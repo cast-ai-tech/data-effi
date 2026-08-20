@@ -665,7 +665,10 @@ class PostgresStore:
                 return row[0]
 
             cur.execute(
-                sql.SQL("SELECT id FROM {table} WHERE " + lookup_where).format(
+                # Safe: `lookup_where` is a module-private constant defined
+                # above in this file, never user input. Values are still
+                # bound as parameters.
+                sql.SQL("SELECT id FROM {table} WHERE " + lookup_where).format(  # noqa: S608
                     table=sql.Identifier(schema, table_name)
                 ),
                 lookup_values,

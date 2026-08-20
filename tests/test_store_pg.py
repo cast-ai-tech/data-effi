@@ -10,7 +10,7 @@ from __future__ import annotations
 
 import threading
 from decimal import Decimal
-from uuid import UUID, uuid4
+from uuid import UUID
 
 import pytest
 
@@ -148,9 +148,9 @@ def test_product_alias_redirects_to_the_canonical_product(pg_engine, pg_conn, gu
     pg_conn.commit()
 
     payload = (
-        "Guia;Fecha;Estado;Producto;Valor\n"
-        "E-5001;05/07/2026;ENTREGADO;FAJA REDUCTORA X2;89.900\n"
-    ).encode("utf-8")
+        b"Guia;Fecha;Estado;Producto;Valor\n"
+        b"E-5001;05/07/2026;ENTREGADO;FAJA REDUCTORA X2;89.900\n"
+    )
     _ingest(pg_engine, payload, "alias.csv")
     pg_conn.commit()
 
@@ -268,13 +268,13 @@ def test_money_discrepancy_is_persisted(pg_engine, pg_conn, guias_dia1, guias_di
 
 def test_static_field_is_filled_but_never_overwritten(pg_engine, pg_conn):
     first = (
-        "Guia;Fecha;Estado;Ciudad;Valor\n"
-        "E-6001;01/07/2026;EN TRANSITO;Cali;50.000\n"
-    ).encode("utf-8")
+        b"Guia;Fecha;Estado;Ciudad;Valor\n"
+        b"E-6001;01/07/2026;EN TRANSITO;Cali;50.000\n"
+    )
     second = (
-        "Guia;Fecha;Estado;Ciudad;Producto;Valor\n"
-        "E-6001;01/07/2026;EN TRANSITO;Medellin;Reloj;50.000\n"
-    ).encode("utf-8")
+        b"Guia;Fecha;Estado;Ciudad;Producto;Valor\n"
+        b"E-6001;01/07/2026;EN TRANSITO;Medellin;Reloj;50.000\n"
+    )
 
     _ingest(pg_engine, first, "a.csv")
     pg_conn.commit()
@@ -463,7 +463,7 @@ def test_two_simultaneous_uploads_of_the_same_file_load_once(pg_dsn, guias_dia1,
                 results.append(report)
             finally:
                 conn.close()
-        except BaseException as exc:      # noqa: BLE001 - surfaced by the assertions
+        except BaseException as exc:
             errors.append(exc)
 
     threads = [threading.Thread(target=worker) for _ in range(2)]
@@ -521,11 +521,11 @@ def test_register_batch_raises_when_the_hash_is_already_claimed(pg_store, pg_con
 
 def test_a_failing_row_does_not_abort_the_whole_load(pg_engine, pg_conn):
     payload = (
-        "Guia;Fecha;Estado;Valor\n"
-        "E-7001;01/07/2026;ENTREGADO;50.000\n"
-        "E-7002;01/12/2027;ENTREGADO;60.000\n"     # future date: rejected
-        "E-7003;01/07/2026;ENTREGADO;70.000\n"
-    ).encode("utf-8")
+        b"Guia;Fecha;Estado;Valor\n"
+        b"E-7001;01/07/2026;ENTREGADO;50.000\n"
+        b"E-7002;01/12/2027;ENTREGADO;60.000\n"     # future date: rejected
+        b"E-7003;01/07/2026;ENTREGADO;70.000\n"
+    )
 
     report = _ingest(pg_engine, payload, "mixto.csv")
     pg_conn.commit()

@@ -6,7 +6,19 @@ select = ["E", "F", "W", "I", "N", "UP", "B", "S", "C4", "PERF", "RUF"]
 ignore = [
     "S101",   # assert: pytest depends on it
     "E501",   # line length is handled by the formatter
+    # Error classes here are named for how they read at a raise site
+    # (`raise NotFound(...)`, `raise Forbidden(...)`). The Error suffix would
+    # make every router noisier without making anything clearer.
+    "N818",
 ]
 
 [lint.per-file-ignores]
 "tests/*" = ["S105", "S106"]
+# S105: `token_type: str = "bearer"` is the OAuth token TYPE, not a secret.
+"api/schemas.py" = ["S105"]
+# S608: these modules build a WHERE clause by joining string literals that are
+# written in the file itself. Every user-supplied VALUE is bound as a query
+# parameter - none are interpolated. Audited 2026-08-20.
+"api/routers/kpis.py" = ["S608"]
+"api/routers/ingest.py" = ["S608"]
+"api/routers/config.py" = ["S608"]

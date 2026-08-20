@@ -1,0 +1,145 @@
+"""Worker entrypoint.
+
+Runs four scheduled jobs. Each one opens its own connection, takes its advisory
+lock, and records the attempt. Running two workers is safe: the second one finds
+the lock held and skips.
+
+You do not have to use this. Every job is also reachable through
+`POST /worker/trigger/{job}` with the shared secret, so an existing n8n or cron
+setup can drive them instead.
+"""
+
+from __future__ import annotations
+
+import logging
+import signal
+import sys
+from typing import Any
+
+import psycopg
+from apscheduler.schedulers.blocking import BlockingScheduler
+from apscheduler.triggers.cron import CronTrigger
+
+from api.settings import get_settings
+from worker.jobs import (
+    job_calibrate_maturation,
+    job_refresh_fx,
+    job_relink_orphans,
+    job_sync_tier3,
+    run_job,
+)
+
+logger = logging.getLogger("norte.worker")
+
+
+def _connect() -> psycopg.Connection:
+    return psycopg.connect(get_settings().database_url, autocommit=False)
+
+
+def run_named_job(job_name: str) -> dict[str, Any]:
+    """Run one job by name. Used by the scheduler and by the webhook alike."""
+    settings = get_settings()
+
+    bodies = {
+        "relink_orphans": job_relink_orphans,
+        "refresh_fx": lambda conn: job_refresh_fx(
+            conn,
+            provider_url=settings.fx_provider_url,
+            api_key=settings.fx_provider_api_key,
+        ),
+        "calibrate_maturation": job_calibrate_maturation,
+        "sync_tier3": lambda conn: job_sync_tier3(
+            conn,
+            pii_salt=settings.pii_hash_salt,
+            enabled=settings.tier3_fetch_enabled,
+        ),
+    }
+
+    body = bodies.get(job_name)
+    if body is None:
+        raise ValueError(f"Unknown job: {job_name}")
+
+    with _connect() as conn:
+        return run_job(conn, job_name, body)
+
+
+def build_scheduler() -> BlockingScheduler:
+    scheduler = BlockingScheduler(timezone="UTC")
+
+    # Tier-3 fetches twice a day, off-peak for the source platform.
+    scheduler.add_job(
+        lambda: run_named_job("sync_tier3"),
+        CronTrigger(hour="6,18", minute=15),
+        id="sync_tier3",
+        max_instances=1,
+        coalesce=True,
+    )
+    # Orphans are cheap to relink and annoying to leave dangling.
+    scheduler.add_job(
+        lambda: run_named_job("relink_orphans"),
+        CronTrigger(minute="*/30"),
+        id="relink_orphans",
+        max_instances=1,
+        coalesce=True,
+    )
+    # FX before the working day starts in LATAM.
+    scheduler.add_job(
+        lambda: run_named_job("refresh_fx"),
+        CronTrigger(hour=10, minute=5),
+        id="refresh_fx",
+        max_instances=1,
+        coalesce=True,
+    )
+    # Calibration once a day; it only ever writes a suggestion.
+    scheduler.add_job(
+        lambda: run_named_job("calibrate_maturation"),
+        CronTrigger(hour=7, minute=30),
+        id="calibrate_maturation",
+        max_instances=1,
+        coalesce=True,
+    )
+    return scheduler
+
+
+def main() -> int:
+    settings = get_settings()
+    logging.basicConfig(
+        level=getattr(logging, settings.log_level.upper(), logging.INFO),
+        format="%(asctime)s %(levelname)-8s %(name)s: %(message)s",
+    )
+
+    if not settings.worker_enabled:
+        logger.info("WORKER_ENABLED is false; exiting without scheduling anything")
+        return 0
+
+    if len(sys.argv) > 1:
+        # One-shot mode: `python -m worker.main refresh_fx`
+        job_name = sys.argv[1]
+        result = run_named_job(job_name)
+        logger.info("%s -> %s", job_name, result)
+        return 0 if result.get("status") != "failed" else 1
+
+    scheduler = build_scheduler()
+
+    def shutdown(signum, _frame):
+        logger.info("signal %s received; stopping scheduler", signum)
+        scheduler.shutdown(wait=True)
+
+    signal.signal(signal.SIGINT, shutdown)
+    signal.signal(signal.SIGTERM, shutdown)
+
+    logger.info(
+        "worker started: tier3=%s jobs=%s",
+        "enabled" if settings.tier3_fetch_enabled else "disabled",
+        [job.id for job in scheduler.get_jobs()],
+    )
+    # Run the cheap ones once at boot so a fresh install is not empty.
+    run_named_job("relink_orphans")
+    run_named_job("refresh_fx")
+
+    scheduler.start()
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

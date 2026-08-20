@@ -68,7 +68,7 @@ MAX_BACKDATE_DAYS = 1095
 COD_OVERCOLLECT_FACTOR = Decimal("1.5")
 
 
-class BatchAlreadyExists(Exception):  # noqa: N818 - not a failure, see docstring
+class BatchAlreadyExists(Exception):
     """Another load already registered this exact file. Raised by register_batch.
 
     This is not an error condition: it is how two concurrent uploads of the same
