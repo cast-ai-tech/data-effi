@@ -1,0 +1,897 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<style>
+body{margin:0;background:#0B0E14;font-family:Inter,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;font-variant-numeric:tabular-nums;-webkit-font-smoothing:antialiased}
+::-webkit-scrollbar{width:8px;height:8px}
+::-webkit-scrollbar-thumb{background:rgba(255,255,255,0.12);border-radius:8px}
+::-webkit-scrollbar-track{background:transparent}
+a{color:#33E5B0}
+a:hover{color:#5CEFC4}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:.4}}
+</style>
+</helmet>
+<div style="display:flex;height:100vh;width:100%;background:#0B0E14;color:#E7EAF0;overflow:hidden;position:relative">
+
+<div style="width:{{ sidebarWidth }}px;flex-shrink:0;background:#0D1017;border-right:1px solid rgba(255,255,255,0.08);display:flex;flex-direction:column;transition:width .15s ease">
+  <div style="display:flex;align-items:center;gap:10px;padding:20px 18px;border-bottom:1px solid rgba(255,255,255,0.06)">
+    <div style="width:28px;height:28px;border-radius:7px;background:#33E5B0;flex-shrink:0;display:flex;align-items:center;justify-content:center;font-weight:800;color:#06110C;font-size:14px">N</div>
+    <sc-if value="{{ notCollapsed }}"><div style="font-weight:700;font-size:15px;letter-spacing:-.01em;white-space:nowrap">Norte</div></sc-if>
+  </div>
+  <div style="flex:1;overflow-y:auto;padding:14px 10px;display:flex;flex-direction:column;gap:2px">
+    <div style="{{ navGlobalStyle }}" onClick="{{ goGlobal }}">
+      <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><rect x="1" y="1" width="6" height="6" rx="1.5" stroke="currentColor" stroke-width="1.4"/><rect x="9" y="1" width="6" height="6" rx="1.5" stroke="currentColor" stroke-width="1.4"/><rect x="1" y="9" width="6" height="6" rx="1.5" stroke="currentColor" stroke-width="1.4"/><rect x="9" y="9" width="6" height="6" rx="1.5" stroke="currentColor" stroke-width="1.4"/></svg>
+      <sc-if value="{{ notCollapsed }}"><span>Global</span></sc-if>
+    </div>
+    <sc-if value="{{ notCollapsed }}"><div style="font-size:10.5px;font-weight:700;letter-spacing:.08em;color:#4C5364;text-transform:uppercase;padding:14px 10px 6px">Países</div></sc-if>
+    <div style="{{ navEcStyle }}" onClick="{{ goEcuador }}"><span style="font-size:15px;line-height:1">🇪🇨</span><sc-if value="{{ notCollapsed }}"><span>Ecuador</span></sc-if></div>
+    <div style="{{ navCoStyle }}" onClick="{{ goColombia }}"><span style="font-size:15px;line-height:1">🇨🇴</span><sc-if value="{{ notCollapsed }}"><span>Colombia</span></sc-if></div>
+    <div style="{{ navGtStyle }}" onClick="{{ goGuatemala }}"><span style="font-size:15px;line-height:1">🇬🇹</span><sc-if value="{{ notCollapsed }}"><span>Guatemala</span></sc-if></div>
+    <div style="{{ navUploadStyle }}" onClick="{{ goUpload }}">
+      <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M8 11V2M8 2L4.5 5.5M8 2l3.5 3.5" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/><path d="M2 11v2a1 1 0 001 1h10a1 1 0 001-1v-2" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/></svg>
+      <sc-if value="{{ notCollapsed }}"><span>Cargar datos</span></sc-if>
+    </div>
+    <div style="{{ navCopilotStyle }}" onClick="{{ toggleCopilot }}">
+      <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M2 3.5A1.5 1.5 0 013.5 2h9A1.5 1.5 0 0114 3.5v6A1.5 1.5 0 0112.5 11H6l-3 3v-3H3.5A1.5 1.5 0 012 9.5v-6z" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round"/></svg>
+      <sc-if value="{{ notCollapsed }}"><span>Copiloto IA</span></sc-if>
+    </div>
+    <div style="{{ navSettingsStyle }}" onClick="{{ goSettings }}">
+      <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><circle cx="8" cy="8" r="2.3" stroke="currentColor" stroke-width="1.4"/><path d="M8 1.5v1.6M8 12.9v1.6M14.5 8h-1.6M3.1 8H1.5M12.4 3.6l-1.1 1.1M4.7 11.3l-1.1 1.1M12.4 12.4l-1.1-1.1M4.7 4.7L3.6 3.6" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/></svg>
+      <sc-if value="{{ notCollapsed }}"><span>Configuración</span></sc-if>
+    </div>
+
+    <sc-if value="{{ notCollapsed }}"><div style="font-size:10.5px;font-weight:700;letter-spacing:.08em;color:#4C5364;text-transform:uppercase;padding:16px 10px 6px">Vista previa</div></sc-if>
+    <div style="{{ navOnboardingStyle }}" onClick="{{ goOnboarding }}"><span style="width:16px;text-align:center;font-size:12px">①</span><sc-if value="{{ notCollapsed }}"><span>Onboarding</span></sc-if></div>
+    <div style="{{ navWidgetStyle }}" onClick="{{ goWidgets }}"><span style="width:16px;text-align:center;font-size:12px">▦</span><sc-if value="{{ notCollapsed }}"><span>Estados de widget</span></sc-if></div>
+    <div style="{{ navMobileStyle }}" onClick="{{ goMobile }}"><span style="width:16px;text-align:center;font-size:12px">▯</span><sc-if value="{{ notCollapsed }}"><span>Móvil</span></sc-if></div>
+    <div style="{{ navDesignStyle }}" onClick="{{ goDesign }}"><span style="width:16px;text-align:center;font-size:12px">◆</span><sc-if value="{{ notCollapsed }}"><span>Sistema de diseño</span></sc-if></div>
+  </div>
+  <div style="padding:12px;border-top:1px solid rgba(255,255,255,0.06)">
+    <div style="display:flex;align-items:center;justify-content:center;height:32px;border-radius:8px;color:#8B93A5;cursor:pointer" onClick="{{ toggleSidebar }}">
+      <svg width="15" height="15" viewBox="0 0 16 16" fill="none" style="{{ collapseIconStyle }}"><path d="M10 3l-5 5 5 5" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>
+    </div>
+  </div>
+</div>
+
+<div style="flex:1;display:flex;flex-direction:column;min-width:0;position:relative">
+  <sc-if value="{{ showTopbar }}">
+  <div style="height:56px;flex-shrink:0;display:flex;align-items:center;justify-content:space-between;padding:0 24px;border-bottom:1px solid rgba(255,255,255,0.07);background:#0B0E14">
+    <div style="font-size:15px;font-weight:700;letter-spacing:-.01em">{{ pageTitle }}</div>
+    <div style="display:flex;align-items:center;gap:10px">
+      <div style="display:flex;background:#12161F;border:1px solid rgba(255,255,255,0.08);border-radius:8px;padding:3px;gap:2px">
+        <div style="{{ rangeTodayStyle }}" onClick="{{ setRangeToday }}">Hoy</div>
+        <div style="{{ range7Style }}" onClick="{{ setRange7 }}">7d</div>
+        <div style="{{ range30Style }}" onClick="{{ setRange30 }}">30d</div>
+        <div style="{{ rangeCohortStyle }}" onClick="{{ setRangeCohort }}">Cohorte</div>
+      </div>
+      <div style="display:flex;align-items:center;gap:6px;padding:7px 12px;background:#12161F;border:1px solid rgba(255,255,255,0.08);border-radius:8px;font-size:12.5px;color:#C4CAD6;cursor:pointer">
+        <span>Tienda Principal</span>
+        <svg width="10" height="10" viewBox="0 0 16 16" fill="none"><path d="M3 6l5 5 5-5" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      </div>
+      <div style="display:flex;align-items:center;gap:6px;padding:7px 12px;background:rgba(51,229,176,0.1);border:1px solid rgba(51,229,176,0.25);border-radius:8px;font-size:12px;color:#33E5B0;font-weight:600">
+        <span style="width:6px;height:6px;border-radius:50%;background:#33E5B0"></span>
+        Sincronizado hace 12 min
+      </div>
+    </div>
+  </div>
+  </sc-if>
+
+  <div style="flex:1;overflow-y:auto;position:relative">
+
+  <sc-if value="{{ isOnboarding }}" hint-placeholder-val="{{ true }}">
+  <div style="min-height:100%;display:flex;flex-direction:column;align-items:center;padding:60px 24px;background:radial-gradient(circle at 50% 0%,rgba(51,229,176,0.06),transparent 55%)">
+    <div style="width:100%;max-width:640px;margin-bottom:36px">
+      <div style="display:flex;justify-content:space-between;font-size:11px;color:#5B6272;font-weight:600;margin-bottom:8px"><span>Paso {{ onboardingStep }} de 4</span><span>{{ obStepLabel }}</span></div>
+      <div style="height:4px;background:#181D27;border-radius:4px;overflow:hidden"><div style="height:100%;background:#33E5B0;border-radius:4px;width:{{ obProgressPct }}%;transition:width .25s"></div></div>
+    </div>
+
+    <sc-if value="{{ isStep1 }}">
+    <div style="width:100%;max-width:640px;text-align:center">
+      <div style="font-size:26px;font-weight:800;letter-spacing:-.02em;margin-bottom:8px">¿En qué países operas?</div>
+      <div style="font-size:14px;color:#8B93A5;margin-bottom:32px">Selecciona todos los que apliquen. Marca uno como principal — define tu moneda de consolidación.</div>
+      <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:14px">
+        <div style="background:#12161F;border:1.5px solid #33E5B0;border-radius:12px;padding:22px 12px;position:relative"><div style="position:absolute;top:10px;right:10px;font-size:9px;font-weight:700;color:#06110C;background:#33E5B0;padding:2px 6px;border-radius:5px">PRINCIPAL</div><div style="font-size:32px;margin-bottom:8px">🇪🇨</div><div style="font-weight:600;font-size:13.5px">Ecuador</div></div>
+        <div style="background:#12161F;border:1.5px solid #33E5B0;border-radius:12px;padding:22px 12px"><div style="font-size:32px;margin-bottom:8px">🇨🇴</div><div style="font-weight:600;font-size:13.5px">Colombia</div></div>
+        <div style="background:#12161F;border:1.5px solid #33E5B0;border-radius:12px;padding:22px 12px"><div style="font-size:32px;margin-bottom:8px">🇬🇹</div><div style="font-weight:600;font-size:13.5px">Guatemala</div></div>
+        <div style="background:#0F131A;border:1.5px dashed rgba(255,255,255,0.12);border-radius:12px;padding:22px 12px;color:#4C5364"><div style="font-size:32px;margin-bottom:8px">🇨🇷</div><div style="font-weight:600;font-size:13.5px">Costa Rica</div></div>
+        <div style="background:#0F131A;border:1.5px dashed rgba(255,255,255,0.12);border-radius:12px;padding:22px 12px;color:#4C5364"><div style="font-size:32px;margin-bottom:8px">🇲🇽</div><div style="font-weight:600;font-size:13.5px">México</div></div>
+        <div style="background:#0F131A;border:1.5px dashed rgba(255,255,255,0.12);border-radius:12px;padding:22px 12px;color:#4C5364"><div style="font-size:32px;margin-bottom:8px">🇵🇪</div><div style="font-weight:600;font-size:13.5px">Perú</div></div>
+      </div>
+    </div>
+    </sc-if>
+
+    <sc-if value="{{ isStep2 }}">
+    <div style="width:100%;max-width:640px">
+      <div style="text-align:center;font-size:26px;font-weight:800;letter-spacing:-.02em;margin-bottom:8px">Conecta tus plataformas</div>
+      <div style="text-align:center;font-size:14px;color:#8B93A5;margin-bottom:28px">Cada país muestra solo las plataformas disponibles ahí.</div>
+      <div style="font-size:12px;font-weight:700;color:#5B6272;text-transform:uppercase;letter-spacing:.06em;margin-bottom:10px">🇪🇨 Ecuador</div>
+      <div style="display:grid;grid-template-columns:repeat(2,1fr);gap:10px;margin-bottom:24px">
+        <div style="background:#12161F;border:1px solid rgba(255,255,255,0.08);border-radius:10px;padding:14px;display:flex;justify-content:space-between;align-items:center"><span style="font-weight:600;font-size:13.5px">Effi</span><span style="font-size:10px;font-weight:700;padding:3px 7px;border-radius:5px;background:rgba(51,229,176,0.12);color:#33E5B0">API</span></div>
+        <div style="background:#12161F;border:1px solid rgba(255,255,255,0.08);border-radius:10px;padding:14px;display:flex;justify-content:space-between;align-items:center"><span style="font-weight:600;font-size:13.5px">Dropi</span><span style="font-size:10px;font-weight:700;padding:3px 7px;border-radius:5px;background:rgba(51,229,176,0.12);color:#33E5B0">API</span></div>
+        <div style="background:#12161F;border:1px solid rgba(255,255,255,0.08);border-radius:10px;padding:14px;display:flex;justify-content:space-between;align-items:center"><span style="font-weight:600;font-size:13.5px">Mastershop</span><span style="font-size:10px;font-weight:700;padding:3px 7px;border-radius:5px;background:rgba(245,168,60,0.12);color:#F5A83C">Archivo</span></div>
+        <div style="background:#12161F;border:1px solid rgba(255,255,255,0.08);border-radius:10px;padding:14px;display:flex;justify-content:space-between;align-items:center"><span style="font-weight:600;font-size:13.5px">Hoko</span><span style="font-size:10px;font-weight:700;padding:3px 7px;border-radius:5px;background:rgba(139,147,165,0.15);color:#8B93A5">Sesión</span></div>
+      </div>
+      <div style="font-size:12px;font-weight:700;color:#5B6272;text-transform:uppercase;letter-spacing:.06em;margin-bottom:10px">🇬🇹 Guatemala</div>
+      <div style="display:grid;grid-template-columns:repeat(2,1fr);gap:10px">
+        <div style="background:#12161F;border:1px solid rgba(255,255,255,0.08);border-radius:10px;padding:14px;display:flex;justify-content:space-between;align-items:center"><span style="font-weight:600;font-size:13.5px">Effi</span><span style="font-size:10px;font-weight:700;padding:3px 7px;border-radius:5px;background:rgba(51,229,176,0.12);color:#33E5B0">API</span></div>
+        <div style="background:#12161F;border:1px solid rgba(255,255,255,0.08);border-radius:10px;padding:14px;display:flex;justify-content:space-between;align-items:center"><span style="font-weight:600;font-size:13.5px">Carga manual</span><span style="font-size:10px;font-weight:700;padding:3px 7px;border-radius:5px;background:rgba(245,168,60,0.12);color:#F5A83C">Archivo</span></div>
+      </div>
+    </div>
+    </sc-if>
+
+    <sc-if value="{{ isStep3 }}">
+    <div style="width:100%;max-width:560px;text-align:center">
+      <div style="font-size:26px;font-weight:800;letter-spacing:-.02em;margin-bottom:8px">Carga tu histórico</div>
+      <div style="font-size:14px;color:#8B93A5;margin-bottom:28px">Con 90 días calibramos tu ventana real de maduración por país.</div>
+      <div style="border:2px dashed rgba(51,229,176,0.35);border-radius:16px;padding:56px 20px;background:rgba(51,229,176,0.04)">
+        <svg width="34" height="34" viewBox="0 0 16 16" fill="none" style="margin:0 auto 14px;display:block;color:#33E5B0"><path d="M8 11V2M8 2L4.5 5.5M8 2l3.5 3.5" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"/><path d="M2 11v2a1 1 0 001 1h10a1 1 0 001-1v-2" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/></svg>
+        <div style="font-weight:600;font-size:15px;margin-bottom:4px">Arrastra tus reportes de los últimos 90 días</div>
+        <div style="font-size:12.5px;color:#5B6272">CSV o Excel de Effi, Dropi, Mastershop — o el consolidado que tengas</div>
+      </div>
+    </div>
+    </sc-if>
+
+    <sc-if value="{{ isStep4 }}">
+    <div style="width:100%;max-width:520px;text-align:center">
+      <div style="font-size:26px;font-weight:800;letter-spacing:-.02em;margin-bottom:20px">Calibración inicial</div>
+      <div style="background:#12161F;border:1px solid rgba(51,229,176,0.25);border-radius:14px;padding:26px;text-align:left">
+        <div style="display:flex;gap:12px;align-items:flex-start">
+          <div style="width:30px;height:30px;border-radius:8px;background:rgba(51,229,176,0.12);flex-shrink:0;display:flex;align-items:center;justify-content:center;color:#33E5B0;font-weight:700">i</div>
+          <div>
+            <div style="font-size:14.5px;line-height:1.55;color:#E7EAF0">Medimos tus entregas: tu ventana de maduración real en <b>Ecuador es 11 días</b>. ¿La aplicamos?</div>
+            <div style="display:flex;gap:8px;margin-top:16px">
+              <div style="padding:9px 16px;background:#33E5B0;color:#06110C;border-radius:8px;font-weight:700;font-size:13px;cursor:pointer">Aplicar 11 días</div>
+              <div style="padding:9px 16px;background:transparent;border:1px solid rgba(255,255,255,0.14);color:#C4CAD6;border-radius:8px;font-weight:600;font-size:13px;cursor:pointer">Usar 15 días (default)</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    </sc-if>
+
+    <div style="display:flex;gap:10px;margin-top:40px">
+      <div style="padding:10px 22px;border-radius:8px;border:1px solid rgba(255,255,255,0.12);color:#8B93A5;font-weight:600;font-size:13px;cursor:pointer" onClick="{{ prevOnboarding }}">Atrás</div>
+      <div style="padding:10px 26px;border-radius:8px;background:#33E5B0;color:#06110C;font-weight:700;font-size:13px;cursor:pointer" onClick="{{ nextOnboarding }}">{{ obNextLabel }}</div>
+    </div>
+  </div>
+  </sc-if>
+
+  <sc-if value="{{ isGlobal }}" hint-placeholder-val="{{ true }}">
+  <div style="padding:24px;display:flex;flex-direction:column;gap:20px">
+    <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:14px">
+      <div style="background:#12161F;border:1px solid rgba(255,255,255,0.07);border-radius:12px;padding:18px">
+        <div style="font-size:12px;color:#8B93A5;font-weight:600;margin-bottom:10px">Contribución total (consolidada)</div>
+        <div style="display:flex;align-items:baseline;gap:8px"><div style="font-size:26px;font-weight:800;letter-spacing:-.02em">$ 20.273</div><div style="font-size:12px;font-weight:700;color:#33E5B0">▲ 8,4%</div></div>
+        <svg width="120" height="32" viewBox="0 0 120 32" style="margin-top:10px;display:block"><polyline points="0,26 17,22 34,24 51,16 68,18 85,10 102,12 120,4" fill="none" stroke="#33E5B0" stroke-width="1.6"/></svg>
+      </div>
+      <div style="background:#12161F;border:1px solid rgba(255,255,255,0.07);border-radius:12px;padding:18px">
+        <div style="font-size:12px;color:#8B93A5;font-weight:600;margin-bottom:10px">CPD promedio</div>
+        <div style="display:flex;align-items:baseline;gap:8px"><div style="font-size:26px;font-weight:800;letter-spacing:-.02em">$ 5,87</div><div style="font-size:12px;font-weight:700;color:#33E5B0">▲ 5,2%</div></div>
+        <svg width="120" height="32" viewBox="0 0 120 32" style="margin-top:10px;display:block"><polyline points="0,20 17,19 34,21 51,17 68,18 85,14 102,15 120,10" fill="none" stroke="#33E5B0" stroke-width="1.6"/></svg>
+      </div>
+      <div style="background:#12161F;border:1px solid rgba(255,255,255,0.07);border-radius:12px;padding:18px">
+        <div style="font-size:12px;color:#8B93A5;font-weight:600;margin-bottom:10px">% de entrega ponderado</div>
+        <div style="display:flex;align-items:baseline;gap:8px"><div style="font-size:26px;font-weight:800;letter-spacing:-.02em">51,3%</div><div style="font-size:12px;font-weight:700;color:#33E5B0">▲ 2,1 pts</div></div>
+        <svg width="120" height="32" viewBox="0 0 120 32" style="margin-top:10px;display:block"><polyline points="0,26 17,22 34,24 51,16 68,18 85,10 102,12 120,4" fill="none" stroke="#33E5B0" stroke-width="1.6"/></svg>
+      </div>
+      <div style="background:#12161F;border:1px solid rgba(255,255,255,0.07);border-radius:12px;padding:18px">
+        <div style="font-size:12px;color:#8B93A5;font-weight:600;margin-bottom:10px">Capital en tránsito</div>
+        <div style="display:flex;align-items:baseline;gap:8px"><div style="font-size:26px;font-weight:800;letter-spacing:-.02em">$ 7.025</div><div style="font-size:12px;font-weight:700;color:#33E5B0">▼ 6,0%</div></div>
+        <svg width="120" height="32" viewBox="0 0 120 32" style="margin-top:10px;display:block"><polyline points="0,6 17,10 34,8 51,14 68,12 85,18 102,16 120,24" fill="none" stroke="#33E5B0" stroke-width="1.6"/></svg>
+      </div>
+    </div>
+
+    <div style="background:#12161F;border:1px solid rgba(51,229,176,0.2);border-radius:12px;padding:20px;display:flex;gap:14px">
+      <div style="width:34px;height:34px;border-radius:9px;background:rgba(51,229,176,0.12);flex-shrink:0;display:flex;align-items:center;justify-content:center;color:#33E5B0;font-weight:700;font-size:15px">IA</div>
+      <div>
+        <div style="font-size:13px;font-weight:700;color:#33E5B0;margin-bottom:6px;text-transform:uppercase;letter-spacing:.04em">Resumen del día</div>
+        <div style="font-size:14px;line-height:1.65;color:#DADEE6">Ayer despachaste 118 guías entre tus 3 países. Gintracom cayó 9 pts en Guayas esta semana; si la caída se sostiene, te cuesta ≈ $310/semana. El Drenaje Linfático mantiene 45% de entrega con margen 52%: aguanta escalar pauta.</div>
+      </div>
+    </div>
+
+    <div style="background:#12161F;border:1px solid rgba(255,255,255,0.07);border-radius:12px;overflow:hidden">
+      <div style="padding:16px 20px;font-size:13px;font-weight:700;border-bottom:1px solid rgba(255,255,255,0.06)">Ranking de países</div>
+      <div style="display:grid;grid-template-columns:1.4fr 1fr 1fr 1.2fr 0.8fr;padding:10px 20px;font-size:11px;font-weight:700;color:#5B6272;text-transform:uppercase;letter-spacing:.04em">
+        <div>País</div><div>Contribución</div><div>Consolidado</div><div>% Entrega</div><div>Tendencia</div>
+      </div>
+      <div style="display:grid;grid-template-columns:1.4fr 1fr 1fr 1.2fr 0.8fr;padding:14px 20px;align-items:center;border-top:1px solid rgba(255,255,255,0.05)">
+        <div style="display:flex;align-items:center;gap:8px;font-weight:600;font-size:13.5px">🇪🇨 Ecuador</div><div style="font-size:13.5px;font-weight:700">$ 9.949</div><div style="font-size:13px;color:#8B93A5">$ 9.949</div>
+        <div><div style="height:6px;background:#1B212C;border-radius:4px;overflow:hidden;width:100px"><div style="height:100%;width:47%;background:#F5A83C;border-radius:4px"></div></div><div style="font-size:11px;color:#8B93A5;margin-top:3px">47,3%</div></div>
+        <div style="color:#33E5B0;font-size:12px;font-weight:700">▲ 3,1%</div>
+      </div>
+      <div style="display:grid;grid-template-columns:1.4fr 1fr 1fr 1.2fr 0.8fr;padding:14px 20px;align-items:center;border-top:1px solid rgba(255,255,255,0.05)">
+        <div style="display:flex;align-items:center;gap:8px;font-weight:600;font-size:13.5px">🇨🇴 Colombia</div><div style="font-size:13.5px;font-weight:700">$ 39.796.000</div><div style="font-size:13px;color:#8B93A5">$ 9.949</div>
+        <div><div style="height:6px;background:#1B212C;border-radius:4px;overflow:hidden;width:100px"><div style="height:100%;width:58%;background:#33E5B0;border-radius:4px"></div></div><div style="font-size:11px;color:#8B93A5;margin-top:3px">58,4%</div></div>
+        <div style="color:#33E5B0;font-size:12px;font-weight:700">▲ 5,7%</div>
+      </div>
+      <div style="display:grid;grid-template-columns:1.4fr 1fr 1fr 1.2fr 0.8fr;padding:14px 20px;align-items:center;border-top:1px solid rgba(255,255,255,0.05)">
+        <div style="display:flex;align-items:center;gap:8px;font-weight:600;font-size:13.5px">🇬🇹 Guatemala</div><div style="font-size:13.5px;font-weight:700">Q 2.930,00</div><div style="font-size:13px;color:#8B93A5">$ 375</div>
+        <div><div style="height:6px;background:#1B212C;border-radius:4px;overflow:hidden;width:100px"><div style="height:100%;width:41%;background:#FF6259;border-radius:4px"></div></div><div style="font-size:11px;color:#8B93A5;margin-top:3px">41,0%</div></div>
+        <div style="color:#FF6259;font-size:12px;font-weight:700">▼ 1,4%</div>
+      </div>
+    </div>
+
+    <div style="background:#12161F;border:1px solid rgba(255,255,255,0.07);border-radius:12px;overflow:hidden">
+      <div style="padding:16px 20px;font-size:13px;font-weight:700;border-bottom:1px solid rgba(255,255,255,0.06)">Salud de conexiones</div>
+      <sc-for list="{{ connections }}" as="c" hint-placeholder-count="6">
+        <div style="display:grid;grid-template-columns:0.6fr 1fr 1fr 1fr 1fr;padding:12px 20px;align-items:center;font-size:13px;border-top:1px solid rgba(255,255,255,0.05)">
+          <div>{{ c.flag }}</div><div style="font-weight:600">{{ c.platform }}</div><div style="color:#8B93A5">{{ c.type }}</div>
+          <div style="display:flex;align-items:center;gap:6px"><span style="width:7px;height:7px;border-radius:50%;background:{{ c.color }}"></span><span style="color:{{ c.color }}">{{ c.status }}</span></div>
+          <div style="color:#5B6272">{{ c.lastSync }}</div>
+        </div>
+      </sc-for>
+    </div>
+  </div>
+  </sc-if>
+
+  <sc-if value="{{ isCountry }}" hint-placeholder-val="{{ true }}">
+  <div style="padding:24px;display:flex;flex-direction:column;gap:20px">
+    <div style="display:flex;align-items:center;gap:12px">
+      <div style="font-size:28px">{{ country.flag }}</div>
+      <div>
+        <div style="font-size:20px;font-weight:800;letter-spacing:-.02em">{{ country.name }}</div>
+        <div style="font-size:12.5px;color:#5B6272">{{ country.period }} · moneda {{ country.currencyCode }}</div>
+      </div>
+    </div>
+
+    <div style="display:flex;gap:4px;border-bottom:1px solid rgba(255,255,255,0.08)">
+      <div style="{{ tabFinanzasStyle }}" onClick="{{ setTabFinanzas }}">Finanzas</div>
+      <div style="{{ tabLogisticaStyle }}" onClick="{{ setTabLogistica }}">Logística</div>
+      <div style="{{ tabEfectividadStyle }}" onClick="{{ setTabEfectividad }}">Efectividad</div>
+      <div style="{{ tabServicioStyle }}" onClick="{{ setTabServicio }}">Servicio</div>
+    </div>
+
+    <sc-if value="{{ isTabFinanzas }}">
+    <div style="display:grid;grid-template-columns:1.5fr 1fr;gap:16px">
+      <div style="background:#12161F;border:1px solid rgba(255,255,255,0.07);border-radius:12px;padding:22px">
+        <div style="font-size:13px;font-weight:700;margin-bottom:20px">Cascada P&amp;L del periodo</div>
+        <div style="position:relative;height:240px;display:flex;align-items:flex-end;gap:26px;padding-left:6px">
+          <div style="display:flex;flex-direction:column;align-items:center;gap:8px;flex:1">
+            <div style="height:220px;width:100%;display:flex;align-items:flex-end"><div style="width:100%;height:{{ wf.b1h }}px;background:#3A4152;border-radius:4px 4px 0 0"></div></div>
+            <div style="font-size:11px;color:#8B93A5;text-align:center">Recaudo<br/><b style="color:#E7EAF0">{{ country.recaudoFmt }}</b></div>
+          </div>
+          <div style="display:flex;flex-direction:column;align-items:center;gap:8px;flex:1">
+            <div style="height:220px;width:100%;display:flex;flex-direction:column;justify-content:flex-end"><div style="width:100%;height:{{ wf.b2h }}px;background:#FF6259;border-radius:4px;margin-bottom:{{ wf.b2bottom }}px"></div></div>
+            <div style="font-size:11px;color:#8B93A5;text-align:center">−Producto<br/><b style="color:#E7EAF0">{{ country.productoFmt }}</b></div>
+          </div>
+          <div style="display:flex;flex-direction:column;align-items:center;gap:8px;flex:1">
+            <div style="height:220px;width:100%;display:flex;flex-direction:column;justify-content:flex-end"><div style="width:100%;height:{{ wf.b3h }}px;background:#F5A83C;border-radius:4px;margin-bottom:{{ wf.b3bottom }}px"></div></div>
+            <div style="font-size:11px;color:#8B93A5;text-align:center">−Flete<br/><b style="color:#E7EAF0">{{ country.fleteFmt }}</b></div>
+          </div>
+          <div style="display:flex;flex-direction:column;align-items:center;gap:8px;flex:1">
+            <div style="height:220px;width:100%;display:flex;align-items:flex-end"><div style="width:100%;height:{{ wf.b4h }}px;background:#33E5B0;border-radius:4px 4px 0 0"></div></div>
+            <div style="font-size:11px;color:#33E5B0;text-align:center">Contribución<br/><b>{{ country.contribucionFmt }}</b></div>
+          </div>
+        </div>
+      </div>
+      <div style="display:flex;flex-direction:column;gap:16px">
+        <div style="background:#12161F;border:1px solid rgba(255,255,255,0.07);border-radius:12px;padding:20px">
+          <div style="font-size:12px;color:#8B93A5;font-weight:600;margin-bottom:8px">CPD — Contribución por Pedido Despachado</div>
+          <div style="font-size:28px;font-weight:800;color:#33E5B0;letter-spacing:-.02em">{{ country.cpdFmt }}</div>
+          <svg width="100%" height="40" viewBox="0 0 260 40" style="margin-top:10px;display:block"><polyline points="0,32 32,28 64,30 96,22 128,24 160,16 192,18 224,10 260,6" fill="none" stroke="#33E5B0" stroke-width="1.8"/></svg>
+        </div>
+        <div style="background:#12161F;border:1px solid rgba(255,255,255,0.07);border-radius:12px;padding:20px">
+          <div style="font-size:12px;color:#8B93A5;font-weight:600;margin-bottom:8px">Ciclo de caja</div>
+          <div style="font-size:18px;font-weight:700;margin-bottom:4px">Tu plata vuelve en <span style="color:#33E5B0">{{ country.cicloDias }}</span></div>
+          <div style="height:8px;border-radius:5px;overflow:hidden;display:flex;margin-top:10px"><div style="width:35%;background:#8B93A5"></div><div style="width:40%;background:#F5A83C"></div><div style="width:25%;background:#33E5B0"></div></div>
+          <div style="display:flex;justify-content:space-between;font-size:10.5px;color:#5B6272;margin-top:6px"><span>En tránsito</span><span>Maduración</span><span>Cobrado</span></div>
+        </div>
+        <div style="background:#12161F;border:1px solid rgba(255,255,255,0.07);border-radius:12px;padding:20px">
+          <div style="font-size:12px;color:#8B93A5;font-weight:600;margin-bottom:8px">Capital en tránsito</div>
+          <div style="font-size:22px;font-weight:800;letter-spacing:-.02em">{{ country.capitalTransitoFmt }}</div>
+          <div style="font-size:11.5px;color:#5B6272;margin-top:4px">en guías aún no confirmadas ni devueltas</div>
+        </div>
+      </div>
+    </div>
+    </sc-if>
+
+    <sc-if value="{{ isTabLogistica }}">
+    <div style="display:flex;flex-direction:column;gap:16px">
+      <sc-if value="{{ country.logisticsLimited }}">
+      <div style="background:rgba(245,168,60,0.08);border:1px solid rgba(245,168,60,0.3);border-radius:10px;padding:14px 18px;font-size:13px;color:#F5A83C">Solo una transportadora conectada en {{ country.name }} — agrega otra plataforma para poder comparar.</div>
+      </sc-if>
+      <div style="background:#12161F;border:1px solid rgba(255,255,255,0.07);border-radius:12px;overflow:hidden">
+        <div style="padding:16px 20px;font-size:13px;font-weight:700;border-bottom:1px solid rgba(255,255,255,0.06)">Transportadoras — cohorte madura</div>
+        <div style="display:grid;grid-template-columns:1.3fr 1fr 1fr 0.8fr 0.8fr 1fr;padding:10px 20px;font-size:11px;font-weight:700;color:#5B6272;text-transform:uppercase;letter-spacing:.04em">
+          <div>Transportadora</div><div>% Entrega</div><div>% Problema</div><div>p50</div><div>p90</div><div>Guías</div>
+        </div>
+        <sc-for list="{{ country.carriers }}" as="c" hint-placeholder-count="3">
+          <div style="display:grid;grid-template-columns:1.3fr 1fr 1fr 0.8fr 0.8fr 1fr;padding:13px 20px;align-items:center;font-size:13px;border-top:1px solid rgba(255,255,255,0.05)">
+            <div style="font-weight:600">{{ c.name }}</div>
+            <div><div style="height:6px;background:#1B212C;border-radius:4px;overflow:hidden;width:70px;margin-bottom:4px"><div style="height:100%;width:{{ c.entrega }}%;background:#33E5B0;border-radius:4px"></div></div>{{ c.entrega }}%</div>
+            <div><div style="height:6px;background:#1B212C;border-radius:4px;overflow:hidden;width:70px;margin-bottom:4px"><div style="height:100%;width:{{ c.problema }}%;background:#FF6259;border-radius:4px"></div></div>{{ c.problema }}%</div>
+            <div style="color:#8B93A5">{{ c.p50 }}d</div><div style="color:#8B93A5">{{ c.p90 }}d</div><div>{{ c.guias }}</div>
+          </div>
+        </sc-for>
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px">
+        <div style="background:#12161F;border:1px solid rgba(255,255,255,0.07);border-radius:12px;padding:20px">
+          <div style="font-size:13px;font-weight:700;margin-bottom:14px">Curva de maduración de cohortes</div>
+          <svg width="100%" height="180" viewBox="0 0 360 180">
+            <line x1="0" y1="179" x2="360" y2="179" stroke="rgba(255,255,255,0.08)"/>
+            <polyline points="0,180 48,153 96,130 144,117 192,106 240,99 288,95 360,92" fill="none" stroke="#33E5B0" stroke-width="1.8"/>
+            <polyline points="0,180 48,158 96,138 144,126 192,116 240,110 288,106 360,101" fill="none" stroke="#F5A83C" stroke-width="1.8"/>
+            <polyline points="0,180 48,162 96,145 144,133 192,124" fill="none" stroke="#5B6272" stroke-width="1.6" stroke-dasharray="3,3"/>
+          </svg>
+          <div style="display:flex;gap:16px;font-size:11px;color:#8B93A5;margin-top:8px"><span><span style="color:#33E5B0">●</span> Semana 1</span><span><span style="color:#F5A83C">●</span> Semana 2</span><span><span style="color:#5B6272">●</span> Semana 3 (en curso)</span></div>
+        </div>
+        <div style="background:#12161F;border:1px solid rgba(255,255,255,0.07);border-radius:12px;padding:20px">
+          <div style="font-size:13px;font-weight:700;margin-bottom:14px">Aging de guías abiertas</div>
+          <div style="display:flex;align-items:flex-end;gap:16px;height:150px">
+            <div style="display:flex;flex-direction:column;align-items:center;gap:8px;flex:1"><div style="width:100%;height:{{ aging.h0 }}px;background:#33E5B0;border-radius:4px 4px 0 0"></div><div style="font-size:11px;color:#8B93A5">0–3d<br/><b style="color:#E7EAF0">{{ country.aging.b0 }}</b></div></div>
+            <div style="display:flex;flex-direction:column;align-items:center;gap:8px;flex:1"><div style="width:100%;height:{{ aging.h1 }}px;background:#5FCB9E;border-radius:4px 4px 0 0"></div><div style="font-size:11px;color:#8B93A5">4–7d<br/><b style="color:#E7EAF0">{{ country.aging.b1 }}</b></div></div>
+            <div style="display:flex;flex-direction:column;align-items:center;gap:8px;flex:1"><div style="width:100%;height:{{ aging.h2 }}px;background:#F5A83C;border-radius:4px 4px 0 0"></div><div style="font-size:11px;color:#8B93A5">8–12d<br/><b style="color:#E7EAF0">{{ country.aging.b2 }}</b></div></div>
+            <div style="display:flex;flex-direction:column;align-items:center;gap:8px;flex:1"><div style="width:100%;height:{{ aging.h3 }}px;background:#FF6259;border-radius:4px 4px 0 0"></div><div style="font-size:11px;color:#8B93A5">13+d<br/><b style="color:#E7EAF0">{{ country.aging.b3 }}</b></div></div>
+          </div>
+        </div>
+      </div>
+      <div style="background:#12161F;border:1px solid rgba(255,255,255,0.07);border-radius:12px;padding:20px">
+        <div style="font-size:13px;font-weight:700;margin-bottom:14px">Embudo de novedades</div>
+        <div style="display:flex;flex-direction:column;gap:10px;max-width:480px">
+          <div><div style="font-size:11.5px;color:#8B93A5;margin-bottom:4px">Entran en novedad — {{ country.novedades.entran }}</div><div style="height:20px;width:100%;background:#5B6272;border-radius:5px"></div></div>
+          <div style="display:flex;gap:10px">
+            <div style="flex:{{ country.novedades.recuperadas }}"><div style="font-size:11.5px;color:#33E5B0;margin-bottom:4px">Recuperadas — {{ country.novedades.recuperadas }}</div><div style="height:20px;width:100%;background:#33E5B0;border-radius:5px"></div></div>
+            <div style="flex:{{ country.novedades.devolucion }}"><div style="font-size:11.5px;color:#FF6259;margin-bottom:4px">Devolución — {{ country.novedades.devolucion }}</div><div style="height:20px;width:100%;background:#FF6259;border-radius:5px"></div></div>
+          </div>
+        </div>
+      </div>
+    </div>
+    </sc-if>
+
+    <sc-if value="{{ isTabEfectividad }}">
+    <div style="display:flex;flex-direction:column;gap:16px">
+      <div style="display:grid;grid-template-columns:1.4fr 1fr;gap:16px">
+        <div style="background:#12161F;border:1px solid rgba(255,255,255,0.07);border-radius:12px;padding:20px">
+          <div style="font-size:13px;font-weight:700;margin-bottom:14px">Margen × % de entrega por producto</div>
+          <svg width="100%" height="260" viewBox="0 0 380 260">
+            <line x1="190" y1="0" x2="190" y2="240" stroke="rgba(255,255,255,0.08)"/>
+            <line x1="0" y1="120" x2="380" y2="120" stroke="rgba(255,255,255,0.08)"/>
+            <text x="284" y="14" fill="#5B6272" font-size="10">Escalar</text>
+            <text x="10" y="14" fill="#5B6272" font-size="10">Arreglar logística</text>
+            <text x="284" y="234" fill="#5B6272" font-size="10">Subir precio</text>
+            <text x="10" y="234" fill="#5B6272" font-size="10">Matar</text>
+            <sc-for list="{{ country.productsPx }}" as="p" hint-placeholder-count="4">
+              <circle cx="{{ p.x }}" cy="{{ p.y }}" r="{{ p.r }}" fill="{{ p.color }}" fill-opacity="0.75"/>
+            </sc-for>
+          </svg>
+          <div style="display:flex;flex-wrap:wrap;gap:10px 16px;margin-top:6px">
+            <sc-for list="{{ country.products }}" as="p" hint-placeholder-count="4">
+              <div style="font-size:11px;color:#8B93A5;display:flex;align-items:center;gap:5px"><span style="width:7px;height:7px;border-radius:50%;background:{{ p.color }}"></span>{{ p.name }}</div>
+            </sc-for>
+          </div>
+        </div>
+        <div style="background:#12161F;border:1px solid rgba(255,255,255,0.07);border-radius:12px;overflow:hidden;display:flex;flex-direction:column">
+          <div style="padding:16px 20px;font-size:13px;font-weight:700;border-bottom:1px solid rgba(255,255,255,0.06)">Semáforo geográfico</div>
+          <sc-for list="{{ country.provinces }}" as="p" hint-placeholder-count="4">
+            <div style="padding:12px 20px;border-top:1px solid rgba(255,255,255,0.05);cursor:pointer">
+              <div style="display:flex;justify-content:space-between;font-size:13px;margin-bottom:6px"><span style="font-weight:600">{{ p.name }}</span><span style="color:{{ p.color }};font-weight:700">{{ p.entrega }}%</span></div>
+              <div style="height:6px;background:#1B212C;border-radius:4px;overflow:hidden"><div style="height:100%;width:{{ p.entrega }}%;background:{{ p.color }};border-radius:4px"></div></div>
+            </div>
+          </sc-for>
+        </div>
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px">
+        <sc-if value="{{ country.pautaLocked }}" hint-placeholder-val="{{ false }}">
+        <div style="background:#12161F;border:1px solid rgba(255,255,255,0.07);border-radius:12px;padding:24px;position:relative;overflow:hidden">
+          <div style="filter:blur(4px);opacity:.4;pointer-events:none">
+            <div style="font-size:12px;color:#8B93A5;margin-bottom:8px">CPA entregado</div><div style="font-size:26px;font-weight:800">$ 4,10</div>
+          </div>
+          <div style="position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:10px;padding:20px;text-align:center;background:rgba(11,14,20,0.55)">
+            <svg width="22" height="22" viewBox="0 0 16 16" fill="none" style="color:#8B93A5"><rect x="3" y="7" width="10" height="7" rx="1.5" stroke="currentColor" stroke-width="1.3"/><path d="M5.5 7V5a2.5 2.5 0 015 0v2" stroke="currentColor" stroke-width="1.3"/></svg>
+            <div style="font-size:12.5px;color:#C4CAD6;line-height:1.5">Conecta Meta Ads en {{ country.name }} para ver tu CPA entregado</div>
+            <div style="padding:7px 16px;background:#33E5B0;color:#06110C;border-radius:7px;font-weight:700;font-size:12px;cursor:pointer">Conectar →</div>
+          </div>
+        </div>
+        </sc-if>
+        <sc-if value="{{ country.pautaLockedInverse }}" hint-placeholder-val="{{ true }}">
+        <div style="background:#12161F;border:1px solid rgba(255,255,255,0.07);border-radius:12px;padding:20px">
+          <div style="font-size:12px;color:#8B93A5;margin-bottom:8px">CPA entregado</div><div style="font-size:26px;font-weight:800">{{ country.cpaFmt }}</div>
+        </div>
+        </sc-if>
+        <div style="background:#12161F;border:1px solid rgba(255,255,255,0.07);border-radius:12px;padding:20px">
+          <div style="font-size:12px;color:#8B93A5;margin-bottom:8px">ROAS neto</div><div style="font-size:26px;font-weight:800;color:#33E5B0">{{ country.roasFmt }}</div>
+        </div>
+      </div>
+    </div>
+    </sc-if>
+
+    <sc-if value="{{ isTabServicio }}">
+    <div style="display:grid;grid-template-columns:1.2fr 1fr;gap:16px">
+      <div style="background:#12161F;border:1px solid rgba(255,255,255,0.07);border-radius:12px;padding:20px">
+        <div style="font-size:13px;font-weight:700;margin-bottom:14px">Confirmación por canal</div>
+        <div style="display:flex;flex-direction:column;gap:12px">
+          <div><div style="display:flex;justify-content:space-between;font-size:12.5px;margin-bottom:5px"><span>WhatsApp</span><b>{{ country.confirmacion.whatsapp }}%</b></div><div style="height:7px;background:#1B212C;border-radius:4px;overflow:hidden"><div style="height:100%;width:{{ country.confirmacion.whatsapp }}%;background:#33E5B0;border-radius:4px"></div></div></div>
+          <div><div style="display:flex;justify-content:space-between;font-size:12.5px;margin-bottom:5px"><span>Llamada</span><b>{{ country.confirmacion.llamada }}%</b></div><div style="height:7px;background:#1B212C;border-radius:4px;overflow:hidden"><div style="height:100%;width:{{ country.confirmacion.llamada }}%;background:#5B6272;border-radius:4px"></div></div></div>
+          <sc-if value="{{ country.servicioBotLocked }}" hint-placeholder-val="{{ false }}">
+          <div style="display:flex;align-items:center;gap:8px;font-size:12px;color:#5B6272;padding:8px 10px;background:#0F131A;border-radius:7px">🔒 Bot IA no conectado en {{ country.name }}</div>
+          </sc-if>
+          <sc-if value="{{ country.servicioBotInverse }}" hint-placeholder-val="{{ true }}">
+          <div><div style="display:flex;justify-content:space-between;font-size:12.5px;margin-bottom:5px"><span>Bot IA</span><b>{{ country.confirmacion.bot }}%</b></div><div style="height:7px;background:#1B212C;border-radius:4px;overflow:hidden"><div style="height:100%;width:{{ country.confirmacion.bot }}%;background:#F5A83C;border-radius:4px"></div></div></div>
+          </sc-if>
+        </div>
+        <div style="margin-top:16px;font-size:12px;color:#5B6272">Tiempo primera respuesta: <b style="color:#C4CAD6">{{ country.tiempoRespuesta }}</b></div>
+      </div>
+      <div style="background:#12161F;border:1px solid rgba(51,229,176,0.22);border-radius:12px;padding:20px">
+        <div style="font-size:12px;font-weight:700;color:#33E5B0;text-transform:uppercase;letter-spacing:.04em;margin-bottom:10px">Lift de confirmación</div>
+        <div style="font-size:14.5px;line-height:1.6">Los pedidos confirmados se entregan <b style="color:#33E5B0">{{ country.liftPts }} pts</b> más — la confirmación te generó <b style="color:#33E5B0">{{ country.liftMoneyFmt }}</b> este mes.</div>
+      </div>
+    </div>
+    </sc-if>
+  </div>
+  </sc-if>
+
+  <sc-if value="{{ isWidgets }}" hint-placeholder-val="{{ true }}">
+  <div style="padding:32px 24px;max-width:1100px">
+    <div style="font-size:20px;font-weight:800;margin-bottom:6px">Estados de widget</div>
+    <div style="font-size:13.5px;color:#8B93A5;margin-bottom:28px">Un widget nunca se oculta: siempre enseña qué le falta a la operación.</div>
+    <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:18px">
+      <div>
+        <div style="font-size:11px;font-weight:700;color:#33E5B0;text-transform:uppercase;letter-spacing:.05em;margin-bottom:10px">Disponible</div>
+        <div style="background:#12161F;border:1px solid rgba(255,255,255,0.07);border-radius:12px;padding:20px">
+          <div style="font-size:12px;color:#8B93A5;margin-bottom:8px">CPA entregado — Ecuador</div>
+          <div style="font-size:26px;font-weight:800">$ 4,10</div>
+          <svg width="100%" height="34" viewBox="0 0 200 34" style="margin-top:10px"><polyline points="0,28 25,24 50,26 75,18 100,20 125,12 150,14 175,8 200,4" fill="none" stroke="#33E5B0" stroke-width="1.6"/></svg>
+        </div>
+      </div>
+      <div>
+        <div style="font-size:11px;font-weight:700;color:#F5A83C;text-transform:uppercase;letter-spacing:.05em;margin-bottom:10px">Degradado</div>
+        <div style="background:#12161F;border:1px solid rgba(245,168,60,0.3);border-radius:12px;overflow:hidden">
+          <div style="background:rgba(245,168,60,0.12);color:#F5A83C;font-size:11px;font-weight:600;padding:7px 14px">Mostrando costo de catálogo — conecta el reporte de movimientos para el costo real</div>
+          <div style="padding:20px">
+            <div style="font-size:12px;color:#8B93A5;margin-bottom:8px">Contribución — Colombia</div>
+            <div style="font-size:26px;font-weight:800">$ 39.796.000</div>
+          </div>
+        </div>
+      </div>
+      <div>
+        <div style="font-size:11px;font-weight:700;color:#FF6259;text-transform:uppercase;letter-spacing:.05em;margin-bottom:10px">Bloqueado</div>
+        <div style="background:#12161F;border:1px solid rgba(255,255,255,0.07);border-radius:12px;padding:20px;position:relative;overflow:hidden;min-height:118px">
+          <div style="filter:blur(4px);opacity:.4"><div style="font-size:12px;color:#8B93A5;margin-bottom:8px">CPA entregado — Guatemala</div><div style="font-size:26px;font-weight:800">$ 4,10</div></div>
+          <div style="position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:9px;padding:16px;text-align:center;background:rgba(11,14,20,0.6)">
+            <svg width="20" height="20" viewBox="0 0 16 16" fill="none" style="color:#8B93A5"><rect x="3" y="7" width="10" height="7" rx="1.5" stroke="currentColor" stroke-width="1.3"/><path d="M5.5 7V5a2.5 2.5 0 015 0v2" stroke="currentColor" stroke-width="1.3"/></svg>
+            <div style="font-size:12px;color:#C4CAD6">Conecta Meta Ads en Guatemala para ver tu CPA entregado</div>
+            <div style="padding:6px 14px;background:#33E5B0;color:#06110C;border-radius:7px;font-weight:700;font-size:11.5px;cursor:pointer">Conectar →</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+  </sc-if>
+
+  <sc-if value="{{ isUpload }}" hint-placeholder-val="{{ true }}">
+  <div style="padding:24px;max-width:960px;display:flex;flex-direction:column;gap:20px">
+    <div style="border:2px dashed rgba(51,229,176,0.3);border-radius:14px;padding:44px;text-align:center;background:rgba(51,229,176,0.03)">
+      <svg width="30" height="30" viewBox="0 0 16 16" fill="none" style="margin:0 auto 12px;display:block;color:#33E5B0"><path d="M8 11V2M8 2L4.5 5.5M8 2l3.5 3.5" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"/><path d="M2 11v2a1 1 0 001 1h10a1 1 0 001-1v-2" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/></svg>
+      <div style="font-weight:600;font-size:14.5px">Arrastra tus archivos aquí</div>
+      <div style="font-size:12px;color:#5B6272;margin-top:4px">Soporta múltiples archivos a la vez · CSV, XLSX</div>
+    </div>
+    <div style="display:flex;flex-direction:column;gap:10px">
+      <div style="background:#12161F;border:1px solid rgba(255,255,255,0.07);border-radius:10px;padding:14px 18px">
+        <div style="display:flex;justify-content:space-between;font-size:13px;margin-bottom:8px"><span style="font-weight:600">guias_ago_ecuador.xlsx</span><span style="color:#5B6272">Detectado: Effi · Reporte de guías (Ecuador)</span></div>
+        <div style="height:5px;background:#1B212C;border-radius:4px;overflow:hidden;margin-bottom:8px"><div style="height:100%;width:100%;background:#33E5B0"></div></div>
+        <div style="font-size:12px;color:#8B93A5">1.649 filas · <span style="color:#33E5B0">212 guías nuevas</span> · <span style="color:#F5A83C">431 actualizadas</span> · 1.006 sin cambios · 0 errores</div>
+      </div>
+      <div style="background:#12161F;border:1px solid rgba(255,255,255,0.07);border-radius:10px;padding:14px 18px">
+        <div style="display:flex;justify-content:space-between;font-size:13px;margin-bottom:8px"><span style="font-weight:600">pauta_colombia_ago.csv</span><span style="color:#5B6272">Detectado: Meta Ads · Reporte de pauta (Colombia)</span></div>
+        <div style="height:5px;background:#1B212C;border-radius:4px;overflow:hidden"><div style="height:100%;width:64%;background:#33E5B0"></div></div>
+      </div>
+      <div style="background:rgba(255,98,89,0.06);border:1px solid rgba(255,98,89,0.3);border-radius:10px;padding:14px 18px">
+        <div style="display:flex;justify-content:space-between;font-size:13px"><span style="font-weight:600;color:#FF6259">movimientos_gt.xlsx</span><span style="color:#FF6259">Falló la validación</span></div>
+        <div style="font-size:12px;color:#F5A0A0;margin-top:6px">Recaudo promedio fuera de rango — posible archivo en centavos. No se cargó nada.</div>
+      </div>
+    </div>
+    <div style="background:#12161F;border:1px solid rgba(255,255,255,0.07);border-radius:12px;overflow:hidden">
+      <div style="padding:16px 20px;font-size:13px;font-weight:700;border-bottom:1px solid rgba(255,255,255,0.06)">Historial de cargas</div>
+      <div style="display:grid;grid-template-columns:1fr 1.6fr 1.4fr 1fr;padding:12px 20px;font-size:13px;border-top:1px solid rgba(255,255,255,0.05)"><div style="color:#5B6272">15/08</div><div>guias_ago_ecuador.xlsx</div><div style="color:#33E5B0">212 nuevas · 431 act.</div><div style="color:#5B6272">Alexander</div></div>
+      <div style="display:grid;grid-template-columns:1fr 1.6fr 1.4fr 1fr;padding:12px 20px;font-size:13px;border-top:1px solid rgba(255,255,255,0.05)"><div style="color:#5B6272">14/08</div><div>dropi_reporte.csv</div><div style="color:#33E5B0">88 nuevas · 120 act.</div><div style="color:#5B6272">Alexander</div></div>
+    </div>
+    <div style="background:#12161F;border:1px solid rgba(255,255,255,0.07);border-radius:12px;padding:18px;display:flex;justify-content:space-between;align-items:center">
+      <div><div style="font-size:13px;font-weight:700;margin-bottom:4px">Recibir por correo</div><div style="font-size:12.5px;color:#8B93A5">Reenvía tus reportes a este buzón y se cargan solos</div></div>
+      <div style="display:flex;align-items:center;gap:8px;background:#0F131A;border:1px solid rgba(255,255,255,0.1);border-radius:8px;padding:8px 12px;font-size:12.5px;color:#C4CAD6">ingesta-a8f3@norte.app <span style="color:#33E5B0;cursor:pointer;font-weight:600">Copiar</span></div>
+    </div>
+  </div>
+  </sc-if>
+
+  <sc-if value="{{ isSettings }}" hint-placeholder-val="{{ true }}">
+  <div style="padding:24px;max-width:920px;display:flex;flex-direction:column;gap:18px">
+    <div style="background:#12161F;border:1px solid rgba(255,255,255,0.07);border-radius:12px;padding:20px">
+      <div style="font-size:13px;font-weight:700;margin-bottom:14px">Países</div>
+      <div style="display:flex;flex-direction:column;gap:8px">
+        <div style="display:flex;justify-content:space-between;align-items:center;padding:10px 14px;background:#0F131A;border-radius:8px"><span>🇪🇨 Ecuador · principal</span><span style="color:#5B6272;font-size:12px">3 conexiones activas</span></div>
+        <div style="display:flex;justify-content:space-between;align-items:center;padding:10px 14px;background:#0F131A;border-radius:8px"><span>🇨🇴 Colombia</span><span style="color:#5B6272;font-size:12px">3 conexiones activas</span></div>
+        <div style="display:flex;justify-content:space-between;align-items:center;padding:10px 14px;background:#0F131A;border-radius:8px"><span>🇬🇹 Guatemala</span><span style="color:#F5A83C;font-size:12px">1 conexión activa · pauta sin conectar</span></div>
+      </div>
+      <div style="margin-top:12px;font-size:12.5px;color:#33E5B0;font-weight:600;cursor:pointer">+ Agregar país</div>
+    </div>
+    <div style="background:#12161F;border:1px solid rgba(255,255,255,0.07);border-radius:12px;padding:20px">
+      <div style="font-size:13px;font-weight:700;margin-bottom:14px">Usuarios y roles</div>
+      <div style="display:flex;flex-direction:column;gap:8px">
+        <div style="display:flex;justify-content:space-between;padding:10px 14px;background:#0F131A;border-radius:8px"><span>Alexander</span><span style="font-size:11px;font-weight:700;color:#33E5B0;background:rgba(51,229,176,0.1);padding:3px 8px;border-radius:5px">Dueño</span></div>
+        <div style="display:flex;justify-content:space-between;padding:10px 14px;background:#0F131A;border-radius:8px"><span>Diana</span><span style="font-size:11px;font-weight:700;color:#C4CAD6;background:rgba(255,255,255,0.06);padding:3px 8px;border-radius:5px">Analista</span></div>
+        <div style="display:flex;justify-content:space-between;padding:10px 14px;background:#0F131A;border-radius:8px"><span>Brian</span><span style="font-size:11px;font-weight:700;color:#8B93A5;background:rgba(255,255,255,0.04);padding:3px 8px;border-radius:5px">Solo lectura</span></div>
+      </div>
+    </div>
+    <div style="background:#12161F;border:1px solid rgba(255,255,255,0.07);border-radius:12px;padding:20px">
+      <div style="font-size:13px;font-weight:700;margin-bottom:14px">Preferencias</div>
+      <div style="display:flex;flex-direction:column;gap:12px;font-size:13px">
+        <div style="display:flex;justify-content:space-between;align-items:center"><span>Moneda principal</span><span style="color:#8B93A5">USD ($)</span></div>
+        <div style="display:flex;justify-content:space-between;align-items:center"><span>Ventana de maduración — Ecuador</span><span style="color:#33E5B0">11 días (sugerido)</span></div>
+        <div style="display:flex;justify-content:space-between;align-items:center"><span>Ventana de maduración — Colombia</span><span style="color:#8B93A5">15 días</span></div>
+        <div style="display:flex;justify-content:space-between;align-items:center"><span>Tema</span><span style="color:#8B93A5">Oscuro</span></div>
+      </div>
+    </div>
+  </div>
+  </sc-if>
+
+  <sc-if value="{{ isDesign }}" hint-placeholder-val="{{ true }}">
+  <div style="padding:32px 24px;max-width:1000px;display:flex;flex-direction:column;gap:28px">
+    <div><div style="font-size:20px;font-weight:800;margin-bottom:4px">Sistema de diseño</div><div style="font-size:13.5px;color:#8B93A5">Tokens y componentes base de Norte</div></div>
+    <div>
+      <div style="font-size:11px;font-weight:700;color:#5B6272;text-transform:uppercase;letter-spacing:.05em;margin-bottom:10px">Color</div>
+      <div style="display:flex;gap:12px;flex-wrap:wrap">
+        <div style="width:120px"><div style="height:60px;border-radius:8px;background:#0B0E14;border:1px solid rgba(255,255,255,0.1)"></div><div style="font-size:11px;color:#8B93A5;margin-top:6px">Fondo · #0B0E14</div></div>
+        <div style="width:120px"><div style="height:60px;border-radius:8px;background:#12161F;border:1px solid rgba(255,255,255,0.1)"></div><div style="font-size:11px;color:#8B93A5;margin-top:6px">Superficie · #12161F</div></div>
+        <div style="width:120px"><div style="height:60px;border-radius:8px;background:#33E5B0"></div><div style="font-size:11px;color:#8B93A5;margin-top:6px">Acento · #33E5B0</div></div>
+        <div style="width:120px"><div style="height:60px;border-radius:8px;background:#F5A83C"></div><div style="font-size:11px;color:#8B93A5;margin-top:6px">Advertencia · #F5A83C</div></div>
+        <div style="width:120px"><div style="height:60px;border-radius:8px;background:#FF6259"></div><div style="font-size:11px;color:#8B93A5;margin-top:6px">Pérdida · #FF6259</div></div>
+      </div>
+    </div>
+    <div>
+      <div style="font-size:11px;font-weight:700;color:#5B6272;text-transform:uppercase;letter-spacing:.05em;margin-bottom:10px">Tipografía — Inter, tabular numerals</div>
+      <div style="display:flex;flex-direction:column;gap:10px">
+        <div style="font-size:28px;font-weight:800;letter-spacing:-.02em">Aa 12.345,67 — Display</div>
+        <div style="font-size:18px;font-weight:700">Aa 12.345,67 — Título</div>
+        <div style="font-size:14px;font-weight:500;color:#C4CAD6">Aa 12.345,67 — Cuerpo</div>
+        <div style="font-size:12px;color:#8B93A5">Aa 12.345,67 — Metadato</div>
+      </div>
+    </div>
+    <div>
+      <div style="font-size:11px;font-weight:700;color:#5B6272;text-transform:uppercase;letter-spacing:.05em;margin-bottom:10px">Chips y semáforo</div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap">
+        <div style="font-size:10px;font-weight:700;padding:3px 8px;border-radius:5px;background:rgba(51,229,176,0.12);color:#33E5B0">API</div>
+        <div style="font-size:10px;font-weight:700;padding:3px 8px;border-radius:5px;background:rgba(245,168,60,0.12);color:#F5A83C">Archivo</div>
+        <div style="font-size:10px;font-weight:700;padding:3px 8px;border-radius:5px;background:rgba(139,147,165,0.15);color:#8B93A5">Sesión</div>
+        <div style="display:flex;align-items:center;gap:5px;font-size:11px"><span style="width:8px;height:8px;border-radius:50%;background:#33E5B0"></span>≥75%</div>
+        <div style="display:flex;align-items:center;gap:5px;font-size:11px"><span style="width:8px;height:8px;border-radius:50%;background:#F5A83C"></span>≥60%</div>
+        <div style="display:flex;align-items:center;gap:5px;font-size:11px"><span style="width:8px;height:8px;border-radius:50%;background:#FF6259"></span>&lt;60%</div>
+      </div>
+    </div>
+    <div>
+      <div style="font-size:11px;font-weight:700;color:#5B6272;text-transform:uppercase;letter-spacing:.05em;margin-bottom:10px">Card KPI</div>
+      <div style="background:#12161F;border:1px solid rgba(255,255,255,0.07);border-radius:12px;padding:18px;width:220px">
+        <div style="font-size:12px;color:#8B93A5;font-weight:600;margin-bottom:10px">Contribución total</div>
+        <div style="display:flex;align-items:baseline;gap:8px"><div style="font-size:26px;font-weight:800;letter-spacing:-.02em">$ 9.949</div><div style="font-size:12px;font-weight:700;color:#33E5B0">▲ 8,4%</div></div>
+      </div>
+    </div>
+    <div>
+      <div style="font-size:11px;font-weight:700;color:#5B6272;text-transform:uppercase;letter-spacing:.05em;margin-bottom:10px">Espaciado — escala 4/8/12/16/20/24/32px · radios 8–12px</div>
+    </div>
+  </div>
+  </sc-if>
+
+  <sc-if value="{{ isMobile }}" hint-placeholder-val="{{ true }}">
+  <div style="display:flex;justify-content:center;padding:36px 20px;gap:20px">
+    <div style="display:flex;flex-direction:column;gap:10px">
+      <div style="display:flex;gap:8px;justify-content:center">
+        <div style="{{ mobHomeBtn }}" onClick="{{ setMobHome }}">Home</div>
+        <div style="{{ mobAlertsBtn }}" onClick="{{ setMobAlerts }}">Alertas</div>
+        <div style="{{ mobDetailBtn }}" onClick="{{ setMobDetail }}">Detalle</div>
+      </div>
+      <div style="width:375px;height:790px;background:#0B0E14;border:10px solid #1A1E27;border-radius:44px;overflow:hidden;position:relative;box-shadow:0 30px 60px rgba(0,0,0,0.5)">
+        <div style="position:absolute;top:0;left:50%;transform:translateX(-50%);width:130px;height:22px;background:#1A1E27;border-radius:0 0 14px 14px;z-index:2"></div>
+        <div style="height:100%;overflow-y:auto;padding-top:34px">
+
+        <sc-if value="{{ isMobHome }}">
+        <div style="padding:16px">
+          <div style="font-size:12px;color:#8B93A5;margin-bottom:14px">🇪🇨 Ecuador · Hoy</div>
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:16px">
+            <div style="background:#12161F;border:1px solid rgba(255,255,255,0.07);border-radius:10px;padding:14px"><div style="font-size:11px;color:#8B93A5;margin-bottom:6px">Contribución</div><div style="font-size:18px;font-weight:800">$ 9.949</div></div>
+            <div style="background:#12161F;border:1px solid rgba(255,255,255,0.07);border-radius:10px;padding:14px"><div style="font-size:11px;color:#8B93A5;margin-bottom:6px">CPD</div><div style="font-size:18px;font-weight:800">$ 6,03</div></div>
+            <div style="background:#12161F;border:1px solid rgba(255,255,255,0.07);border-radius:10px;padding:14px"><div style="font-size:11px;color:#8B93A5;margin-bottom:6px">% Entrega</div><div style="font-size:18px;font-weight:800">47,3%</div></div>
+            <div style="background:#12161F;border:1px solid rgba(255,255,255,0.07);border-radius:10px;padding:14px"><div style="font-size:11px;color:#8B93A5;margin-bottom:6px">Capital tránsito</div><div style="font-size:18px;font-weight:800">$ 3.450</div></div>
+          </div>
+          <div style="background:#12161F;border:1px solid rgba(51,229,176,0.2);border-radius:10px;padding:14px">
+            <div style="font-size:10.5px;font-weight:700;color:#33E5B0;text-transform:uppercase;margin-bottom:6px">Resumen IA</div>
+            <div style="font-size:13px;line-height:1.5;color:#DADEE6">Gintracom cayó 9 pts en Guayas. Drenaje Linfático aguanta escalar pauta.</div>
+          </div>
+        </div>
+        </sc-if>
+
+        <sc-if value="{{ isMobAlerts }}">
+        <div style="padding:16px;display:flex;flex-direction:column;gap:10px">
+          <div style="font-size:15px;font-weight:700;margin-bottom:4px">Alertas</div>
+          <div style="background:#12161F;border-left:3px solid #FF6259;border-radius:8px;padding:12px 14px" onClick="{{ setMobDetail }}"><div style="font-size:11px;font-weight:700;color:#FF6259;margin-bottom:4px">CRÍTICA</div><div style="font-size:13px;line-height:1.4">Gintracom cae 9 pts en Guayas esta semana</div></div>
+          <div style="background:#12161F;border-left:3px solid #F5A83C;border-radius:8px;padding:12px 14px"><div style="font-size:11px;font-weight:700;color:#F5A83C;margin-bottom:4px">ATENCIÓN</div><div style="font-size:13px;line-height:1.4">Zooone con 33,9% de entrega — margen bajo</div></div>
+          <div style="background:#12161F;border-left:3px solid #33E5B0;border-radius:8px;padding:12px 14px"><div style="font-size:11px;font-weight:700;color:#33E5B0;margin-bottom:4px">OPORTUNIDAD</div><div style="font-size:13px;line-height:1.4">Drenaje Linfático aguanta más pauta</div></div>
+        </div>
+        </sc-if>
+
+        <sc-if value="{{ isMobDetail }}">
+        <div style="padding:16px">
+          <div style="font-size:11px;font-weight:700;color:#FF6259;margin-bottom:8px">CRÍTICA</div>
+          <div style="font-size:16px;font-weight:700;line-height:1.4;margin-bottom:10px">Gintracom cae 9 pts en Guayas esta semana</div>
+          <div style="font-size:13px;color:#C4CAD6;line-height:1.6;margin-bottom:16px">Si la caída se sostiene, te cuesta ≈ $310/semana en contribución perdida sobre las 410 guías gestionadas por esta transportadora.</div>
+          <div style="background:#0F131A;border-radius:8px;padding:12px;margin-bottom:16px"><div style="font-size:11px;color:#5B6272;margin-bottom:4px">Impacto estimado</div><div style="font-size:20px;font-weight:800;color:#FF6259">−$310 / semana</div></div>
+          <div style="padding:12px;background:#33E5B0;color:#06110C;border-radius:9px;font-weight:700;font-size:13.5px;text-align:center">Ver guías afectadas</div>
+        </div>
+        </sc-if>
+
+        </div>
+      </div>
+    </div>
+  </div>
+  </sc-if>
+
+  </div>
+</div>
+
+<div style="position:fixed;bottom:28px;right:28px;width:52px;height:52px;border-radius:16px;background:#33E5B0;display:flex;align-items:center;justify-content:center;cursor:pointer;box-shadow:0 8px 24px rgba(51,229,176,0.35);z-index:40" onClick="{{ toggleCopilot }}">
+  <svg width="22" height="22" viewBox="0 0 16 16" fill="none"><path d="M2 3.5A1.5 1.5 0 013.5 2h9A1.5 1.5 0 0114 3.5v6A1.5 1.5 0 0112.5 11H6l-3 3v-3H3.5A1.5 1.5 0 012 9.5v-6z" fill="#06110C"/></svg>
+</div>
+
+<sc-if value="{{ copilotOpen }}">
+<div style="position:fixed;top:0;right:0;width:420px;height:100vh;background:#0D1017;border-left:1px solid rgba(255,255,255,0.09);z-index:50;display:flex;flex-direction:column;box-shadow:-20px 0 40px rgba(0,0,0,0.35)">
+  <div style="display:flex;justify-content:space-between;align-items:center;padding:18px 20px;border-bottom:1px solid rgba(255,255,255,0.07)">
+    <div style="font-weight:700;font-size:14.5px">Copiloto IA</div>
+    <div style="cursor:pointer;color:#5B6272;font-size:18px;line-height:1" onClick="{{ toggleCopilot }}">×</div>
+  </div>
+  <div style="flex:1;overflow-y:auto;padding:20px;display:flex;flex-direction:column;gap:20px">
+    <div>
+      <div style="font-size:11px;font-weight:700;color:#33E5B0;text-transform:uppercase;letter-spacing:.05em;margin-bottom:10px">Resumen del día</div>
+      <div style="font-size:13.5px;line-height:1.65;color:#DADEE6">Ayer despachaste 118 guías. Gintracom cayó 9 pts en Guayas esta semana; si la caída se sostiene, te cuesta ≈ $310/semana. El Drenaje Linfático mantiene 45% de entrega con margen 52%: aguanta escalar pauta.</div>
+    </div>
+    <div>
+      <div style="font-size:11px;font-weight:700;color:#5B6272;text-transform:uppercase;letter-spacing:.05em;margin-bottom:10px">Alertas inteligentes</div>
+      <div style="display:flex;flex-direction:column;gap:10px">
+        <div style="background:#12161F;border:1px solid rgba(255,98,89,0.25);border-radius:10px;padding:14px">
+          <div style="font-size:10.5px;font-weight:700;color:#FF6259;margin-bottom:6px">CRÍTICA · Logística</div>
+          <div style="font-size:13px;line-height:1.5;margin-bottom:8px">Gintracom cae 9 pts en Guayas esta semana</div>
+          <div style="font-size:12px;color:#8B93A5;margin-bottom:10px">Impacto estimado: <b style="color:#FF6259">−$310/semana</b></div>
+          <div style="display:inline-block;padding:6px 12px;background:rgba(255,98,89,0.12);color:#FF6259;border-radius:7px;font-size:12px;font-weight:700;cursor:pointer">Ver guías afectadas</div>
+        </div>
+        <div style="background:#12161F;border:1px solid rgba(245,168,60,0.25);border-radius:10px;padding:14px">
+          <div style="font-size:10.5px;font-weight:700;color:#F5A83C;margin-bottom:6px">ATENCIÓN · Producto</div>
+          <div style="font-size:13px;line-height:1.5;margin-bottom:8px">Zooone quema margen: 33,9% de entrega en 428 guías</div>
+          <div style="font-size:12px;color:#8B93A5;margin-bottom:10px">Impacto estimado: <b style="color:#F5A83C">−$740 este mes</b></div>
+          <div style="display:inline-block;padding:6px 12px;background:rgba(245,168,60,0.12);color:#F5A83C;border-radius:7px;font-size:12px;font-weight:700;cursor:pointer">Pausar producto en El Oro</div>
+        </div>
+        <div style="background:#12161F;border:1px solid rgba(51,229,176,0.25);border-radius:10px;padding:14px">
+          <div style="font-size:10.5px;font-weight:700;color:#33E5B0;margin-bottom:6px">OPORTUNIDAD · Escalado</div>
+          <div style="font-size:13px;line-height:1.5;margin-bottom:8px">Drenaje Linfático sostiene 45% entrega con 52% margen</div>
+          <div style="font-size:12px;color:#8B93A5;margin-bottom:10px">Potencial: <b style="color:#33E5B0">+$1.200/mes escalando pauta</b></div>
+          <div style="display:inline-block;padding:6px 12px;background:rgba(51,229,176,0.12);color:#33E5B0;border-radius:7px;font-size:12px;font-weight:700;cursor:pointer">Subir pauta 20%</div>
+        </div>
+      </div>
+    </div>
+    <div>
+      <div style="font-size:11px;font-weight:700;color:#5B6272;text-transform:uppercase;letter-spacing:.05em;margin-bottom:10px">Pregúntale a tus datos</div>
+      <div style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:10px">
+        <div style="font-size:11.5px;padding:6px 10px;background:#12161F;border:1px solid rgba(255,255,255,0.1);border-radius:16px;color:#C4CAD6;cursor:pointer">¿qué producto me está quemando plata?</div>
+        <div style="font-size:11.5px;padding:6px 10px;background:#12161F;border:1px solid rgba(255,255,255,0.1);border-radius:16px;color:#C4CAD6;cursor:pointer">compara Servientrega vs Gintracom en agosto</div>
+      </div>
+      <div style="display:flex;gap:8px">
+        <div style="flex:1;background:#12161F;border:1px solid rgba(255,255,255,0.1);border-radius:9px;padding:10px 12px;font-size:13px;color:#5B6272">Escribe tu pregunta…</div>
+        <div style="width:38px;height:38px;border-radius:9px;background:#33E5B0;display:flex;align-items:center;justify-content:center;flex-shrink:0;cursor:pointer"><svg width="15" height="15" viewBox="0 0 16 16" fill="none"><path d="M2 8h11M9 4l4 4-4 4" stroke="#06110C" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg></div>
+      </div>
+    </div>
+  </div>
+</div>
+</sc-if>
+
+</div>
+
+</x-dc>
+<script type="text/x-dc" data-dc-script>
+const COUNTRIES = {
+  ecuador: {
+    key:'ecuador', flag:'🇪🇨', name:'Ecuador', currencyCode:'USD', period:'1–15 ago 2026',
+    recaudo:20896, producto:6138, flete:4809, contribucion:9949,
+    recaudoFmt:'$ 20.896', productoFmt:'$ 6.138', fleteFmt:'$ 4.809', contribucionFmt:'$ 9.949',
+    cpdFmt:'$ 6,03', capitalTransitoFmt:'$ 3.450', cicloDias:'9,3 días',
+    logisticsLimited:false, pautaLocked:false,
+    carriers:[
+      {name:'Servientrega',entrega:45.1,problema:29.0,guias:922,p50:4,p90:9},
+      {name:'Gintracom',entrega:51.2,problema:32.4,guias:410,p50:5,p90:11},
+      {name:'Laarcourier',entrega:52.7,problema:25.3,guias:91,p50:3,p90:7},
+    ],
+    aging:{b0:412,b1:298,b2:156,b3:89},
+    novedades:{entran:478,recuperadas:196,devolucion:282},
+    products:[
+      {name:'Drenaje Linfático',guias:704,entrega:44.9,margin:52,color:'#33E5B0'},
+      {name:'Clorofila Detox',guias:426,entrega:46.7,margin:38,color:'#5FCB9E'},
+      {name:'Zooone',guias:428,entrega:33.9,margin:22,color:'#FF6259'},
+      {name:'Beevena Apitoxina',guias:89,entrega:53.9,margin:48,color:'#F5A83C'},
+    ],
+    provinces:[
+      {name:'Manabí',entrega:52.6},{name:'Guayas',entrega:41.8},{name:'El Oro',entrega:35.1},{name:'Tungurahua',entrega:50.0},
+    ],
+    cpaFmt:'$ 4,10', roasFmt:'3,2x',
+    confirmacion:{whatsapp:68,llamada:22,bot:10}, servicioBotLocked:false, tiempoRespuesta:'6 min',
+    liftPts:18, liftMoneyFmt:'$ 2.340',
+  },
+  colombia: {
+    key:'colombia', flag:'🇨🇴', name:'Colombia', currencyCode:'COP', period:'1–15 ago 2026',
+    recaudo:83584000, producto:24552000, flete:19236000, contribucion:39796000,
+    recaudoFmt:'$ 83.584.000', productoFmt:'$ 24.552.000', fleteFmt:'$ 19.236.000', contribucionFmt:'$ 39.796.000',
+    cpdFmt:'$ 24.120', capitalTransitoFmt:'$ 13.800.000', cicloDias:'7,8 días',
+    logisticsLimited:false, pautaLocked:false,
+    carriers:[
+      {name:'Coordinadora',entrega:61.2,problema:19.5,guias:850,p50:3,p90:6},
+      {name:'Interrápidísimo',entrega:55.8,problema:24.1,guias:520,p50:4,p90:8},
+      {name:'Envía',entrega:58.0,problema:21.0,guias:300,p50:3,p90:7},
+    ],
+    aging:{b0:380,b1:240,b2:130,b3:60},
+    novedades:{entran:390,recuperadas:210,devolucion:180},
+    products:[
+      {name:'Crema Reafirmante',guias:610,entrega:59.1,margin:44,color:'#33E5B0'},
+      {name:'Té Detox',guias:390,entrega:55.3,margin:36,color:'#5FCB9E'},
+      {name:'Faja Térmica',guias:340,entrega:62.7,margin:41,color:'#F5A83C'},
+      {name:'Sérum Facial',guias:220,entrega:66.9,margin:50,color:'#33E5B0'},
+    ],
+    provinces:[
+      {name:'Antioquia',entrega:68.4},{name:'Valle del Cauca',entrega:60.1},{name:'Cundinamarca',entrega:57.9},{name:'Atlántico',entrega:49.5},
+    ],
+    cpaFmt:'$ 18.500', roasFmt:'4,1x',
+    confirmacion:{whatsapp:74,llamada:18,bot:8}, servicioBotLocked:false, tiempoRespuesta:'4 min',
+    liftPts:15, liftMoneyFmt:'$ 6.200.000',
+  },
+  guatemala: {
+    key:'guatemala', flag:'🇬🇹', name:'Guatemala', currencyCode:'GTQ', period:'1–15 ago 2026',
+    recaudo:6420, producto:1980, flete:1510, contribucion:2930,
+    recaudoFmt:'Q 6.420,00', productoFmt:'Q 1.980,00', fleteFmt:'Q 1.510,00', contribucionFmt:'Q 2.930,00',
+    cpdFmt:'Q 5,72', capitalTransitoFmt:'Q 980,00', cicloDias:'11,2 días',
+    logisticsLimited:true, pautaLocked:true,
+    carriers:[
+      {name:'Cargo Expreso',entrega:41.0,problema:33.5,guias:512,p50:5,p90:12},
+    ],
+    aging:{b0:120,b1:90,b2:55,b3:40},
+    novedades:{entran:165,recuperadas:58,devolucion:98},
+    products:[
+      {name:'Colágeno Hidrolizado',guias:290,entrega:39.5,margin:30,color:'#FF6259'},
+      {name:'Multivitamínico',guias:222,entrega:43.2,margin:34,color:'#F5A83C'},
+    ],
+    provinces:[
+      {name:'Guatemala',entrega:44.2},{name:'Quetzaltenango',entrega:38.6},
+    ],
+    cpaFmt:null, roasFmt:null,
+    confirmacion:{whatsapp:52,llamada:30,bot:0}, servicioBotLocked:true, tiempoRespuesta:'14 min',
+    liftPts:9, liftMoneyFmt:'Q 410,00',
+  },
+};
+
+const NAV_ACTIVE = 'display:flex;align-items:center;gap:10px;padding:9px 10px;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer;background:rgba(51,229,176,0.1);color:#33E5B0';
+const NAV_INACTIVE = 'display:flex;align-items:center;gap:10px;padding:9px 10px;border-radius:8px;font-size:13px;font-weight:500;cursor:pointer;color:#9AA1B0';
+const TAB_ACTIVE = 'padding:12px 4px;margin-right:22px;font-size:13.5px;font-weight:700;color:#E7EAF0;border-bottom:2px solid #33E5B0;cursor:pointer';
+const TAB_INACTIVE = 'padding:12px 4px;margin-right:22px;font-size:13.5px;font-weight:500;color:#5B6272;border-bottom:2px solid transparent;cursor:pointer';
+const RANGE_ACTIVE = 'padding:6px 12px;border-radius:6px;font-size:12px;font-weight:700;background:#1E2530;color:#E7EAF0;cursor:pointer';
+const RANGE_INACTIVE = 'padding:6px 12px;border-radius:6px;font-size:12px;font-weight:500;color:#8B93A5;cursor:pointer';
+const MOB_BTN_ACTIVE = 'padding:6px 14px;border-radius:16px;background:#33E5B0;color:#06110C;font-size:11.5px;font-weight:700;cursor:pointer';
+const MOB_BTN_INACTIVE = 'padding:6px 14px;border-radius:16px;background:#12161F;border:1px solid rgba(255,255,255,0.1);color:#8B93A5;font-size:11.5px;font-weight:600;cursor:pointer';
+
+class Component extends DCLogic {
+  state = {
+    screen: 'global', selectedCountry: 'ecuador', countryTab: 'finanzas',
+    copilotOpen: false, sidebarCollapsed: false, onboardingStep: 1,
+    mobScreen: 'home', range: '30d',
+  };
+
+  go(screen){ return () => this.setState({ screen }); }
+  goCountry(key){ return () => this.setState({ screen: 'country', selectedCountry: key }); }
+
+  renderVals() {
+    const s = this.state;
+    const screen = s.screen;
+    const country = COUNTRIES[s.selectedCountry];
+    const scale = 220 / country.recaudo;
+    const wf = {
+      b1h: Math.round(220),
+      b2h: Math.round(country.producto * scale),
+      b2bottom: Math.round((country.recaudo - country.producto) * scale),
+      b3h: Math.round(country.flete * scale),
+      b3bottom: Math.round(country.contribucion * scale),
+      b4h: Math.round(country.contribucion * scale),
+    };
+    const maxAging = Math.max(country.aging.b0, country.aging.b1, country.aging.b2, country.aging.b3);
+    const aging = {
+      h0: Math.round(140 * country.aging.b0 / maxAging),
+      h1: Math.round(140 * country.aging.b1 / maxAging),
+      h2: Math.round(140 * country.aging.b2 / maxAging),
+      h3: Math.round(140 * country.aging.b3 / maxAging),
+    };
+    const productsPx = country.products.map(p => ({
+      x: Math.round((p.entrega/100) * 360),
+      y: Math.round(240 - (p.margin/100) * 240),
+      r: Math.max(8, Math.round(6 + p.guias/40)),
+      color: p.color,
+    }));
+    country.productsPx = productsPx;
+    country.provinces.forEach(p => { p.color = p.entrega>=75 ? '#33E5B0' : p.entrega>=60 ? '#F5A83C' : '#FF6259'; });
+    country.pautaLockedInverse = !country.pautaLocked;
+    country.servicioBotInverse = !country.servicioBotLocked;
+
+    const nav = (key, active) => active ? NAV_ACTIVE : NAV_INACTIVE;
+    const tab = (t) => s.countryTab === t ? TAB_ACTIVE : TAB_INACTIVE;
+    const range = (r) => s.range === r ? RANGE_ACTIVE : RANGE_INACTIVE;
+    const mobBtn = (m) => s.mobScreen === m ? MOB_BTN_ACTIVE : MOB_BTN_INACTIVE;
+
+    const titles = {
+      global:'Dashboard Global', country: country.name, widgets:'Estados de widget', upload:'Cargar datos',
+      settings:'Configuración', onboarding:'Onboarding', mobile:'Vista móvil', design:'Sistema de diseño',
+    };
+
+    return {
+      screen,
+      isOnboarding: screen==='onboarding', isGlobal: screen==='global', isCountry: screen==='country',
+      isWidgets: screen==='widgets', isUpload: screen==='upload', isSettings: screen==='settings',
+      isMobile: screen==='mobile', isDesign: screen==='design',
+      showTopbar: ['global','country','widgets','upload','settings'].includes(screen),
+      pageTitle: titles[screen] || '',
+      sidebarWidth: s.sidebarCollapsed ? 64 : 224,
+      notCollapsed: !s.sidebarCollapsed,
+      collapseIconStyle: s.sidebarCollapsed ? 'transform:rotate(180deg)' : '',
+      toggleSidebar: () => this.setState({ sidebarCollapsed: !s.sidebarCollapsed }),
+
+      navGlobalStyle: nav('global', screen==='global'),
+      navEcStyle: nav('ec', screen==='country' && s.selectedCountry==='ecuador'),
+      navCoStyle: nav('co', screen==='country' && s.selectedCountry==='colombia'),
+      navGtStyle: nav('gt', screen==='country' && s.selectedCountry==='guatemala'),
+      navUploadStyle: nav('upload', screen==='upload'),
+      navCopilotStyle: nav('copilot', s.copilotOpen),
+      navSettingsStyle: nav('settings', screen==='settings'),
+      navOnboardingStyle: nav('ob', screen==='onboarding'),
+      navWidgetStyle: nav('wd', screen==='widgets'),
+      navMobileStyle: nav('mob', screen==='mobile'),
+      navDesignStyle: nav('des', screen==='design'),
+
+      goGlobal: this.go('global'), goUpload: this.go('upload'), goSettings: this.go('settings'),
+      goOnboarding: this.go('onboarding'), goWidgets: this.go('widgets'), goMobile: this.go('mobile'), goDesign: this.go('design'),
+      goEcuador: this.goCountry('ecuador'), goColombia: this.goCountry('colombia'), goGuatemala: this.goCountry('guatemala'),
+      toggleCopilot: () => this.setState({ copilotOpen: !s.copilotOpen }),
+      copilotOpen: s.copilotOpen,
+
+      country, wf, aging,
+
+      tabFinanzasStyle: tab('finanzas'), tabLogisticaStyle: tab('logistica'), tabEfectividadStyle: tab('efectividad'), tabServicioStyle: tab('servicio'),
+      isTabFinanzas: s.countryTab==='finanzas', isTabLogistica: s.countryTab==='logistica', isTabEfectividad: s.countryTab==='efectividad', isTabServicio: s.countryTab==='servicio',
+      setTabFinanzas: () => this.setState({countryTab:'finanzas'}), setTabLogistica: () => this.setState({countryTab:'logistica'}),
+      setTabEfectividad: () => this.setState({countryTab:'efectividad'}), setTabServicio: () => this.setState({countryTab:'servicio'}),
+
+      rangeTodayStyle: range('hoy'), range7Style: range('7d'), range30Style: range('30d'), rangeCohortStyle: range('cohorte'),
+      setRangeToday: () => this.setState({range:'hoy'}), setRange7: () => this.setState({range:'7d'}),
+      setRange30: () => this.setState({range:'30d'}), setRangeCohort: () => this.setState({range:'cohorte'}),
+
+      onboardingStep: s.onboardingStep,
+      isStep1: s.onboardingStep===1, isStep2: s.onboardingStep===2, isStep3: s.onboardingStep===3, isStep4: s.onboardingStep===4,
+      obStepLabel: ['','Países','Plataformas','Histórico','Calibración'][s.onboardingStep],
+      obProgressPct: s.onboardingStep*25,
+      obNextLabel: s.onboardingStep===4 ? 'Ir al Dashboard' : 'Continuar',
+      nextOnboarding: () => s.onboardingStep>=4 ? this.setState({screen:'global'}) : this.setState({onboardingStep:s.onboardingStep+1}),
+      prevOnboarding: () => this.setState({onboardingStep: Math.max(1, s.onboardingStep-1)}),
+
+      connections: [
+        {flag:'🇪🇨',platform:'Effi',type:'API',status:'Sincronizado',color:'#33E5B0',lastSync:'hace 2 h'},
+        {flag:'🇪🇨',platform:'Dropi',type:'API',status:'Sincronizado',color:'#33E5B0',lastSync:'hace 1 h'},
+        {flag:'🇪🇨',platform:'Mastershop',type:'Archivo',status:'Pendiente',color:'#F5A83C',lastSync:'hace 14 h'},
+        {flag:'🇨🇴',platform:'Effi',type:'API',status:'Sincronizado',color:'#33E5B0',lastSync:'hace 40 min'},
+        {flag:'🇨🇴',platform:'Meta Ads',type:'API',status:'Sincronizado',color:'#33E5B0',lastSync:'hace 20 min'},
+        {flag:'🇬🇹',platform:'Meta Ads',type:'—',status:'Sin conectar',color:'#FF6259',lastSync:'—'},
+      ],
+
+      mobHomeBtn: mobBtn('home'), mobAlertsBtn: mobBtn('alerts'), mobDetailBtn: mobBtn('detail'),
+      isMobHome: s.mobScreen==='home', isMobAlerts: s.mobScreen==='alerts', isMobDetail: s.mobScreen==='detail',
+      setMobHome: () => this.setState({mobScreen:'home'}), setMobAlerts: () => this.setState({mobScreen:'alerts'}), setMobDetail: () => this.setState({mobScreen:'detail'}),
+    };
+  }
+}
+</script>
+</body>
+</html>
