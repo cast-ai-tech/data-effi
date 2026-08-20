@@ -94,7 +94,8 @@ def register_error_handlers(app: FastAPI) -> None:
             for err in exc.errors()
         ]
         return JSONResponse(
-            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            # Starlette renamed this constant; the numeric code is unchanged.
+            status_code=422,
             content=_envelope(
                 "validation_error",
                 "Revisa los datos enviados: hay campos inválidos.",

@@ -1,0 +1,44 @@
+# Norte API and worker.
+#
+# One image serves both: the API runs uvicorn, the worker runs the scheduler.
+# They share every dependency, so building twice would only buy divergence.
+
+FROM python:3.12-slim AS base
+
+ENV PYTHONUNBUFFERED=1 \
+    PYTHONDONTWRITEBYTECODE=1 \
+    PIP_NO_CACHE_DIR=1 \
+    PIP_DISABLE_PIP_VERSION_CHECK=1
+
+WORKDIR /app
+
+# Build tools for argon2-cffi, then removed in the same layer.
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends build-essential libpq5 curl \
+    && rm -rf /var/lib/apt/lists/*
+
+COPY requirements.txt ./
+RUN pip install --no-cache-dir -r requirements.txt \
+    && apt-get purge -y --auto-remove build-essential
+
+COPY api/ ./api/
+COPY worker/ ./worker/
+COPY pipeline/ ./pipeline/
+COPY connectors/ ./connectors/
+COPY ai/ ./ai/
+COPY scripts/ ./scripts/
+COPY migrations/ ./migrations/
+COPY tests/fixtures/ ./tests/fixtures/
+
+# Runs as a non-root user: a container that does not need root should not have it.
+RUN useradd --create-home --uid 10001 norte \
+    && mkdir -p /app/uploads \
+    && chown -R norte:norte /app
+USER norte
+
+EXPOSE 8000
+
+HEALTHCHECK --interval=15s --timeout=5s --start-period=20s --retries=5 \
+    CMD curl -fsS http://localhost:8000/health || exit 1
+
+CMD ["uvicorn", "api.main:app", "--host", "0.0.0.0", "--port", "8000"]

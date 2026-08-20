@@ -2,12 +2,17 @@
 
 Response models stay close to the mart views: the API is a thin, typed window
 onto SQL that already did the thinking.
+
+MONEY IS `float`, NOT `Decimal`, IN RESPONSES. Pydantic serialises Decimal as a
+JSON *string* ("43885700.00"), and JavaScript then happily concatenates those
+instead of adding them - a bug that shows up as a dashboard total silently
+reading "—". PostgreSQL keeps the exact numeric; the wire format is a number,
+which is the only thing JS can add. Requests keep their precise types.
 """
 
 from __future__ import annotations
 
 from datetime import date, datetime
-from decimal import Decimal
 from typing import Any, Literal
 from uuid import UUID
 
@@ -198,7 +203,7 @@ class BatchSummary(BaseModel):
     error: str | None
     started_at: datetime
     finished_at: datetime | None
-    duration_seconds: Decimal | None
+    duration_seconds: float | None
 
 
 class PaginatedBatches(BaseModel):
@@ -238,17 +243,17 @@ class DailyContributionRow(BaseModel):
     returned: int
     in_transit: int
     dead: int
-    declared_value: Decimal | None
-    revenue: Decimal | None
-    freight: Decimal | None
-    cogs: Decimal | None
-    fees: Decimal | None
-    adjustments: Decimal | None
-    ad_spend: Decimal | None
-    contribution: Decimal | None
-    contribution_margin_pct: Decimal | None
-    delivery_rate_terminal_pct: Decimal | None
-    delivery_rate_dispatched_pct: Decimal | None
+    declared_value: float | None
+    revenue: float | None
+    freight: float | None
+    cogs: float | None
+    fees: float | None
+    adjustments: float | None
+    ad_spend: float | None
+    contribution: float | None
+    contribution_margin_pct: float | None
+    delivery_rate_terminal_pct: float | None
+    delivery_rate_dispatched_pct: float | None
     currency_code: str | None
     ad_spend_missing: bool
 
@@ -261,14 +266,14 @@ class CarrierRow(BaseModel):
     delivered: int
     returned: int
     in_transit: int
-    delivery_rate_pct: Decimal | None
-    return_rate_pct: Decimal | None
-    avg_days_to_deliver: Decimal | None
-    p90_days_to_deliver: Decimal | None
-    freight_total: Decimal | None
-    avg_freight_per_shipment: Decimal | None
-    revenue: Decimal | None
-    contribution: Decimal | None
+    delivery_rate_pct: float | None
+    return_rate_pct: float | None
+    avg_days_to_deliver: float | None
+    p90_days_to_deliver: float | None
+    freight_total: float | None
+    avg_freight_per_shipment: float | None
+    revenue: float | None
+    contribution: float | None
     currency_code: str | None
 
 
@@ -281,10 +286,10 @@ class GeoRow(BaseModel):
     delivered: int
     returned: int
     in_transit: int
-    delivery_rate_pct: Decimal | None
-    revenue: Decimal | None
-    contribution: Decimal | None
-    avg_days_to_deliver: Decimal | None
+    delivery_rate_pct: float | None
+    revenue: float | None
+    contribution: float | None
+    avg_days_to_deliver: float | None
     traffic_light: str
     currency_code: str | None
 
@@ -299,13 +304,13 @@ class ProductRow(BaseModel):
     units: int | None
     delivered: int
     returned: int
-    delivery_rate_pct: Decimal | None
-    revenue: Decimal | None
-    cogs: Decimal | None
-    freight: Decimal | None
-    contribution: Decimal | None
-    contribution_per_shipment: Decimal | None
-    margin_pct: Decimal | None
+    delivery_rate_pct: float | None
+    revenue: float | None
+    cogs: float | None
+    freight: float | None
+    contribution: float | None
+    contribution_per_shipment: float | None
+    margin_pct: float | None
     currency_code: str | None
 
 
@@ -315,7 +320,7 @@ class CohortRow(BaseModel):
     cohort_size: int
     days_since: int
     delivered_by_day: int
-    delivery_rate_pct: Decimal | None
+    delivery_rate_pct: float | None
     is_observable: bool
     is_mature: bool
     maturation_days: int
@@ -326,8 +331,8 @@ class AgingRow(BaseModel):
     aging_bucket: str
     bucket_order: int
     shipments: int
-    value_at_risk: Decimal | None
-    avg_days_open: Decimal | None
+    value_at_risk: float | None
+    avg_days_open: float | None
     currency_code: str | None
 
 
@@ -339,22 +344,22 @@ class CsRow(BaseModel):
     rejected: int
     no_answer: int
     pending: int
-    confirmation_rate_pct: Decimal | None
-    avg_attempts: Decimal | None
+    confirmation_rate_pct: float | None
+    avg_attempts: float | None
 
 
 class CpaRow(BaseModel):
     country_code: str
     day: date
-    ad_spend: Decimal
+    ad_spend: float
     impressions: int
     clicks: int
     shipments: int
     delivered: int
-    revenue: Decimal
-    cpa_dispatched: Decimal | None
-    cpa_delivered: Decimal | None
-    roas: Decimal | None
+    revenue: float
+    cpa_dispatched: float | None
+    cpa_delivered: float | None
+    roas: float | None
     currency_code: str | None
 
 
@@ -366,13 +371,13 @@ class GlobalRow(BaseModel):
     delivered: int
     returned: int
     in_transit: int
-    delivery_rate_pct: Decimal | None
-    revenue: Decimal | None
-    ad_spend: Decimal | None
-    contribution: Decimal | None
-    fx_rate_to_usd: Decimal | None
+    delivery_rate_pct: float | None
+    revenue: float | None
+    ad_spend: float | None
+    contribution: float | None
+    fx_rate_to_usd: float | None
     fx_rate_date: date | None
-    contribution_usd: Decimal | None
+    contribution_usd: float | None
     fx_missing: bool
     last_shipment_date: date | None
 
@@ -416,7 +421,7 @@ class AlertResponse(BaseModel):
     severity: Literal["info", "warning", "critical"]
     title: str
     finding: str
-    impact_amount: Decimal | None
+    impact_amount: float | None
     impact_currency: str | None
     action: str
     deep_link: str

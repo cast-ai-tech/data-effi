@@ -68,7 +68,7 @@ def recent_runs(
 
     from api.db import connection, fetch_all
 
-    with connection() as conn:
+    with connection(service=True) as conn:
         return fetch_all(
             conn,
             """

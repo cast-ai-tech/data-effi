@@ -38,7 +38,7 @@ class IngestQueue:
 
     async def recover_pending(self) -> int:
         """Re-queue jobs left behind by a restart."""
-        with connection() as conn:
+        with connection(service=True) as conn:
             rows = fetch_all(
                 conn,
                 "SELECT id FROM raw.upload_job WHERE status IN ('queued', 'processing') "
@@ -65,7 +65,7 @@ class IngestQueue:
 
     def _process(self, job_id: UUID) -> None:
         """Synchronous body, run in a worker thread (psycopg here is sync)."""
-        with connection() as conn:
+        with connection(service=True) as conn:
             job = fetch_one(
                 conn,
                 """
@@ -97,7 +97,7 @@ class IngestQueue:
             return
 
         try:
-            with connection() as conn:
+            with connection(service=True) as conn:
                 store = PostgresStore(conn)
                 engine = IngestEngine(store, pii_salt=self._settings.pii_hash_salt)
                 report = engine.ingest(
@@ -140,7 +140,7 @@ class IngestQueue:
         )
 
     def _fail(self, job_id: UUID, message: str) -> None:
-        with connection() as conn:
+        with connection(service=True) as conn:
             execute(
                 conn,
                 "UPDATE raw.upload_job SET status = 'failed', error = %s, finished_at = now() "

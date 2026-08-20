@@ -69,17 +69,27 @@ def get_readonly_pool() -> ConnectionPool | None:
 
 
 @contextmanager
-def connection(tenant_id: UUID | None = None) -> Iterator[psycopg.Connection]:
+def connection(
+    tenant_id: UUID | None = None, *, service: bool = False
+) -> Iterator[psycopg.Connection]:
     """Check out a connection, scoped to a tenant, committing on success.
 
     `SET LOCAL` means the setting dies with the transaction, so a pooled
     connection can never carry one tenant's scope into another's request.
+
+    `service=True` is the worker/ingestion context: those processes legitimately
+    touch every tenant, so RLS lets them through (see migration 007). Never set
+    it on a path that serves a user request.
     """
     with get_pool().connection() as conn:
         try:
-            if tenant_id is not None:
-                with conn.cursor() as cur:
-                    cur.execute("SELECT set_config('norte.tenant_id', %s, true)", (str(tenant_id),))
+            with conn.cursor() as cur:
+                if tenant_id is not None:
+                    cur.execute(
+                        "SELECT set_config('norte.tenant_id', %s, true)", (str(tenant_id),)
+                    )
+                if service:
+                    cur.execute("SELECT set_config('norte.service', 'on', true)")
             yield conn
             conn.commit()
         except Exception:

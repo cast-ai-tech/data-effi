@@ -1,0 +1,174 @@
+@import "tailwindcss";
+
+/*
+ * Norte design tokens.
+ *
+ * Structure, density and scale come from design/Norte.dc.html (see
+ * design/DESIGN-SPEC.md). The accent hue comes from Effi, the platform this
+ * tool sits next to all day - a dashboard that clashes with the ERP beside it
+ * reads as a foreign object.
+ *
+ * COLOUR IS NEVER DECORATION HERE. Each one means exactly one thing:
+ *   accent   -> actionable / brand
+ *   positive -> money earned, delivery, things going up that should
+ *   warning  -> degraded, watch this
+ *   negative -> money lost, returns, things going down
+ */
+
+@theme {
+  /* --- surfaces --- */
+  --color-page: #0b0e14;
+  --color-sidebar: #0d1017;
+  --color-surface: #12161f;
+  --color-sunken: #0f131a;
+  --color-track: #1b212c;
+  --color-range-active: #1e2530;
+
+  /* --- borders --- */
+  --color-line: rgba(255, 255, 255, 0.07);
+  --color-line-strong: rgba(255, 255, 255, 0.08);
+  --color-line-subtle: rgba(255, 255, 255, 0.06);
+  --color-line-row: rgba(255, 255, 255, 0.05);
+  --color-line-input: rgba(255, 255, 255, 0.1);
+
+  /* --- text --- */
+  --color-ink: #e7eaf0;
+  --color-ink-body: #dadee6;
+  --color-ink-2: #c4cad6;
+  --color-ink-muted: #8b93a5;
+  --color-ink-dim: #5b6272;
+  --color-ink-faint: #4c5364;
+  --color-ink-nav: #9aa1b0;
+  --color-on-accent: #04202e;
+
+  /* --- semantics (Effi palette) --- */
+  --color-accent: #29a9e0;
+  --color-accent-hover: #4fbcea;
+  --color-accent-deep: #1c86b4;
+  --color-positive: #21c08a;
+  --color-positive-2: #5fcb9e;
+  --color-warning: #f5a83c;
+  --color-negative: #ff6259;
+  --color-negative-soft: #f5a0a0;
+  --color-neutral-bar: #3a4152;
+  --color-neutral-series: #5b6272;
+
+  /* --- radii --- */
+  --radius-card: 12px;
+  --radius-control: 8px;
+
+  --font-sans: Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+}
+
+/* Light theme. The product is dark-first; this keeps it usable in a bright room
+ * without inventing a second design. */
+@media (prefers-color-scheme: light) {
+  :root:not([data-theme="dark"]) {
+    --color-page: #f5f7fa;
+    --color-sidebar: #ffffff;
+    --color-surface: #ffffff;
+    --color-sunken: #f0f3f7;
+    --color-track: #e3e8ef;
+    --color-range-active: #e8edf4;
+    --color-line: rgba(15, 23, 42, 0.1);
+    --color-line-strong: rgba(15, 23, 42, 0.12);
+    --color-line-subtle: rgba(15, 23, 42, 0.08);
+    --color-line-row: rgba(15, 23, 42, 0.07);
+    --color-line-input: rgba(15, 23, 42, 0.14);
+    --color-ink: #0f172a;
+    --color-ink-body: #1e293b;
+    --color-ink-2: #334155;
+    --color-ink-muted: #64748b;
+    --color-ink-dim: #94a3b8;
+    --color-ink-faint: #a8b2c1;
+    --color-ink-nav: #475569;
+    --color-on-accent: #ffffff;
+  }
+}
+
+:root[data-theme="light"] {
+  --color-page: #f5f7fa;
+  --color-sidebar: #ffffff;
+  --color-surface: #ffffff;
+  --color-sunken: #f0f3f7;
+  --color-track: #e3e8ef;
+  --color-line: rgba(15, 23, 42, 0.1);
+  --color-line-strong: rgba(15, 23, 42, 0.12);
+  --color-line-subtle: rgba(15, 23, 42, 0.08);
+  --color-line-row: rgba(15, 23, 42, 0.07);
+  --color-line-input: rgba(15, 23, 42, 0.14);
+  --color-ink: #0f172a;
+  --color-ink-body: #1e293b;
+  --color-ink-2: #334155;
+  --color-ink-muted: #64748b;
+  --color-ink-dim: #94a3b8;
+  --color-ink-faint: #a8b2c1;
+  --color-ink-nav: #475569;
+  --color-on-accent: #ffffff;
+}
+
+html,
+body {
+  background: var(--color-page);
+  color: var(--color-ink);
+}
+
+body {
+  font-family: var(--font-sans);
+  /* Non-negotiable in BI: every figure must line up in its column. */
+  font-variant-numeric: tabular-nums;
+  -webkit-font-smoothing: antialiased;
+}
+
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.12);
+  border-radius: 8px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+a {
+  color: var(--color-accent);
+}
+a:hover {
+  color: var(--color-accent-hover);
+}
+
+@keyframes norte-pulse {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.4;
+  }
+}
+
+.skeleton {
+  background: var(--color-track);
+  border-radius: 6px;
+  animation: norte-pulse 1.6s ease-in-out infinite;
+}
+
+/* Chrome paints autofilled inputs with its own near-white background, which on a
+ * dark surface looks like a rendering bug. There is no property to override it;
+ * a large inset shadow is the accepted way to repaint the field. */
+input:-webkit-autofill,
+input:-webkit-autofill:hover,
+input:-webkit-autofill:focus {
+  -webkit-text-fill-color: var(--color-ink);
+  -webkit-box-shadow: 0 0 0 1000px var(--color-surface) inset;
+  caret-color: var(--color-ink);
+  transition: background-color 9999s ease-in-out 0s;
+}
+
+/* Recharts leaves a focus outline on the SVG wrapper that reads as a bug. */
+.recharts-wrapper:focus,
+.recharts-surface:focus {
+  outline: none;
+}

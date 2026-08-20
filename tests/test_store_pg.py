@@ -39,9 +39,24 @@ def pg_dsn() -> str:
         pytest.skip(f"PostgreSQL unreachable: {exc}")
 
 
+def _service_connection(dsn: str) -> psycopg.Connection:
+    """A connection in the ingestion service context.
+
+    The ingestion queue legitimately writes for any tenant, so it declares
+    `norte.service` and row-level security lets it through (migration 007).
+    Tests must use the same context the real code path does - otherwise they
+    would be testing a path that does not exist.
+    """
+    conn = psycopg.connect(dsn, autocommit=False)
+    with conn.cursor() as cur:
+        cur.execute("SELECT set_config('norte.service', 'on', false)")
+    conn.commit()
+    return conn
+
+
 @pytest.fixture
 def pg_conn(pg_dsn):
-    conn = psycopg.connect(pg_dsn, autocommit=False)
+    conn = _service_connection(pg_dsn)
     seed_workspace(conn, tenant_id=TENANT_A, connection_id=CONN_A, slug="tenant-a")
     seed_workspace(conn, tenant_id=TENANT_B, connection_id=CONN_B, slug="tenant-b")
     truncate_data(conn)
@@ -442,7 +457,7 @@ def test_two_simultaneous_uploads_of_the_same_file_load_once(pg_dsn, guias_dia1,
     """
     from pipeline.store_pg import PostgresStore
 
-    setup = psycopg.connect(pg_dsn, autocommit=False)
+    setup = _service_connection(pg_dsn)
     seed_workspace(setup, tenant_id=TENANT_A, connection_id=CONN_A, slug="tenant-a")
     truncate_data(setup)
     seed_workspace(setup, tenant_id=TENANT_A, connection_id=CONN_A, slug="tenant-a")
@@ -454,7 +469,7 @@ def test_two_simultaneous_uploads_of_the_same_file_load_once(pg_dsn, guias_dia1,
 
     def worker() -> None:
         try:
-            conn = psycopg.connect(pg_dsn, autocommit=False)
+            conn = _service_connection(pg_dsn)
             try:
                 engine = IngestEngine(PostgresStore(conn), pii_salt=pii_salt, today=TODAY)
                 barrier.wait(timeout=20)
@@ -481,7 +496,7 @@ def test_two_simultaneous_uploads_of_the_same_file_load_once(pg_dsn, guias_dia1,
     assert len(skipped) == 1
     assert loaded[0].rows_inserted == 10
 
-    verify = psycopg.connect(pg_dsn)
+    verify = _service_connection(pg_dsn)
     try:
         counts = _rows(
             verify,
@@ -553,7 +568,7 @@ def test_mart_views_are_empty_without_a_tenant_guc(pg_engine, pg_conn, guias_dia
 def test_mart_views_return_only_the_current_tenant(pg_dsn, guias_dia1, pii_salt):
     from pipeline.store_pg import PostgresStore, set_tenant
 
-    conn = psycopg.connect(pg_dsn, autocommit=False)
+    conn = _service_connection(pg_dsn)
     try:
         seed_workspace(conn, tenant_id=TENANT_A, connection_id=CONN_A, slug="tenant-a")
         seed_workspace(conn, tenant_id=TENANT_B, connection_id=CONN_B, slug="tenant-b")
@@ -580,7 +595,7 @@ def test_kpis_match_the_hand_counted_fixture(pg_dsn, guias_dia1, pii_salt):
     """v_daily_contribution reconciled by hand against tests/fixtures/effi_guias_dia1.csv."""
     from pipeline.store_pg import PostgresStore, set_tenant
 
-    conn = psycopg.connect(pg_dsn, autocommit=False)
+    conn = _service_connection(pg_dsn)
     try:
         seed_workspace(conn, tenant_id=TENANT_A, connection_id=CONN_A, slug="tenant-a")
         truncate_data(conn)
@@ -633,7 +648,7 @@ def test_kpis_match_the_hand_counted_fixture(pg_dsn, guias_dia1, pii_salt):
 def test_layout_blocks_cpa_without_an_ads_connection(pg_dsn, guias_dia1, pii_salt):
     from pipeline.store_pg import PostgresStore, set_tenant
 
-    conn = psycopg.connect(pg_dsn, autocommit=False)
+    conn = _service_connection(pg_dsn)
     try:
         seed_workspace(conn, tenant_id=TENANT_A, connection_id=CONN_A, slug="tenant-a")
         truncate_data(conn)

@@ -1,0 +1,117 @@
+# Norte - the whole platform.
+#
+#   docker compose up          -> database, migrations, API, worker, web
+#   make seed-demo             -> a three-country demo workspace with real numbers
+#
+# Every value comes from .env. Copy .env.example first and fill the blanks; the
+# API refuses to start with a placeholder secret rather than starting insecure.
+
+x-app-env: &app-env
+  DATABASE_URL: postgresql://norte_app:${POSTGRES_APP_PASSWORD:?POSTGRES_APP_PASSWORD is required}@db:5432/${POSTGRES_DB:-norte}
+  DATABASE_URL_READONLY: postgresql://norte_readonly:${POSTGRES_READONLY_PASSWORD:-}@db:5432/${POSTGRES_DB:-norte}
+  POSTGRES_ADMIN_URL: postgresql://${POSTGRES_USER:-norte}:${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}@db:5432/${POSTGRES_DB:-norte}
+  POSTGRES_APP_PASSWORD: ${POSTGRES_APP_PASSWORD}
+  POSTGRES_READONLY_PASSWORD: ${POSTGRES_READONLY_PASSWORD:-}
+  JWT_SECRET: ${JWT_SECRET:?JWT_SECRET is required}
+  PII_HASH_SALT: ${PII_HASH_SALT:?PII_HASH_SALT is required}
+  WORKER_TRIGGER_SECRET: ${WORKER_TRIGGER_SECRET:?WORKER_TRIGGER_SECRET is required}
+  CORS_ORIGINS: ${CORS_ORIGINS:-http://localhost:3000}
+  MAX_UPLOAD_MB: ${MAX_UPLOAD_MB:-25}
+  INGEST_MAX_CONCURRENCY: ${INGEST_MAX_CONCURRENCY:-4}
+  LOG_LEVEL: ${LOG_LEVEL:-INFO}
+  ENVIRONMENT: ${ENVIRONMENT:-development}
+  AI_ENABLED: ${AI_ENABLED:-false}
+  ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
+  AI_MODEL: ${AI_MODEL:-claude-sonnet-5}
+  AI_DAILY_TOKEN_BUDGET: ${AI_DAILY_TOKEN_BUDGET:-200000}
+  TIER3_FETCH_ENABLED: ${TIER3_FETCH_ENABLED:-false}
+  FX_PROVIDER_URL: ${FX_PROVIDER_URL:-https://open.er-api.com/v6/latest}
+  FX_PROVIDER_API_KEY: ${FX_PROVIDER_API_KEY:-}
+
+services:
+  db:
+    image: postgres:16-alpine
+    container_name: norte_db
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-norte}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}
+      POSTGRES_DB: ${POSTGRES_DB:-norte}
+      POSTGRES_INITDB_ARGS: "--locale=C --encoding=UTF8"
+    ports:
+      - "${POSTGRES_PORT:-5433}:5432"
+    volumes:
+      - norte_pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 3s
+      timeout: 5s
+      retries: 20
+    restart: unless-stopped
+
+  # Applies migrations and sets the role passwords, then exits. Everything else
+  # waits for it to finish, so the API never meets a half-built schema.
+  migrate:
+    build:
+      context: .
+      dockerfile: Dockerfile.api
+    container_name: norte_migrate
+    environment:
+      <<: *app-env
+    depends_on:
+      db:
+        condition: service_healthy
+    command: >
+      sh -c "
+        python -m scripts.migrate &&
+        python -m scripts.setup_roles
+      "
+    restart: "no"
+
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile.api
+    container_name: norte_api
+    environment:
+      <<: *app-env
+      UPLOAD_DIR: /app/uploads
+    ports:
+      - "${API_PORT:-8000}:8000"
+    volumes:
+      - norte_uploads:/app/uploads
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+    restart: unless-stopped
+
+  worker:
+    build:
+      context: .
+      dockerfile: Dockerfile.api
+    container_name: norte_worker
+    environment:
+      <<: *app-env
+      WORKER_ENABLED: ${WORKER_ENABLED:-true}
+    command: ["python", "-m", "worker.main"]
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+    restart: unless-stopped
+
+  web:
+    build:
+      context: ./web
+      dockerfile: Dockerfile
+      args:
+        NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-http://localhost:8000}
+    container_name: norte_web
+    ports:
+      - "${WEB_PORT:-3000}:3000"
+    depends_on:
+      api:
+        condition: service_started
+    restart: unless-stopped
+
+volumes:
+  norte_pgdata:
+  norte_uploads:
