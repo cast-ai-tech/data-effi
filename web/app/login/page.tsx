@@ -56,9 +56,9 @@ function LoginForm() {
       <div className="w-full max-w-[380px]">
         <div className="mb-7 flex items-center gap-2.5">
           <div className="flex size-8 items-center justify-center rounded-[8px] bg-accent text-[16px] font-extrabold text-on-accent">
-            N
+            DE
           </div>
-          <span className="text-[18px] font-bold tracking-tight">Norte</span>
+          <span className="text-[18px] font-bold tracking-tight">Data Effi</span>
         </div>
 
         <h1 className="text-[20px] font-bold leading-tight">

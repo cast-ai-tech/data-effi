@@ -311,7 +311,7 @@ function NewConnectionForm({
             className="mt-0.5"
           />
           <span className="text-[11.5px] leading-relaxed text-warning">
-            Entiendo que esta es una conexión <b>Tier 3</b>: Norte entrará con mi sesión de
+            Entiendo que esta es una conexión <b>Tier 3</b>: Data Effi entrará con mi sesión de
             usuario a {selected.platform_name}. Puede ir contra los términos de esa
             plataforma y la responsabilidad es mía. Leí <code>docs/tier3-politica.md</code>.
           </span>
@@ -363,7 +363,7 @@ function Tier3Notice() {
       <div className="space-y-2 text-[12px] leading-relaxed text-ink-2">
         <p>
           Una conexión Tier 3 entra con <b>tu sesión</b> a una plataforma que no publica
-          API. Norte se identifica, espera entre peticiones y se detiene apenas la
+          API. Data Effi se identifica, espera entre peticiones y se detiene apenas la
           plataforma rechaza la sesión: nunca disfraza el tráfico.
         </p>
         <p>

@@ -23,13 +23,21 @@ from api.ingest_queue import get_queue
 from api.schemas import (
     BatchDetail,
     BatchSummary,
+    DetectResponse,
     DiscrepancyResponse,
     PaginatedBatches,
     UploadAcceptedResponse,
     UploadJobResponse,
 )
 from pipeline.models import BatchKind
-from pipeline.readers import SUPPORTED_EXTENSIONS
+from pipeline.profiles import build_profile_header_map, detect_country, detect_profile
+from pipeline.readers import (
+    SUPPORTED_EXTENSIONS,
+    EmptyFileError,
+    UnsupportedFileError,
+    read_tabular,
+    sniff_format,
+)
 
 logger = logging.getLogger(__name__)
 

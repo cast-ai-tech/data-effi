@@ -33,7 +33,7 @@ logger = logging.getLogger(__name__)
 # hash makes a repeated report a no-op.
 TIER3_LOOKBACK_DAYS = 14
 
-# Currencies Norte converts to USD for the global view.
+# Currencies Data Effi converts to USD for the global view.
 FX_BASE_CURRENCIES = ("COP", "MXN", "PEN", "CLP", "GTQ", "USD")
 
 

@@ -19,7 +19,7 @@ pytest.importorskip("fastapi")
 
 pytestmark = pytest.mark.postgres
 
-OWNER_EMAIL = "owner@norteapp.co"
+OWNER_EMAIL = "owner@dataeffi.co"
 OWNER_PASSWORD = "una-clave-larga-de-prueba"
 
 
@@ -105,7 +105,7 @@ def test_register_refuses_a_second_time(client, owner_token):
     response = client.post(
         "/auth/register",
         json={
-            "email": "otro@norteapp.co",
+            "email": "otro@dataeffi.co",
             "password": "otra-clave-larga-1234",
             "full_name": "Otro",
             "tenant_name": "Otra empresa",
@@ -134,7 +134,7 @@ def test_login_with_a_wrong_password_is_rejected(client, owner_token):
 
 def test_login_with_an_unknown_email_gives_the_same_message(client, owner_token):
     response = client.post(
-        "/auth/login", json={"email": "nadie@norteapp.co", "password": "loquesea1234"}
+        "/auth/login", json={"email": "nadie@dataeffi.co", "password": "loquesea1234"}
     )
     assert response.status_code == 401
     assert response.json()["error"]["message"] == "Correo o contraseña incorrectos"
@@ -164,7 +164,7 @@ def test_me_returns_the_caller(client, owner_token):
 
 def test_a_viewer_cannot_create_connections(client, owner_token):
     invite = client.post(
-        "/auth/invite", json={"email": "viewer@norteapp.co", "role": "viewer"},
+        "/auth/invite", json={"email": "viewer@dataeffi.co", "role": "viewer"},
         headers=auth(owner_token),
     )
     assert invite.status_code == 201
@@ -523,5 +523,5 @@ def test_openapi_is_served(client):
     response = client.get("/openapi.json")
     assert response.status_code == 200
     schema = response.json()
-    assert schema["info"]["title"] == "Norte API"
+    assert schema["info"]["title"] == "Data Effi API"
     assert "/kpis/layout" in schema["paths"]

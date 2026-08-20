@@ -1,4 +1,4 @@
-"""Norte API.
+"""Data Effi API.
 
 Boots only when the environment is complete, and says exactly what is missing
 when it is not. Everything past /health and /auth/login requires a token.
@@ -23,7 +23,7 @@ from api.settings import get_settings
 logger = logging.getLogger(__name__)
 
 DESCRIPTION = """
-API de **Norte**, plataforma de analítica para operaciones de ecommerce
+API de **Data Effi**, plataforma de analítica para operaciones de ecommerce
 contraentrega (COD) multi-país en LATAM.
 
 Todos los KPI se leen de vistas `mart.*`; la API no calcula métricas. El
@@ -47,20 +47,20 @@ async def lifespan(app: FastAPI):
     queue = init_queue(settings)
     await queue.recover_pending()
 
-    logger.info("Norte API lista en %s:%s", settings.api_host, settings.api_port)
+    logger.info("Data Effi API lista en %s:%s", settings.api_host, settings.api_port)
     try:
         yield
     finally:
         await get_queue().drain()
         close_pools()
-        logger.info("Norte API detenida limpiamente")
+        logger.info("Data Effi API detenida limpiamente")
 
 
 def create_app() -> FastAPI:
     settings = get_settings()
 
     app = FastAPI(
-        title="Norte API",
+        title="Data Effi API",
         description=DESCRIPTION,
         version="1.0.0",
         lifespan=lifespan,

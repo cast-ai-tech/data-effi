@@ -1,1 +1,1 @@
-"""Norte external connectors."""
+"""Data Effi external connectors."""

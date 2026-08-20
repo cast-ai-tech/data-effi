@@ -45,6 +45,7 @@ from pipeline.models import (
     RowOutcome,
     SanityIssue,
     ShipmentInput,
+    SourceRow,
     UpsertResult,
 )
 from pipeline.normalize import (
@@ -62,7 +63,9 @@ from pipeline.normalize import (
 from pipeline.profiles import (
     apply_transform,
     build_profile_header_map,
+    detect_country,
     detect_profile,
+    redact_row,
 )
 from pipeline.readers import iter_records, read_tabular
 
@@ -72,6 +75,24 @@ logger = logging.getLogger(__name__)
 MAX_BACKDATE_DAYS = 1095
 # Collecting more than this multiple of the declared value means a bad column map.
 COD_OVERCOLLECT_FACTOR = Decimal("1.5")
+
+
+class CountryMismatch(Exception):
+    """The file says it is about a different country than the connection.
+
+    Refused rather than imported: loading Ecuadorian guides into a Colombian
+    connection would price every one of them in COP, and the mistake becomes
+    invisible the moment the data is in.
+    """
+
+    def __init__(self, detected: str, expected: str, raw_value: str) -> None:
+        super().__init__(
+            f"El archivo es de {raw_value} ({detected}) pero la conexión es de "
+            f"{expected}. Súbelo a una conexión de {detected}, o revisa el archivo."
+        )
+        self.detected = detected
+        self.expected = expected
+        self.raw_value = raw_value
 
 
 class BatchAlreadyExists(Exception):
@@ -119,6 +140,15 @@ class Store(Protocol):
     def finish_batch(self, ctx: BatchContext, report: IngestReport) -> None:
         ...
 
+    def save_source_rows(self, ctx: BatchContext, rows: list[SourceRow]) -> int:
+        """Archive the original rows, every column of them.
+
+        A column that was discarded is a metric that cannot be built later, so
+        the whole row is kept. Personal identifiers arrive here already hashed -
+        see profiles.redact_row.
+        """
+        ...
+
 
 # =============================================================================
 # Merge policy - the single source of truth for "what may a later file change?"
@@ -159,7 +189,15 @@ class ShipmentRecord:
     expected_delivery_date: date | None = None
     settled_at: datetime | None = None
     settled_with_collection: bool | None = None
+    settled_any_at: datetime | None = None
+    settled_return_at: datetime | None = None
+    settled_return: bool | None = None
     service_level: str | None = None
+    weight_kg: Decimal | None = None
+    discount_pct: Decimal | None = None
+    dispatch_batch_ref: str | None = None
+    dispatched_batch_at: datetime | None = None
+    distributor_name: str | None = None
     declared_value: Decimal | None = None
     cod_collected: Decimal | None = None
     freight_cost: Decimal | None = None
@@ -168,6 +206,11 @@ class ShipmentRecord:
     platform_fee: Decimal | None = None
     insurance_cost: Decimal | None = None
     collection_fee: Decimal | None = None
+    freight_base: Decimal | None = None
+    sale_total: Decimal | None = None
+    distributor_sale_total: Decimal | None = None
+    distributor_cost_total: Decimal | None = None
+    supplier_sale_total: Decimal | None = None
     first_batch_id: UUID | None = None
     last_batch_id: UUID | None = None
 
@@ -293,6 +336,7 @@ class MemoryStore:
         self.shipments: dict[tuple[UUID, str], ShipmentRecord] = {}
         self.movements: dict[tuple[UUID, str], MovementRecord] = {}
         self.discrepancies: list[tuple[UUID, Discrepancy]] = []
+        self.source_rows: dict[UUID, list[SourceRow]] = {}
 
     # -- batch lifecycle ------------------------------------------------
     def batch_exists(self, tenant_id: UUID, connection_id: UUID, content_hash: str) -> bool:
@@ -325,6 +369,10 @@ class MemoryStore:
 
     def finish_batch(self, ctx: BatchContext, report: IngestReport) -> None:
         self.batch_reports[ctx.batch_id] = report
+
+    def save_source_rows(self, ctx: BatchContext, rows: list[SourceRow]) -> int:
+        self.source_rows.setdefault(ctx.batch_id, []).extend(rows)
+        return len(rows)
 
     # -- rows -----------------------------------------------------------
     def upsert_shipment(self, ctx: BatchContext, shipment: ShipmentInput) -> UpsertResult:
@@ -359,7 +407,15 @@ class MemoryStore:
                 expected_delivery_date=shipment.expected_delivery_date,
                 settled_at=shipment.settled_at,
                 settled_with_collection=shipment.settled_with_collection,
+                settled_any_at=shipment.settled_any_at,
+                settled_return_at=shipment.settled_return_at,
+                settled_return=shipment.settled_return,
                 service_level=shipment.service_level,
+                weight_kg=shipment.weight_kg,
+                discount_pct=shipment.discount_pct,
+                dispatch_batch_ref=shipment.dispatch_batch_ref,
+                dispatched_batch_at=shipment.dispatched_batch_at,
+                distributor_name=shipment.distributor_name,
                 declared_value=shipment.declared_value,
                 cod_collected=shipment.cod_collected,
                 freight_cost=shipment.freight_cost,
@@ -368,6 +424,11 @@ class MemoryStore:
                 platform_fee=shipment.platform_fee,
                 insurance_cost=shipment.insurance_cost,
                 collection_fee=shipment.collection_fee,
+                freight_base=shipment.freight_base,
+                sale_total=shipment.sale_total,
+                distributor_sale_total=shipment.distributor_sale_total,
+                distributor_cost_total=shipment.distributor_cost_total,
+                supplier_sale_total=shipment.supplier_sale_total,
                 first_batch_id=ctx.batch_id,
                 last_batch_id=ctx.batch_id,
             )
@@ -577,12 +638,23 @@ def check_movement(movement: MovementInput, today: date) -> list[SanityIssue]:
 class IngestEngine:
     """Runs one file through parse -> validate -> merge -> report."""
 
-    def __init__(self, store: Store, *, pii_salt: str, today: date | None = None) -> None:
+    def __init__(
+        self,
+        store: Store,
+        *,
+        pii_salt: str,
+        today: date | None = None,
+        archive_rows: bool = True,
+    ) -> None:
         if not pii_salt:
             raise ValueError("pii_salt is required: customer identifiers are never stored raw")
         self._store = store
         self._pii_salt = pii_salt
         self._today = today or datetime.now(UTC).date()
+        # Keep every original column. Costs storage, and buys the ability to
+        # answer a question about a column nobody mapped - without asking the
+        # user to upload the file again.
+        self._archive_rows = archive_rows
 
     def ingest(
         self,
@@ -646,6 +718,23 @@ class IngestEngine:
         report.profile_code = profile.code if profile else None
         report.profile_label = profile.label if profile else None
 
+        # The file usually says what country it is about. Believe it, and refuse
+        # to import it into a connection for somewhere else.
+        if profile is not None:
+            detected, raw_value = detect_country(headers, rows, profile)
+            report.detected_country_code = detected
+            report.detected_country_raw = raw_value
+
+            if detected and detected != country_code.upper():
+                report.finished_at = datetime.now(UTC)
+                mismatch = CountryMismatch(detected, country_code.upper(), raw_value or detected)
+                report.errors.append(RowError(0, str(mismatch)))
+                report.rows_total = len(rows)
+                report.rows_failed = len(rows)
+                self._store.finish_batch(ctx, report)
+                logger.warning("country mismatch: file=%s connection=%s", detected, country_code)
+                return report
+
         required = (
             ("tracking_number",)
             if profile is not None and profile.kind is BatchKind.SHIPMENTS
@@ -673,8 +762,12 @@ class IngestEngine:
 
         handler = self._handle_shipment_row if kind is BatchKind.SHIPMENTS else self._handle_movement_row
 
+        pii_headers = profile.pii_columns_norm if profile else frozenset()
+        archive: list[SourceRow] = []
+
         for row_number, mapped, raw in iter_records(headers, rows, header_map):
             report.rows_total += 1
+            fields: dict[str, Any] = mapped
             try:
                 fields = apply_transform(profile, mapped) if profile else mapped
                 handler(ctx, report, row_number, fields, default_currency)
@@ -682,6 +775,22 @@ class IngestEngine:
                 report.rows_failed += 1
                 report.errors.append(RowError(row_number, str(exc), raw))
                 logger.warning("row %s failed: %s", row_number, exc)
+
+            # Archive the original row whatever happened to it. A row that
+            # failed to parse is precisely the one somebody will want to read.
+            if self._archive_rows:
+                payload, redacted = redact_row(raw, pii_headers, self._pii_salt)
+                archive.append(
+                    SourceRow(
+                        row_number=row_number,
+                        entity_key=_entity_key_of(fields),
+                        payload=payload,
+                        redacted_fields=redacted,
+                    )
+                )
+
+        if archive:
+            report.rows_stored = self._store.save_source_rows(ctx, archive)
 
         report.finished_at = datetime.now(UTC)
         self._store.finish_batch(ctx, report)
@@ -749,7 +858,17 @@ class IngestEngine:
             settled_with_collection=mapped.get("settled_with_collection")
             if isinstance(mapped.get("settled_with_collection"), bool)
             else None,
+            settled_any_at=parse_datetime(mapped.get("settled_any_at")),
+            settled_return_at=parse_datetime(mapped.get("settled_return_at")),
+            settled_return=mapped.get("settled_return")
+            if isinstance(mapped.get("settled_return"), bool)
+            else None,
             service_level=clean_text(mapped.get("service_level")),
+            weight_kg=parse_decimal(mapped.get("weight_kg")),
+            discount_pct=parse_decimal(mapped.get("discount_pct")),
+            dispatch_batch_ref=clean_text(mapped.get("dispatch_batch_ref")),
+            dispatched_batch_at=parse_datetime(mapped.get("dispatched_batch_at")),
+            distributor_name=clean_text(mapped.get("distributor_name")),
             declared_value=_abs_or_none(parse_decimal(mapped.get("declared_value"))),
             cod_collected=_abs_or_none(parse_decimal(mapped.get("cod_collected"))),
             freight_cost=_abs_or_none(parse_decimal(mapped.get("freight_cost"))),
@@ -758,6 +877,15 @@ class IngestEngine:
             platform_fee=_abs_or_none(parse_decimal(mapped.get("platform_fee"))),
             insurance_cost=_abs_or_none(parse_decimal(mapped.get("insurance_cost"))),
             collection_fee=_abs_or_none(parse_decimal(mapped.get("collection_fee"))),
+            freight_base=_abs_or_none(parse_decimal(mapped.get("freight_base"))),
+            sale_total=_abs_or_none(parse_decimal(mapped.get("sale_total"))),
+            distributor_sale_total=_abs_or_none(
+                parse_decimal(mapped.get("distributor_sale_total"))
+            ),
+            distributor_cost_total=_abs_or_none(
+                parse_decimal(mapped.get("distributor_cost_total"))
+            ),
+            supplier_sale_total=_abs_or_none(parse_decimal(mapped.get("supplier_sale_total"))),
             source_row_number=row_number,
         )
 
@@ -888,3 +1016,13 @@ __all__ = [
     "check_shipment",
     "merge_shipment",
 ]
+
+
+def _entity_key_of(fields: dict[str, Any]) -> str | None:
+    """Best identifier available for an archived row, for later lookup."""
+    for key in ("tracking_number", "carrier_tracking_number", "external_ref",
+                "tracking_number_raw", "external_order_id"):
+        value = fields.get(key)
+        if value:
+            return str(value)[:120]
+    return None

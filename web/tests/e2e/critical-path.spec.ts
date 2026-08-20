@@ -9,12 +9,12 @@ import { expect, test, type Page } from "@playwright/test";
  * red that trains everyone to ignore it.
  */
 
-const API_HEALTH_URL = process.env.NORTE_API_URL
-  ? `${process.env.NORTE_API_URL}/health`
+const API_HEALTH_URL = process.env.DATAEFFI_API_URL
+  ? `${process.env.DATAEFFI_API_URL}/health`
   : "http://localhost:8000/health";
 
-const DEMO_EMAIL = process.env.NORTE_DEMO_EMAIL ?? "demo@norteapp.co";
-const DEMO_PASSWORD = process.env.NORTE_DEMO_PASSWORD ?? "demo-norte-2026";
+const DEMO_EMAIL = process.env.DATAEFFI_DEMO_EMAIL ?? "demo@dataeffi.co";
+const DEMO_PASSWORD = process.env.DATAEFFI_DEMO_PASSWORD ?? "demo-dataeffi-2026";
 
 let stackIsUp = false;
 

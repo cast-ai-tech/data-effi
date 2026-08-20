@@ -64,7 +64,7 @@ export function AppShell({
 }) {
   const pathname = usePathname();
   const router = useRouter();
-  const [collapsed, setCollapsed] = usePersistentState("norte.sidebar.collapsed", false);
+  const [collapsed, setCollapsed] = usePersistentState("dataeffi.sidebar.collapsed", false);
   const [copilotOpen, setCopilotOpen] = useState(false);
 
   const { data: countries } = useApi<Country[]>("/config/countries");
@@ -103,10 +103,10 @@ export function AppShell({
       >
         <div className="flex items-center gap-2.5 border-b border-line-subtle px-[18px] py-5">
           <div className="flex size-7 shrink-0 items-center justify-center rounded-[7px] bg-accent text-[14px] font-extrabold text-on-accent">
-            N
+            DE
           </div>
           {!collapsed && (
-            <span className="text-[15px] font-bold tracking-tight">Norte</span>
+            <span className="text-[15px] font-bold tracking-tight">Data Effi</span>
           )}
         </div>
 

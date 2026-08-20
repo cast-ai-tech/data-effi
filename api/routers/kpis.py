@@ -17,14 +17,20 @@ from api.deps import DbDep
 from api.schemas import (
     AgingRow,
     CarrierRow,
+    CashCycleRow,
     CohortRow,
     CpaRow,
     CsRow,
     DailyContributionRow,
+    DropshippingMarginRow,
+    FreightRow,
+    FulfillmentRow,
     GeoRow,
     GlobalRow,
     LayoutResponse,
     LayoutWidget,
+    OfficeRescueRow,
+    ProblemRateRow,
     ProductRow,
 )
 
@@ -182,6 +188,87 @@ def cpa(
     where, params = _range_filter("day", country, date_from, date_to)
     rows = fetch_all(conn, f"SELECT * FROM mart.v_cpa_roas {where} ORDER BY day", params)
     return [CpaRow(**row) for row in rows]
+
+
+@router.get(
+    "/dropshipping-margin",
+    response_model=list[DropshippingMarginRow],
+    summary="Cadena de márgenes por producto",
+)
+def dropshipping_margin(conn: DbDep, country: CountryQuery) -> list[DropshippingMarginRow]:
+    rows = fetch_all(
+        conn,
+        "SELECT * FROM mart.v_dropshipping_margin WHERE country_code = %(country)s "
+        "ORDER BY net_contribution DESC NULLS LAST",
+        {"country": country.upper()},
+    )
+    return [DropshippingMarginRow(**row) for row in rows]
+
+
+@router.get(
+    "/fulfillment",
+    response_model=list[FulfillmentRow],
+    summary="Alistamiento y cumplimiento de promesa",
+)
+def fulfillment(conn: DbDep, country: CountryQuery) -> list[FulfillmentRow]:
+    rows = fetch_all(
+        conn,
+        "SELECT * FROM mart.v_fulfillment_sla WHERE country_code = %(country)s "
+        "ORDER BY shipments DESC",
+        {"country": country.upper()},
+    )
+    return [FulfillmentRow(**row) for row in rows]
+
+
+@router.get(
+    "/office-rescue",
+    response_model=list[OfficeRescueRow],
+    summary="Guías esperando en oficina",
+)
+def office_rescue(conn: DbDep, country: CountryQuery) -> list[OfficeRescueRow]:
+    rows = fetch_all(
+        conn,
+        "SELECT * FROM mart.v_office_rescue WHERE country_code = %(country)s "
+        "ORDER BY value_waiting DESC NULLS LAST",
+        {"country": country.upper()},
+    )
+    return [OfficeRescueRow(**row) for row in rows]
+
+
+@router.get("/freight", response_model=list[FreightRow], summary="Análisis de flete")
+def freight(conn: DbDep, country: CountryQuery) -> list[FreightRow]:
+    rows = fetch_all(
+        conn,
+        "SELECT * FROM mart.v_freight_analysis WHERE country_code = %(country)s "
+        "ORDER BY shipments DESC",
+        {"country": country.upper()},
+    )
+    return [FreightRow(**row) for row in rows]
+
+
+@router.get("/cash-cycle", response_model=list[CashCycleRow], summary="Ciclo de caja")
+def cash_cycle(conn: DbDep, country: CountryQuery) -> list[CashCycleRow]:
+    rows = fetch_all(
+        conn,
+        "SELECT * FROM mart.v_cash_cycle WHERE country_code = %(country)s ORDER BY country_code",
+        {"country": country.upper()},
+    )
+    return [CashCycleRow(**row) for row in rows]
+
+
+@router.get(
+    "/problem-rate",
+    response_model=list[ProblemRateRow],
+    summary="Novedad, oficina y devolución como un solo número",
+)
+def problem_rate(conn: DbDep, country: CountryQuery) -> list[ProblemRateRow]:
+    rows = fetch_all(
+        conn,
+        "SELECT * FROM mart.v_problem_rate WHERE country_code = %(country)s "
+        "ORDER BY problem_rate_pct DESC NULLS LAST",
+        {"country": country.upper()},
+    )
+    return [ProblemRateRow(**row) for row in rows]
 
 
 @router.get("/global", response_model=list[GlobalRow], summary="Consolidado multi-país")

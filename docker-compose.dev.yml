@@ -6,7 +6,7 @@
 services:
   db:
     image: postgres:16-alpine
-    container_name: norte_db
+    container_name: dataeffi_db
     environment:
       POSTGRES_USER: ${POSTGRES_USER:?POSTGRES_USER is required}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}
@@ -16,7 +16,7 @@ services:
     ports:
       - "${POSTGRES_PORT:-5433}:5432"
     volumes:
-      - norte_pgdata:/var/lib/postgresql/data
+      - dataeffi_pgdata:/var/lib/postgresql/data
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
       interval: 3s
@@ -24,4 +24,4 @@ services:
       retries: 20
 
 volumes:
-  norte_pgdata:
+  dataeffi_pgdata:

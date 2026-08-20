@@ -1,1 +1,1 @@
-"""Norte ingestion pipeline."""
+"""Data Effi ingestion pipeline."""

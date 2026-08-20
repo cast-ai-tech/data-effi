@@ -11,7 +11,7 @@ const inter = Inter({
 });
 
 export const metadata: Metadata = {
-  title: "Norte · Analítica contraentrega",
+  title: "Data Effi · Analítica contraentrega",
   description:
     "Plataforma de analítica para operaciones de ecommerce contraentrega (COD) multi-país en LATAM.",
 };

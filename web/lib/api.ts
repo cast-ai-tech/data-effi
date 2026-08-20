@@ -11,8 +11,8 @@ import type { ApiErrorBody } from "@/lib/types";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
 
-const ACCESS_COOKIE = "norte_access";
-const REFRESH_COOKIE = "norte_refresh";
+const ACCESS_COOKIE = "dataeffi_access";
+const REFRESH_COOKIE = "dataeffi_refresh";
 
 export class ApiError extends Error {
   readonly status: number;

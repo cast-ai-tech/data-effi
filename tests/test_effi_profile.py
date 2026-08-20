@@ -28,7 +28,12 @@ from pipeline.profiles import (
     resolve_effi_movement_type,
 )
 from pipeline.readers import read_tabular, sniff_format
-from tests.conftest import CONNECTION_ID, COUNTRY, PLATFORM, TENANT_ID
+from tests.conftest import CONNECTION_ID, PLATFORM, TENANT_ID
+
+# The fixtures are Ecuadorian, like the real exports they mirror. The engine
+# refuses to load a file into a connection for another country, so the tests
+# have to declare the right one - which is the behaviour being relied on.
+COUNTRY = "EC"
 
 # These fixtures mirror an export taken on 2026-08-14, so "today" has to be
 # after the guides were dispatched - otherwise the engine correctly rejects them
@@ -449,3 +454,140 @@ def test_reloading_the_same_export_changes_nothing(pii_salt, guides_bytes):
 
     assert second.already_loaded is True
     assert len(store.shipments) == 4
+
+
+# =============================================================================
+# Country detection
+# =============================================================================
+
+
+def test_the_country_is_read_from_the_file(guides_bytes):
+    """`País destinatario` said 'Ecuador' on all 1,649 rows of a real export."""
+    from pipeline.profiles import EFFI_GUIDES, detect_country
+
+    headers, rows = read_tabular(guides_bytes, "guias.xlsx")
+    code, raw_value = detect_country(headers, rows, EFFI_GUIDES)
+
+    assert code == "EC"
+    assert raw_value == "Ecuador"
+
+
+def test_uploading_a_file_to_the_wrong_country_is_refused(pii_salt, guides_bytes):
+    """Loading Ecuadorian guides into a Colombian connection would price every
+    one of them in COP, and the mistake is invisible once the data is in."""
+    store = MemoryStore()
+    engine = IngestEngine(store, pii_salt=pii_salt, today=TODAY)
+
+    report = engine.ingest(
+        payload=guides_bytes,
+        source_name="guias.xlsx",
+        kind=BatchKind.SHIPMENTS,
+        tenant_id=TENANT_ID,
+        connection_id=CONNECTION_ID,
+        country_code="CO",          # the file says Ecuador
+        platform_code=PLATFORM,
+        default_currency="COP",
+    )
+
+    assert report.rows_inserted == 0
+    assert report.detected_country_code == "EC"
+    assert store.shipments == {}
+    assert "Ecuador" in report.errors[0].message
+    assert "CO" in report.errors[0].message
+
+
+# =============================================================================
+# Raw archive
+# =============================================================================
+
+
+def test_every_original_column_is_archived(pii_salt, guides_bytes):
+    """A column that was discarded is a metric that cannot be built later."""
+    store = MemoryStore()
+    engine = IngestEngine(store, pii_salt=pii_salt, today=TODAY)
+    report = _ingest(engine, guides_bytes, "guias.xlsx", BatchKind.SHIPMENTS)
+
+    archived = store.source_rows[report.batch_id]
+    assert len(archived) == 4
+    assert report.rows_stored == 4
+
+    # All 87 columns, not just the mapped ones.
+    assert len(archived[0].payload) == 87
+    assert "URL PDF" in archived[0].payload
+    assert "Total venta proveedor" in archived[0].payload
+
+
+def test_the_archive_hashes_personal_data_and_keeps_everything_else(
+    pii_salt, guides_bytes
+):
+    store = MemoryStore()
+    engine = IngestEngine(store, pii_salt=pii_salt, today=TODAY)
+    report = _ingest(engine, guides_bytes, "guias.xlsx", BatchKind.SHIPMENTS)
+
+    row = store.source_rows[report.batch_id][0]
+
+    # The identity columns are hashed...
+    assert "Destinatario" in row.redacted_fields
+    assert "Teléfonos destinatario" in row.redacted_fields
+    assert str(row.payload["Destinatario"]).startswith("sha256:")
+    assert "Persona Ficticia" not in str(row.payload)
+    assert "0900000001" not in str(row.payload)
+
+    # ...and nothing else is. The city, the money and the URLs stay readable.
+    assert row.payload["Ciudad destinatario"] == "Guayaquil"
+    assert row.payload["Estado global guía inicial"] == "Entregada a destino"
+
+
+def test_archiving_can_be_switched_off(pii_salt, guides_bytes):
+    """Storage is not free; an operator with millions of rows can opt out."""
+    store = MemoryStore()
+    engine = IngestEngine(store, pii_salt=pii_salt, today=TODAY, archive_rows=False)
+    report = _ingest(engine, guides_bytes, "guias.xlsx", BatchKind.SHIPMENTS)
+
+    assert report.rows_inserted == 4
+    assert report.rows_stored == 0
+    assert store.source_rows == {}
+
+
+def test_a_failed_row_is_archived_too(pii_salt):
+    """The row that failed to parse is precisely the one somebody wants to read."""
+    payload = (
+        b"Guia;Fecha;Estado;Valor\n"
+        b"E-1;01/07/2026;ENTREGADO;50.000\n"
+        b";01/07/2026;ENTREGADO;60.000\n"
+    )
+
+    store = MemoryStore()
+    engine = IngestEngine(store, pii_salt=pii_salt, today=TODAY)
+    report = _ingest(engine, payload, "parcial.csv", BatchKind.SHIPMENTS)
+
+    assert report.rows_failed == 1
+    assert report.rows_stored == 2      # both rows kept, including the broken one
+
+
+# =============================================================================
+# The dropshipping chain
+# =============================================================================
+
+
+def test_the_margin_chain_is_captured(pii_salt, guides_bytes):
+    store = MemoryStore()
+    engine = IngestEngine(store, pii_salt=pii_salt, today=TODAY)
+    _ingest(engine, guides_bytes, "guias.xlsx", BatchKind.SHIPMENTS)
+
+    first = store.shipments[(CONNECTION_ID, "TEST-0001")]
+
+    # What the merchant paid for the goods on this guide.
+    assert first.product_cost == Decimal("12.60")
+    # The freight components, kept apart rather than lumped together.
+    assert first.freight_cost == Decimal("6.29")
+    assert first.insurance_cost == Decimal("0.43")
+    assert first.collection_fee == Decimal("1.73")
+    # And the whole record carries the new fields, even when the fixture leaves
+    # some of them empty.
+    for attribute in (
+        "weight_kg", "discount_pct", "dispatch_batch_ref", "dispatched_batch_at",
+        "distributor_name", "sale_total", "distributor_sale_total",
+        "distributor_cost_total", "supplier_sale_total",
+    ):
+        assert hasattr(first, attribute), f"ShipmentRecord is missing {attribute}"

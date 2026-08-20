@@ -204,7 +204,7 @@ export default function ProductTable({ countryCode, country }: WidgetProps) {
       <Card title="Rentabilidad por producto" subtitle={subtitle}>
         <EmptyState
           title="Todavía no hay productos con despachos"
-          instruction="Cargue el catálogo con SKU y costo unitario, y verifique que las guías traigan el SKU del producto. Sin ese cruce Norte no puede repartir el recaudo entre productos."
+          instruction="Cargue el catálogo con SKU y costo unitario, y verifique que las guías traigan el SKU del producto. Sin ese cruce Data Effi no puede repartir el recaudo entre productos."
         />
       </Card>
     );

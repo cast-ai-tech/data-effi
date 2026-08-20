@@ -1,4 +1,4 @@
-"""Source profiles: exact column maps for reports Norte knows by name.
+"""Source profiles: exact column maps for reports Data Effi knows by name.
 
 WHY THIS EXISTS ALONGSIDE THE ALIAS MATCHER. `mapping.py` guesses: it takes a
 header like "Valor" and hopes it means the declared value. That is the right
@@ -37,6 +37,16 @@ class SourceProfile:
     # Fields the profile promises to deliver even though no single column holds
     # them (they come out of a transform).
     derived: tuple[str, ...] = field(default=())
+    # Columns that identify a person. Hashed before ANY storage, including the
+    # raw archive. Never mapped to a field that would keep them readable.
+    pii_columns: tuple[str, ...] = field(default=())
+    # Column holding the country this report is about, so the upload does not
+    # have to be told.
+    country_column: str | None = None
+
+    @property
+    def pii_columns_norm(self) -> frozenset[str]:
+        return frozenset(filter(None, (normalize_text(c) for c in self.pii_columns)))
 
     def matches(self, normalized_headers: set[str]) -> bool:
         return all(header in normalized_headers for header in self.signature)
@@ -55,8 +65,8 @@ def _norm_keys(mapping: dict[str, str]) -> dict[str, str]:
 # =============================================================================
 # Effi - guides report ("Reporte de Guías de transporte YYYY-MM-DD.xlsx")
 #
-# 87 columns. Only the ones Norte can act on are mapped; the rest are reported
-# back to the user as ignored, which is how they find out Norte skipped
+# 87 columns. Only the ones Data Effi can act on are mapped; the rest are reported
+# back to the user as ignored, which is how they find out Data Effi skipped
 # something they cared about.
 #
 # NOT MAPPED ON PURPOSE - customer PII:
@@ -105,9 +115,42 @@ EFFI_GUIDES_COLUMNS = _norm_keys(
         "Precio manejo (seguro) a cliente": "insurance_cost",
         "Precio recaudo a cliente": "collection_fee",
         "Costo documento de venta": "product_cost",
-        # --- settlement ---
+        "Total documento de venta": "sale_total",
+        "Precio flete a cliente": "freight_base",
+        "% Descuento": "discount_pct",
+        "Peso (Kg)": "weight_kg",
+        # --- the dropshipping chain ---
+        "Nombre Distribuidor": "distributor_name",
+        "Total venta distribuidor": "distributor_sale_total",
+        "Total compra distribuidor": "distributor_cost_total",
+        "Total venta proveedor": "supplier_sale_total",
+        # --- dispatch ---
+        "Relación de despacho": "dispatch_batch_ref",
+        "Fecha relación de despacho": "dispatched_batch_at",
+        # --- settlement, all six kinds ---
         "Liquidación con recaudo": "settled_with_collection",
+        "Liquidación (de cualquier tipo)": "settled_any",
+        "Liquidación devolución": "settled_return",
+        "Fecha liquidación (de cualquier tipo)": "settled_any_at",
+        "Fecha liquidación devolución": "settled_return_at",
+        # --- return leg (the status column is already mapped above) ---
+        "Guía devolución transportadora": "return_tracking_number",
     }
+)
+
+# Columns that identify a human being. Stored ONLY as a SHA-256, in the raw
+# archive as well as in core. Ecuador's LOPDP and Colombia's Ley 1581 both make
+# keeping these in the clear a liability, and no metric needs them: a hash still
+# answers "same person?" and "same address?".
+EFFI_GUIDES_PII = (
+    "Destinatario",
+    "ID. destinatario",
+    "Dirección destinatario",
+    "Teléfonos destinatario",
+    "Remitente",
+    "ID. remitente",
+    "Dirección remitente",
+    "Teléfonos remitente",
 )
 
 EFFI_GUIDES = SourceProfile(
@@ -123,6 +166,8 @@ EFFI_GUIDES = SourceProfile(
     ),
     columns=EFFI_GUIDES_COLUMNS,
     derived=("tracking_number", "product_name", "quantity", "delivered_at", "returned_at"),
+    pii_columns=EFFI_GUIDES_PII,
+    country_column="País destinatario",
 )
 
 
@@ -148,7 +193,40 @@ EFFI_MOVEMENTS_COLUMNS = _norm_keys(
         "Departamento destinatario Guía inicial": "geo_level1",
         "Ciudad destinatario Guía inicial": "city_name",
         "Contenido": "content_raw",
+        # --- wallet identity, for bank reconciliation ---
+        "ID Wallet": "wallet_id",
+        "Medio de pago Wallet": "wallet_method",
+        "Cuenta bancaria": "bank_account_ref",
+        "Responsable": "operator_name",
+        # --- the guide this movement belongs to ---
+        "Guía adicional": "secondary_tracking_number",
+        "ID venta referencia": "sale_reference",
+        # --- freight breakdown, repeated here per movement ---
+        "Precio flete a cliente": "freight_base",
+        "Precio manejo (seguro) a cliente": "insurance_cost",
+        "Precio recaudo a cliente": "collection_fee",
+        "Precio flete total a cliente": "freight_cost",
+        "Valor recaudo": "declared_value",
+        # --- the dropshipping chain, repeated here per movement ---
+        "Distribuidor": "distributor_name",
+        "Total venta distribuidor": "distributor_sale_total",
+        "Total compra distribuidor": "distributor_cost_total",
+        "Proveedor": "supplier_name",
+        "Total venta proveedor": "supplier_sale_total",
     }
+)
+
+EFFI_MOVEMENTS_PII = (
+    "Titular Wallet",
+    "Identificación titular",
+    "Nombre remitente Guía inicial",
+    "Teléfono remitente Guía inicial",
+    "Dirección remitente Guía inicial",
+    "ID remitente Guía inicial",
+    "Nombre destinatario Guía inicial",
+    "Teléfono destinatario Guía inicial",
+    "Dirección destinatario Guía inicial",
+    "ID destinatario Guía inicial",
 )
 
 EFFI_MOVEMENTS = SourceProfile(
@@ -163,6 +241,8 @@ EFFI_MOVEMENTS = SourceProfile(
         "guia inicial",
     ),
     columns=EFFI_MOVEMENTS_COLUMNS,
+    pii_columns=EFFI_MOVEMENTS_PII,
+    country_column="País destinatario Guía inicial",
 )
 
 
@@ -213,7 +293,7 @@ def parse_content(raw: Any) -> tuple[int | None, str | None, int]:
     """Parse Effi's `Contenido` field.
 
     Returns (quantity, product_name, extra_items). `extra_items` is how many
-    additional products the cell held - a multi-product guide that Norte's
+    additional products the cell held - a multi-product guide that Data Effi's
     one-product-per-shipment model cannot represent, and which the batch report
     surfaces rather than silently dropping.
     """
@@ -363,6 +443,7 @@ def transform_effi_guide(mapped: dict[str, Any]) -> dict[str, Any]:
 
     # --- settlement -----------------------------------------------------
     out["settled_with_collection"] = is_yes(mapped.get("settled_with_collection"))
+    out["settled_return"] = is_yes(mapped.get("settled_return"))
     # A settlement date without a settlement flag is still a settlement.
     if not mapped.get("settled_at"):
         out["settled_at"] = None
@@ -388,3 +469,92 @@ TRANSFORMS = {
 def apply_transform(profile: SourceProfile, mapped: dict[str, Any]) -> dict[str, Any]:
     transform = TRANSFORMS.get(profile.code)
     return transform(mapped) if transform else mapped
+
+
+# =============================================================================
+# Raw retention and country detection
+# =============================================================================
+
+# Mirror of core.country_alias (migration 010), so a file can be inspected
+# without a database - which is what the upload screen does before uploading.
+COUNTRY_ALIASES: dict[str, str] = {
+    "colombia": "CO", "co": "CO", "col": "CO", "republica de colombia": "CO",
+    "ecuador": "EC", "ec": "EC", "ecu": "EC", "republica del ecuador": "EC",
+    "mexico": "MX", "mx": "MX", "mex": "MX", "estados unidos mexicanos": "MX",
+    "peru": "PE", "pe": "PE", "per": "PE",
+    "chile": "CL", "cl": "CL", "chl": "CL",
+    "panama": "PA", "pa": "PA", "pan": "PA",
+    "guatemala": "GT", "gt": "GT", "gtm": "GT",
+}
+
+
+def resolve_country(raw: Any) -> str | None:
+    """Country name as a report writes it -> ISO code. None when unrecognised."""
+    key = normalize_text(raw)
+    return COUNTRY_ALIASES.get(key) if key else None
+
+
+def detect_country(
+    headers: list[str], rows: list[list[Any]], profile: SourceProfile, sample: int = 50
+) -> tuple[str | None, str | None]:
+    """Read the country out of the file itself.
+
+    Returns (iso_code, raw_value_seen). Samples rows rather than reading all of
+    them: a report covering two countries is a different problem, and the
+    ingestion engine reports that separately.
+    """
+    if not profile.country_column:
+        return None, None
+
+    target = normalize_text(profile.country_column)
+    position = next(
+        (i for i, header in enumerate(headers) if normalize_text(header) == target), None
+    )
+    if position is None:
+        return None, None
+
+    seen: dict[str, int] = {}
+    for row in rows[:sample]:
+        if position >= len(row):
+            continue
+        value = clean_text(row[position])
+        if value:
+            seen[value] = seen.get(value, 0) + 1
+
+    if not seen:
+        return None, None
+
+    most_common = max(seen, key=lambda k: seen[k])
+    return resolve_country(most_common), most_common
+
+
+def redact_row(
+    raw: dict[str, Any], pii_headers: frozenset[str], salt: str
+) -> tuple[dict[str, Any], list[str]]:
+    """Prepare a raw row for storage, hashing anything that identifies a person.
+
+    EVERY column is kept - that is the point of the archive. The four or ten
+    that name, number, locate or phone a human being are replaced by a salted
+    SHA-256, which still answers "is this the same person?" and "have we shipped
+    to this address before?" while a stolen backup reveals nothing.
+
+    Returns (payload, names of the columns that were hashed).
+    """
+    import hashlib
+
+    payload: dict[str, Any] = {}
+    redacted: list[str] = []
+
+    for header, value in raw.items():
+        if normalize_text(header) in pii_headers:
+            text = clean_text(value)
+            if text:
+                digest = hashlib.sha256(f"{salt}:{text}".encode()).hexdigest()
+                payload[header] = f"sha256:{digest[:32]}"
+                redacted.append(header)
+            else:
+                payload[header] = None
+        else:
+            payload[header] = value
+
+    return payload, redacted

@@ -29,7 +29,7 @@ from worker.jobs import (
     run_job,
 )
 
-logger = logging.getLogger("norte.worker")
+logger = logging.getLogger("dataeffi.worker")
 
 
 def _connect() -> psycopg.Connection:

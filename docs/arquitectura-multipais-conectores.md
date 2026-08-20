@@ -1,6 +1,6 @@
 # Arquitectura multi-país y conectores
 
-Cómo Norte soporta varios países, varias plataformas y varias tiendas sin que el
+Cómo Data Effi soporta varios países, varias plataformas y varias tiendas sin que el
 código sepa nada de Colombia en particular.
 
 ---
@@ -95,7 +95,7 @@ reporte llega por correo y por fetch, se ingiere una sola vez.
 
 ## 6. Resolución de dimensiones
 
-Los nombres llegan escritos de cualquier forma. Norte los resuelve con *get-or-create*
+Los nombres llegan escritos de cualquier forma. Data Effi los resuelve con *get-or-create*
 sobre una clave normalizada (minúsculas, sin tildes, espacios colapsados):
 
 | Dimensión | Clave |

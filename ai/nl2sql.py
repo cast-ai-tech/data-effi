@@ -32,6 +32,22 @@ STATEMENT_TIMEOUT_MS = 5_000
 
 # The only relations a generated query may touch. Business views only: nothing
 # from core, nothing from raw, nothing from stg, no catalogs.
+#
+# THE OPERATOR ASKED FOR "ANY DATA IN THE PLATFORM". This list is the answer to
+# that: every business aggregate Norte computes is reachable. What is NOT on it,
+# and never will be:
+#
+#   * mart.v_source_row_archive - the original file rows. Customer name, id,
+#     address and phone are stored as SHA-256 there, but a hash is still a
+#     row-level record of a real person. "Any data" means every aggregate, not
+#     every customer.
+#   * mart.v_ai_memory - what the copilot remembers. A generated query that can
+#     read the memory is a generated query that can be steered by whatever text
+#     was written into it.
+#   * anything in core, raw or stg.
+#
+# Adding a view here is a deliberate act. It is the ONLY part of this file that
+# should ever change to widen reach - the checks below are not negotiable.
 ALLOWED_VIEWS: frozenset[str] = frozenset(
     {
         "v_daily_contribution",
@@ -48,6 +64,24 @@ ALLOWED_VIEWS: frozenset[str] = frozenset(
         "v_country_dashboard_layout",
         "v_batch_history",
         "v_alert_signals",
+        # Migration 008: the real-world Effi metrics
+        "v_problem_rate",
+        "v_cash_cycle",
+        # Migration 009: the dropshipping chain, fulfilment, office queue, freight
+        "v_dropshipping_margin",
+        "v_fulfillment_sla",
+        "v_office_rescue",
+        "v_freight_analysis",
+        "v_product_catalogue",
+    }
+)
+
+# Views that must never be reachable, whatever else changes. Asserted by the
+# test battery so a careless addition to ALLOWED_VIEWS above fails loudly.
+NEVER_ALLOWED_VIEWS: frozenset[str] = frozenset(
+    {
+        "v_source_row_archive",     # row-level customer data, hashed or not
+        "v_ai_memory",              # prompt-injectable text the model already trusts
     }
 )
 
@@ -263,11 +297,63 @@ mart.v_connection_health(connection_name, country_code, platform_name, tier, sta
 
 mart.v_batch_history(source_name, kind, status, rows_total, rows_inserted, rows_updated,
     rows_failed, discrepancy_count, started_at, country_code)
+
+mart.v_problem_rate(country_code, carrier_name, shipments, novedad, en_oficina, devolucion,
+    con_problema, problem_rate_pct, value_in_office, currency_code)
+    -- Novedad + en oficina + devolución as one number, por transportadora. Las tres se
+    -- persiguen igual, aunque el reporte las separe. value_in_office es plata esperando
+    -- que alguien pase a recogerla.
+
+mart.v_cash_cycle(country_code, settled, delivered_unsettled, avg_days_to_cash,
+    p50_days_to_cash, p90_days_to_cash, cash_in_transit, currency_code)
+    -- Una fila por país. Entregado no es cobrado: cash_in_transit es lo entregado que la
+    -- transportadora ya recaudó y todavía no te consigna.
+
+mart.v_dropshipping_margin(country_code, product_name, sku, supplier_name, shipments,
+    delivered, units, revenue, supplier_cost, freight, gross_margin, gross_margin_pct,
+    net_contribution, contribution_per_shipment, cost_of_undelivered,
+    breakeven_delivery_pct, delivery_rate_pct, catalogue_cost, catalogue_price,
+    catalogue_reviewed, observed_unit_cost, currency_code)
+    -- La cadena completa por producto: lo que cobraste, lo que le pagaste al proveedor y
+    -- lo que queda. El flete y la mercancía se pagan en TODO lo despachado, no solo en lo
+    -- entregado. breakeven_delivery_pct es el % de entrega por debajo del cual el producto
+    -- pierde plata: compáralo contra delivery_rate_pct.
+
+mart.v_fulfillment_sla(country_code, carrier_name, service_level, shipments, delivered,
+    avg_prep_days, p50_prep_days, p90_prep_days, avg_transit_days, p90_transit_days,
+    avg_total_days, prep_share_pct, on_time_count, measurable_count, on_time_pct)
+    -- Parte el reloj de entrega en dos: alistamiento (prep_*, lo que tardas TÚ en
+    -- despachar) y tránsito (transit_*, lo que tarda la transportadora). prep_share_pct
+    -- es qué porcentaje de la espera es culpa propia.
+
+mart.v_office_rescue(country_code, carrier_name, level1_name, city_name, shipments,
+    value_waiting, avg_days_waiting, fresh_0_7, aging_8_14, urgent_15_21, probably_lost,
+    value_still_recoverable, currency_code)
+    -- Guías esperando en oficina de la transportadora: ni entregadas ni devueltas.
+    -- value_still_recoverable es el valor de la banda de 8 a 21 días, que es la que
+    -- todavía se rescata con una llamada. Pasados 21 días normalmente se devuelve sola.
+
+mart.v_freight_analysis(country_code, carrier_name, service_level, shipments,
+    avg_weight_kg, total_weight_kg, freight_total, avg_freight, freight_per_kg,
+    avg_freight_base, avg_handling, avg_collection_fee, avg_discount_pct, discount_value,
+    freight_share_of_value_pct, return_freight_total, currency_code)
+    -- freight_per_kg es la cifra comparable entre transportadoras: una no es cara por
+    -- llevar paquetes más pesados. freight_share_of_value_pct es el flete como porcentaje
+    -- de lo que vale la guía.
+
+mart.v_product_catalogue(product_name, sku, category, supplier_name, unit_cost, list_price,
+    target_margin_pct, weight_kg, currency_code, is_active, reviewed_at, notes, shipments,
+    delivered, last_shipment_date, observed_unit_cost, catalogue_status,
+    catalogue_margin_pct)
+    -- OJO: esta vista NO tiene country_code, el catálogo es del negocio entero.
+    -- catalogue_status es uno de: 'sin_costo', 'sin_revisar', 'costo_desactualizado', 'ok'.
+    -- 'costo_desactualizado' significa que el costo observado en las guías se separó más
+    -- de 10% del costo del catálogo.
 """
 
 SYSTEM_PROMPT = f"""Eres un analista de datos que traduce preguntas de negocio a SQL de PostgreSQL.
 
-Trabajas para Norte, una plataforma de analítica de ecommerce contraentrega (COD) en LATAM.
+Trabajas para Data Effi, una plataforma de analítica de ecommerce contraentrega (COD) en LATAM.
 
 REGLAS ABSOLUTAS:
 - Devuelves ÚNICAMENTE una sentencia SELECT. Nada más: ni explicación, ni punto y coma final,

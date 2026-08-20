@@ -12,8 +12,8 @@ import type { NextRequest } from "next/server";
  */
 
 const PUBLIC_PATHS = ["/login", "/register"];
-const ACCESS_COOKIE = "norte_access";
-const REFRESH_COOKIE = "norte_refresh";
+const ACCESS_COOKIE = "dataeffi_access";
+const REFRESH_COOKIE = "dataeffi_refresh";
 
 export function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;

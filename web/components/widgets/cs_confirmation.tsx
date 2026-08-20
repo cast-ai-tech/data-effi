@@ -122,7 +122,7 @@ export default function CsConfirmation({
       <Card title="Confirmación de pedidos" subtitle={subtitle}>
         <EmptyState
           title="Falta conectar una fuente de servicio al cliente"
-          instruction="Conecte el CRM o la plataforma de WhatsApp donde su equipo confirma los pedidos (o cargue el archivo de gestiones). Sin esa fuente Norte no sabe cuántos contactos terminaron en confirmación."
+          instruction="Conecte el CRM o la plataforma de WhatsApp donde su equipo confirma los pedidos (o cargue el archivo de gestiones). Sin esa fuente Data Effi no sabe cuántos contactos terminaron en confirmación."
         />
       </Card>
     );

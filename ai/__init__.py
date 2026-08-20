@@ -1,1 +1,1 @@
-"""Norte AI layer."""
+"""Data Effi AI layer."""

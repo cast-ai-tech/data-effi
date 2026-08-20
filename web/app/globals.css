@@ -1,9 +1,9 @@
 @import "tailwindcss";
 
 /*
- * Norte design tokens.
+ * Data Effi design tokens.
  *
- * Structure, density and scale come from design/Norte.dc.html (see
+ * Structure, density and scale come from design/DataEffi.dc.html (see
  * design/DESIGN-SPEC.md). The accent hue comes from Effi, the platform this
  * tool sits next to all day - a dashboard that clashes with the ERP beside it
  * reads as a foreign object.
@@ -139,7 +139,7 @@ a:hover {
   color: var(--color-accent-hover);
 }
 
-@keyframes norte-pulse {
+@keyframes dataeffi-pulse {
   0%,
   100% {
     opacity: 1;
@@ -152,7 +152,7 @@ a:hover {
 .skeleton {
   background: var(--color-track);
   border-radius: 6px;
-  animation: norte-pulse 1.6s ease-in-out infinite;
+  animation: dataeffi-pulse 1.6s ease-in-out infinite;
 }
 
 /* Chrome paints autofilled inputs with its own near-white background, which on a

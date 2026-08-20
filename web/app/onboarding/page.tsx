@@ -41,9 +41,9 @@ export default function OnboardingPage() {
       <div className="mb-8">
         <div className="mb-2 flex items-center gap-2.5">
           <div className="flex size-7 items-center justify-center rounded-[7px] bg-accent text-[14px] font-extrabold text-on-accent">
-            N
+            DE
           </div>
-          <span className="text-[15px] font-bold tracking-tight">Norte</span>
+          <span className="text-[15px] font-bold tracking-tight">Data Effi</span>
         </div>
 
         <div className="mt-5 flex items-center gap-2">
@@ -337,7 +337,7 @@ function CalibrationStep({
     <section>
       <h1 className="text-[20px] font-bold">Calibración de maduración</h1>
       <p className="mt-1.5 text-[13px] leading-relaxed text-ink-dim">
-        Una cohorte de guías tarda días en estabilizar su porcentaje de entrega. Norte
+        Una cohorte de guías tarda días en estabilizar su porcentaje de entrega. Data Effi
         mide el p90 real de tu operación y te propone la ventana; no la cambia solo,
         porque eso decide cómo se mide todo lo demás.
       </p>

@@ -349,3 +349,170 @@ export interface ApiErrorBody {
     detail: Record<string, unknown>;
   };
 }
+
+// ---------------------------------------------------------------------------
+// Dropshipping metrics (migration 009) + cash cycle (migration 008).
+//
+// One interface per view, column for column. `tenant_id` is stripped by the
+// API - it is the auth context, never payload.
+// ---------------------------------------------------------------------------
+
+/** `mart.v_dropshipping_margin`: charged, paid to the supplier, what is left. */
+export interface DropshippingMarginRow {
+  country_code: string;
+  product_id: string | null;
+  product_name: string;
+  sku: string | null;
+  supplier_name: string;
+  shipments: number;
+  delivered: number;
+  units: number | null;
+  revenue: number | null;
+  supplier_cost: number | null;
+  freight: number | null;
+  gross_margin: number | null;
+  gross_margin_pct: number | null;
+  net_contribution: number | null;
+  contribution_per_shipment: number | null;
+  cost_of_undelivered: number | null;
+  /** Below this delivery rate the product loses money on every dispatch. */
+  breakeven_delivery_pct: number | null;
+  delivery_rate_pct: number | null;
+  catalogue_cost: number | null;
+  catalogue_price: number | null;
+  /** False when no human ever confirmed the cost: it is inferred from reports. */
+  catalogue_reviewed: boolean;
+  observed_unit_cost: number | null;
+  currency_code: string | null;
+}
+
+/** `mart.v_fulfillment_sla`: the delivery clock split into yours and theirs. */
+export interface FulfillmentSlaRow {
+  country_code: string;
+  carrier_id: string | null;
+  carrier_name: string;
+  service_level: string;
+  shipments: number;
+  delivered: number;
+  avg_prep_days: number | null;
+  p50_prep_days: number | null;
+  p90_prep_days: number | null;
+  avg_transit_days: number | null;
+  p90_transit_days: number | null;
+  avg_total_days: number | null;
+  /** How much of the total wait happened before the parcel even left. */
+  prep_share_pct: number | null;
+  on_time_count: number;
+  measurable_count: number;
+  on_time_pct: number | null;
+}
+
+/** `mart.v_office_rescue`: guides waiting at a carrier office, by city. */
+export interface OfficeRescueRow {
+  country_code: string;
+  carrier_name: string;
+  level1_name: string;
+  city_name: string;
+  shipments: number;
+  value_waiting: number | null;
+  avg_days_waiting: number | null;
+  fresh_0_7: number;
+  aging_8_14: number;
+  urgent_15_21: number;
+  probably_lost: number;
+  /** The 8-21 day window: old enough to be at risk, young enough to rescue. */
+  value_still_recoverable: number | null;
+  currency_code: string | null;
+}
+
+/** `mart.v_freight_analysis`: freight per kilo, by component and discount. */
+export interface FreightAnalysisRow {
+  country_code: string;
+  carrier_id: string | null;
+  carrier_name: string;
+  service_level: string;
+  shipments: number;
+  avg_weight_kg: number | null;
+  total_weight_kg: number | null;
+  freight_total: number | null;
+  avg_freight: number | null;
+  /** The only comparable figure: a heavier parcel is not a dearer carrier. */
+  freight_per_kg: number | null;
+  avg_freight_base: number | null;
+  avg_handling: number | null;
+  avg_collection_fee: number | null;
+  avg_discount_pct: number | null;
+  discount_value: number | null;
+  freight_share_of_value_pct: number | null;
+  return_freight_total: number | null;
+  currency_code: string | null;
+}
+
+/** `mart.v_cash_cycle`: days from dispatch until the money is spendable. */
+export interface CashCycleRow {
+  country_code: string;
+  settled: number;
+  /** Delivered, the carrier holds the cash, it is not in your account yet. */
+  delivered_unsettled: number;
+  avg_days_to_cash: number | null;
+  p50_days_to_cash: number | null;
+  p90_days_to_cash: number | null;
+  cash_in_transit: number | null;
+  currency_code: string | null;
+}
+
+/**
+ * What the catalogue is missing, per product.
+ *
+ * `sin_costo` -> no cost at all; `sin_revisar` -> a cost nobody confirmed;
+ * `costo_desactualizado` -> the catalogue and the reports disagree by >10%.
+ */
+export type CatalogueStatus =
+  | "sin_costo"
+  | "sin_revisar"
+  | "costo_desactualizado"
+  | "ok";
+
+/** `mart.v_product_catalogue`: the catalogue next to what the reports observed. */
+export interface ProductCatalogueRow {
+  product_id: string;
+  product_name: string;
+  sku: string | null;
+  category: string | null;
+  supplier_name: string | null;
+  unit_cost: number | null;
+  list_price: number | null;
+  target_margin_pct: number | null;
+  weight_kg: number | null;
+  currency_code: string | null;
+  is_active: boolean;
+  reviewed_at: string | null;
+  notes: string | null;
+  shipments: number;
+  delivered: number;
+  last_shipment_date: string | null;
+  observed_unit_cost: number | null;
+  catalogue_status: CatalogueStatus;
+  catalogue_margin_pct: number | null;
+}
+
+/**
+ * Body for POST /products and PATCH /products/{id}.
+ *
+ * `supplier_name` is text, not an id: the operator types the supplier the way
+ * it appears on the invoice, and the API resolves it. `reviewed_at` is set
+ * server-side - the client cannot claim a human confirmed something.
+ */
+export interface ProductWrite {
+  name?: string;
+  sku?: string | null;
+  category?: string | null;
+  supplier_name?: string | null;
+  unit_cost?: number | null;
+  list_price?: number | null;
+  target_margin_pct?: number | null;
+  weight_kg?: number | null;
+  currency_code?: string | null;
+  notes?: string | null;
+  is_active?: boolean;
+}

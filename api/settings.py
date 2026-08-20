@@ -104,7 +104,7 @@ def get_settings() -> Settings:
         return Settings()
     except Exception as exc:
         print("\n" + "=" * 72, file=sys.stderr)
-        print("Norte no puede arrancar: falta configuración.", file=sys.stderr)
+        print("Data Effi no puede arrancar: falta configuración.", file=sys.stderr)
         print("=" * 72, file=sys.stderr)
         print(str(exc), file=sys.stderr)
         print(

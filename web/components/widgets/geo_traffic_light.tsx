@@ -142,7 +142,7 @@ export default function GeoTrafficLight({ countryCode, country }: WidgetProps) {
       <Card title="Semáforo geográfico" subtitle={subtitle}>
         <EmptyState
           title="Sin cobertura geográfica todavía"
-          instruction={`Las guías cargadas no traen ${level1Label.toLowerCase()} ni ciudad de destino. Revise el mapeo de columnas de destino en la conexión de guías para que Norte pueda ubicar cada despacho.`}
+          instruction={`Las guías cargadas no traen ${level1Label.toLowerCase()} ni ciudad de destino. Revise el mapeo de columnas de destino en la conexión de guías para que Data Effi pueda ubicar cada despacho.`}
         />
       </Card>
     );

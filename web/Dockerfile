@@ -1,4 +1,4 @@
-# Norte web. Multi-stage: the runtime image carries no source and no toolchain.
+# Data Effi web. Multi-stage: the runtime image carries no source and no toolchain.
 
 FROM node:22-alpine AS deps
 WORKDIR /app
@@ -25,13 +25,13 @@ ENV NODE_ENV=production \
     NEXT_TELEMETRY_DISABLED=1 \
     PORT=3000
 
-RUN addgroup -g 10001 -S norte && adduser -u 10001 -S norte -G norte
+RUN addgroup -g 10001 -S dataeffi && adduser -u 10001 -S dataeffi -G dataeffi
 
 COPY --from=builder /app/public ./public
-COPY --from=builder --chown=norte:norte /app/.next/standalone ./
-COPY --from=builder --chown=norte:norte /app/.next/static ./.next/static
+COPY --from=builder --chown=dataeffi:dataeffi /app/.next/standalone ./
+COPY --from=builder --chown=dataeffi:dataeffi /app/.next/static ./.next/static
 
-USER norte
+USER dataeffi
 EXPOSE 3000
 
 HEALTHCHECK --interval=15s --timeout=5s --start-period=20s --retries=5 \

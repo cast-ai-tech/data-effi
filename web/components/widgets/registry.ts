@@ -9,13 +9,18 @@
 
 import AgingBars from "@/components/widgets/aging_bars";
 import CarrierTable from "@/components/widgets/carrier_table";
+import CashCycle from "@/components/widgets/cash_cycle";
 import CohortCurve from "@/components/widgets/cohort_curve";
 import CpaRoas from "@/components/widgets/cpa_roas";
 import CsConfirmation from "@/components/widgets/cs_confirmation";
+import DropshippingMargin from "@/components/widgets/dropshipping_margin";
+import FreightAnalysis from "@/components/widgets/freight_analysis";
+import FulfillmentSla from "@/components/widgets/fulfillment_sla";
 import GeoTrafficLight from "@/components/widgets/geo_traffic_light";
 import GlobalSummary from "@/components/widgets/global_summary";
 import KpiContribution from "@/components/widgets/kpi_contribution";
 import MarginDeliveryScatter from "@/components/widgets/margin_delivery_scatter";
+import OfficeRescue from "@/components/widgets/office_rescue";
 import ProductTable from "@/components/widgets/product_table";
 import WaterfallPnl from "@/components/widgets/waterfall_pnl";
 import type { WidgetComponent } from "@/components/widgets/types";
@@ -32,6 +37,13 @@ export const WIDGET_REGISTRY: Record<string, WidgetComponent> = {
   product_table: ProductTable,
   cs_confirmation: CsConfirmation,
   global_summary: GlobalSummary,
+
+  // Dropshipping metrics (migration 009) + cash cycle (migration 008).
+  dropshipping_margin: DropshippingMargin,
+  fulfillment_sla: FulfillmentSla,
+  office_rescue: OfficeRescue,
+  freight_analysis: FreightAnalysis,
+  cash_cycle: CashCycle,
 };
 
 /** Tabs of the country dashboard, in display order. */

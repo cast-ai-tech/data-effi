@@ -1,4 +1,4 @@
-"""Set the passwords for the database roles Norte connects with.
+"""Set the passwords for the database roles Data Effi connects with.
 
 Kept out of the migrations on purpose: a password written into a .sql file is a
 password in git history forever. This reads them from the environment.

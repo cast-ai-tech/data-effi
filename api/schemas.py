@@ -13,6 +13,7 @@ which is the only thing JS can add. Requests keep their precise types.
 from __future__ import annotations
 
 from datetime import date, datetime
+from decimal import Decimal
 from typing import Any, Literal
 from uuid import UUID
 
@@ -20,6 +21,7 @@ from pydantic import BaseModel, EmailStr, Field
 
 Role = Literal["owner", "analyst", "viewer"]
 WidgetState = Literal["available", "degraded", "blocked"]
+CatalogueStatus = Literal["sin_costo", "sin_revisar", "costo_desactualizado", "ok"]
 
 
 # =============================================================================
@@ -183,6 +185,24 @@ class UploadJobResponse(BaseModel):
 class UploadAcceptedResponse(BaseModel):
     jobs: list[UploadJobResponse]
     message: str
+
+
+class DetectResponse(BaseModel):
+    """What Norte understood about a file, before anything is stored."""
+
+    filename: str
+    format: str = Field(description="xlsx | html | csv | xls_binary")
+    profile_code: str | None
+    profile_label: str | None
+    detected_country_code: str | None
+    detected_country_raw: str | None
+    row_count: int
+    column_count: int
+    mapped_columns: dict[str, str] = Field(
+        default_factory=dict,
+        description="Encabezado del archivo -> campo canonico de Norte.",
+    )
+    unmapped_columns: list[str] = Field(default_factory=list)
 
 
 class BatchSummary(BaseModel):
@@ -382,6 +402,125 @@ class GlobalRow(BaseModel):
     last_shipment_date: date | None
 
 
+class DropshippingMarginRow(BaseModel):
+    """mart.v_dropshipping_margin - charged, paid, and what is left, per product."""
+
+    country_code: str
+    product_id: UUID | None
+    product_name: str
+    sku: str | None
+    supplier_name: str | None
+    shipments: int
+    delivered: int
+    units: int | None
+    revenue: float | None
+    supplier_cost: float | None
+    freight: float | None
+    gross_margin: float | None
+    gross_margin_pct: float | None
+    net_contribution: float | None
+    contribution_per_shipment: float | None
+    cost_of_undelivered: float | None
+    breakeven_delivery_pct: float | None
+    delivery_rate_pct: float | None
+    catalogue_cost: float | None
+    catalogue_price: float | None
+    catalogue_reviewed: bool
+    observed_unit_cost: float | None
+    currency_code: str | None
+
+
+class FulfillmentRow(BaseModel):
+    """mart.v_fulfillment_sla - the merchant's half of the clock, and the carrier's."""
+
+    country_code: str
+    carrier_id: UUID | None
+    carrier_name: str
+    service_level: str
+    shipments: int
+    delivered: int
+    avg_prep_days: float | None
+    p50_prep_days: float | None
+    p90_prep_days: float | None
+    avg_transit_days: float | None
+    p90_transit_days: float | None
+    avg_total_days: float | None
+    prep_share_pct: float | None
+    on_time_count: int
+    measurable_count: int
+    on_time_pct: float | None
+
+
+class OfficeRescueRow(BaseModel):
+    """mart.v_office_rescue - parcels at an agency, by how long they have waited."""
+
+    country_code: str
+    carrier_name: str
+    level1_name: str
+    city_name: str
+    shipments: int
+    value_waiting: float | None
+    avg_days_waiting: float | None
+    fresh_0_7: int
+    aging_8_14: int
+    urgent_15_21: int
+    probably_lost: int
+    value_still_recoverable: float | None
+    currency_code: str | None
+
+
+class FreightRow(BaseModel):
+    """mart.v_freight_analysis - freight per kilo, by component, and the discount."""
+
+    country_code: str
+    carrier_id: UUID | None
+    carrier_name: str
+    service_level: str
+    shipments: int
+    avg_weight_kg: float | None
+    total_weight_kg: float | None
+    freight_total: float | None
+    avg_freight: float | None
+    freight_per_kg: float | None
+    avg_freight_base: float | None
+    avg_handling: float | None
+    avg_collection_fee: float | None
+    avg_discount_pct: float | None
+    discount_value: float | None
+    freight_share_of_value_pct: float | None
+    return_freight_total: float | None
+    currency_code: str | None
+
+
+class CashCycleRow(BaseModel):
+    """mart.v_cash_cycle - days from dispatch to money you can actually spend."""
+
+    country_code: str
+    settled: int
+    delivered_unsettled: int
+    avg_days_to_cash: float | None
+    p50_days_to_cash: float | None
+    p90_days_to_cash: float | None
+    cash_in_transit: float | None
+    currency_code: str | None
+
+
+class ProblemRateRow(BaseModel):
+    """mart.v_problem_rate - novedad + oficina + devolucion as one number."""
+
+    country_code: str
+    carrier_id: UUID | None
+    carrier_name: str
+    shipments: int
+    novedad: int
+    en_oficina: int
+    devolucion: int
+    con_problema: int
+    problem_rate_pct: float | None
+    value_in_office: float | None
+    currency_code: str | None
+
+
 class LayoutWidget(BaseModel):
     widget_code: str
     tab: str
@@ -400,6 +539,97 @@ class LayoutWidget(BaseModel):
 class LayoutResponse(BaseModel):
     country_code: str
     widgets: list[LayoutWidget]
+
+
+# =============================================================================
+# Product catalogue
+#
+# A product exists two ways: ingestion saw its name in a report, or a person
+# typed it here. `reviewed_at` is the difference, and the catalogue view reports
+# it, so the UI can ask for the half nobody has confirmed yet.
+# =============================================================================
+
+
+class ProductCatalogueRow(BaseModel):
+    """mart.v_product_catalogue - the catalogue next to what the reports observed."""
+
+    product_id: UUID
+    product_name: str
+    sku: str | None
+    category: str | None
+    supplier_name: str | None
+    unit_cost: float | None
+    list_price: float | None
+    target_margin_pct: float | None
+    weight_kg: float | None
+    currency_code: str | None
+    is_active: bool
+    reviewed_at: datetime | None
+    notes: str | None
+    shipments: int
+    delivered: int
+    last_shipment_date: date | None
+    observed_unit_cost: float | None
+    catalogue_status: CatalogueStatus
+    catalogue_margin_pct: float | None
+
+
+class ProductCostHistoryRow(BaseModel):
+    """One row of core.product_cost_history. 'import' means a file wrote it."""
+
+    id: int
+    unit_cost: float
+    currency_code: str | None
+    source: Literal["manual", "import", "observed"]
+    changed_by: UUID | None
+    changed_at: datetime
+
+
+class ProductDetail(BaseModel):
+    product: ProductCatalogueRow
+    cost_history: list[ProductCostHistoryRow]
+
+
+class ProductCreateRequest(BaseModel):
+    name: str = Field(min_length=1, max_length=200)
+    sku: str | None = Field(default=None, max_length=80)
+    category: str | None = Field(default=None, max_length=120)
+    supplier_name: str | None = Field(
+        default=None,
+        max_length=200,
+        description="Se crea el proveedor si no existe, igual que en la ingesta.",
+    )
+    unit_cost: Decimal | None = Field(default=None, ge=0, max_digits=14, decimal_places=2)
+    list_price: Decimal | None = Field(default=None, ge=0, max_digits=14, decimal_places=2)
+    target_margin_pct: Decimal | None = Field(
+        default=None, ge=0, le=100, max_digits=6, decimal_places=2
+    )
+    weight_kg: Decimal | None = Field(default=None, ge=0, max_digits=10, decimal_places=3)
+    currency_code: str | None = Field(default=None, min_length=3, max_length=3)
+    notes: str | None = Field(default=None, max_length=2000)
+
+
+class ProductUpdateRequest(BaseModel):
+    """Every field optional. Omitting one leaves it exactly as it was."""
+
+    name: str | None = Field(default=None, min_length=1, max_length=200)
+    sku: str | None = Field(default=None, max_length=80)
+    category: str | None = Field(default=None, max_length=120)
+    supplier_name: str | None = Field(default=None, max_length=200)
+    unit_cost: Decimal | None = Field(
+        default=None,
+        ge=0,
+        max_digits=14,
+        decimal_places=2,
+        description="Al enviarlo, el producto queda marcado como revisado por ti.",
+    )
+    list_price: Decimal | None = Field(default=None, ge=0, max_digits=14, decimal_places=2)
+    target_margin_pct: Decimal | None = Field(
+        default=None, ge=0, le=100, max_digits=6, decimal_places=2
+    )
+    weight_kg: Decimal | None = Field(default=None, ge=0, max_digits=10, decimal_places=3)
+    currency_code: str | None = Field(default=None, min_length=3, max_length=3)
+    notes: str | None = Field(default=None, max_length=2000)
 
 
 # =============================================================================

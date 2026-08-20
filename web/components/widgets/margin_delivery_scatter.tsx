@@ -126,7 +126,7 @@ export default function MarginDeliveryScatter({ countryCode, country }: WidgetPr
       <Card title="Margen vs. entrega" subtitle={subtitle}>
         <EmptyState
           title="Ningún producto se puede ubicar en el plano"
-          instruction="Para calcular margen se necesita el costo de cada producto. Cargue el catálogo con costo unitario y vuelva a sincronizar las guías para que Norte cruce recaudo y costo."
+          instruction="Para calcular margen se necesita el costo de cada producto. Cargue el catálogo con costo unitario y vuelva a sincronizar las guías para que Data Effi cruce recaudo y costo."
         />
       </Card>
     );

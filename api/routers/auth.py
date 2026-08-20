@@ -116,7 +116,7 @@ def register(
             "que te envíe una invitación."
         )
 
-    slug = payload.tenant_name.lower().replace(" ", "-")[:40] or "norte"
+    slug = payload.tenant_name.lower().replace(" ", "-")[:40] or "dataeffi"
     tenant = fetch_one(
         conn,
         "INSERT INTO core.tenant (slug, name) VALUES (%s, %s) RETURNING id, name",

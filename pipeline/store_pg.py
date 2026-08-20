@@ -35,6 +35,7 @@ from pipeline.models import (
     MovementInput,
     RowOutcome,
     ShipmentInput,
+    SourceRow,
     UpsertResult,
 )
 from pipeline.normalize import normalize_text
@@ -60,6 +61,11 @@ STATIC_COLUMNS: tuple[str, ...] = (
     "returned_at",
     "expected_delivery_date",
     "service_level",
+    "weight_kg",
+    "discount_pct",
+    "dispatch_batch_ref",
+    "dispatched_batch_at",
+    "distributor_name",
 )
 
 # Money columns: newest wins, discrepancies recorded. Same list as MONEY_FIELDS.
@@ -72,6 +78,11 @@ MONEY_COLUMNS: tuple[str, ...] = (
     "platform_fee",
     "insurance_cost",
     "collection_fee",
+    "freight_base",
+    "sale_total",
+    "distributor_sale_total",
+    "distributor_cost_total",
+    "supplier_sale_total",
 )
 
 # Columns that describe the CURRENT state rather than the shipment itself.
@@ -80,6 +91,9 @@ MONEY_COLUMNS: tuple[str, ...] = (
 PROGRESS_COLUMNS: tuple[str, ...] = (
     "settled_at",
     "settled_with_collection",
+    "settled_any_at",
+    "settled_return_at",
+    "settled_return",
     "status_detail",
 )
 
@@ -275,6 +289,9 @@ class PostgresStore:
                 """
                 UPDATE raw.load_batch SET
                     status        = %s,
+                    detected_country_code = %s,
+                    profile_code  = %s,
+                    rows_stored   = %s,
                     rows_total    = %s,
                     rows_inserted = %s,
                     rows_updated  = %s,
@@ -287,6 +304,9 @@ class PostgresStore:
                 """,
                 (
                     status,
+                    report.detected_country_code,
+                    report.profile_code,
+                    report.rows_stored,
                     report.rows_total,
                     report.rows_inserted,
                     report.rows_updated,
@@ -303,6 +323,42 @@ class PostgresStore:
                 "UPDATE core.connection SET last_sync_at = now(), status = 'active' WHERE id = %s",
                 (ctx.connection_id,),
             )
+
+    def save_source_rows(self, ctx: BatchContext, rows: list[SourceRow]) -> int:
+        """Archive every original row, in batches.
+
+        Written with executemany over a modest page size: a real Effi export is
+        1,649 rows of 87 columns, and a wallet export 2,152 of 56. One statement
+        per row would triple the load time for no benefit.
+        """
+        if not rows:
+            return 0
+
+        page = 500
+        stored = 0
+        with self._conn.cursor() as cur:
+            for start in range(0, len(rows), page):
+                chunk = rows[start:start + page]
+                cur.executemany(
+                    """
+                    INSERT INTO raw.source_row
+                        (batch_id, tenant_id, row_number, entity_key, payload, redacted_fields)
+                    VALUES (%s, %s, %s, %s, %s, %s)
+                    """,
+                    [
+                        (
+                            ctx.batch_id,
+                            ctx.tenant_id,
+                            row.row_number,
+                            row.entity_key,
+                            psycopg.types.json.Json(_jsonable_payload(row.payload)),
+                            row.redacted_fields,
+                        )
+                        for row in chunk
+                    ],
+                )
+                stored += len(chunk)
+        return stored
 
     # =====================================================================
     # Shipments
@@ -362,6 +418,14 @@ class PostgresStore:
             "settled_at": shipment.settled_at,
             "settled_with_collection": shipment.settled_with_collection,
             "service_level": shipment.service_level,
+            "weight_kg": shipment.weight_kg,
+            "discount_pct": shipment.discount_pct,
+            "dispatch_batch_ref": shipment.dispatch_batch_ref,
+            "dispatched_batch_at": shipment.dispatched_batch_at,
+            "distributor_name": shipment.distributor_name,
+            "settled_any_at": shipment.settled_any_at,
+            "settled_return_at": shipment.settled_return_at,
+            "settled_return": shipment.settled_return,
             "declared_value": shipment.declared_value,
             "cod_collected": shipment.cod_collected,
             "freight_cost": shipment.freight_cost,
@@ -370,6 +434,11 @@ class PostgresStore:
             "platform_fee": shipment.platform_fee,
             "insurance_cost": shipment.insurance_cost,
             "collection_fee": shipment.collection_fee,
+            "freight_base": shipment.freight_base,
+            "sale_total": shipment.sale_total,
+            "distributor_sale_total": shipment.distributor_sale_total,
+            "distributor_cost_total": shipment.distributor_cost_total,
+            "supplier_sale_total": shipment.supplier_sale_total,
             "first_batch_id": ctx.batch_id,
             "last_batch_id": ctx.batch_id,
         }
@@ -726,7 +795,7 @@ def _money_text(value: Any) -> str:
 
 
 def connect(dsn: str, *, tenant_id: UUID | None = None) -> psycopg.Connection:
-    """Open a connection configured for Norte.
+    """Open a connection configured for Data Effi.
 
     Setting `norte.tenant_id` is what makes every mart.* view return this
     tenant's rows and nothing else. Without it the views are empty by design.
@@ -754,3 +823,21 @@ __all__ = [
     "connect",
     "set_tenant",
 ]
+
+
+def _jsonable_payload(payload: dict[str, Any]) -> dict[str, Any]:
+    """Spreadsheet cells arrive as dates and Decimals; JSON takes neither."""
+    from datetime import date, datetime
+    from decimal import Decimal
+
+    out: dict[str, Any] = {}
+    for key, value in payload.items():
+        if value is None or isinstance(value, str | int | float | bool):
+            out[key] = value
+        elif isinstance(value, Decimal):
+            out[key] = float(value)
+        elif isinstance(value, datetime | date):
+            out[key] = value.isoformat()
+        else:
+            out[key] = str(value)
+    return out

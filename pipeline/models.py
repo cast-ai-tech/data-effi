@@ -48,6 +48,11 @@ STATIC_FIELDS: tuple[str, ...] = (
     "returned_at",
     "expected_delivery_date",
     "service_level",
+    "weight_kg",
+    "discount_pct",
+    "dispatch_batch_ref",
+    "dispatched_batch_at",
+    "distributor_name",
 )
 
 # Fields that carry money. The newest file wins, but any change against a
@@ -61,6 +66,11 @@ MONEY_FIELDS: tuple[str, ...] = (
     "platform_fee",
     "insurance_cost",
     "collection_fee",
+    "freight_base",
+    "sale_total",
+    "distributor_sale_total",
+    "distributor_cost_total",
+    "supplier_sale_total",
 )
 
 # Fields that reflect the LATEST known state and are therefore refreshed on
@@ -69,6 +79,9 @@ MONEY_FIELDS: tuple[str, ...] = (
 PROGRESS_FIELDS: tuple[str, ...] = (
     "settled_at",
     "settled_with_collection",
+    "settled_any_at",
+    "settled_return_at",
+    "settled_return",
     "status_detail",
 )
 
@@ -107,7 +120,17 @@ class ShipmentInput:
     # the same as paid, and in COD the gap is where cash flow dies.
     settled_at: datetime | None = None
     settled_with_collection: bool | None = None
+    settled_any_at: datetime | None = None
+    settled_return_at: datetime | None = None
+    settled_return: bool | None = None
     service_level: str | None = None
+    weight_kg: Decimal | None = None
+    discount_pct: Decimal | None = None
+    # The dispatch batch, and when it physically left. The gap from
+    # created_date is the only part of the delivery clock the merchant owns.
+    dispatch_batch_ref: str | None = None
+    dispatched_batch_at: datetime | None = None
+    distributor_name: str | None = None
 
     declared_value: Decimal | None = None
     cod_collected: Decimal | None = None
@@ -117,6 +140,12 @@ class ShipmentInput:
     platform_fee: Decimal | None = None
     insurance_cost: Decimal | None = None
     collection_fee: Decimal | None = None
+    freight_base: Decimal | None = None
+    # The dropshipping chain: charged, paid, invoiced.
+    sale_total: Decimal | None = None
+    distributor_sale_total: Decimal | None = None
+    distributor_cost_total: Decimal | None = None
+    supplier_sale_total: Decimal | None = None
 
     source_row_number: int = 0
 
@@ -135,6 +164,16 @@ class MovementInput:
     external_ref: str | None = None
     description: str | None = None
     source_row_number: int = 0
+
+
+@dataclass(slots=True)
+class SourceRow:
+    """One original row, kept whole for questions nobody has asked yet."""
+
+    row_number: int
+    entity_key: str | None
+    payload: dict[str, Any]
+    redacted_fields: list[str]
 
 
 @dataclass(slots=True)
@@ -206,9 +245,13 @@ class IngestReport:
     unmapped_columns: list[str] = field(default_factory=list)
     # Which known report shape this file matched, if any. Shown to the user as
     # "Detectado: Effi · Reporte de guías" so they can tell at a glance that
-    # Norte understood the file rather than guessing at it.
+    # Data Effi understood the file rather than guessing at it.
     profile_code: str | None = None
     profile_label: str | None = None
+    # What country the file itself says it is about, and what it wrote there.
+    detected_country_code: str | None = None
+    detected_country_raw: str | None = None
+    rows_stored: int = 0
     started_at: datetime | None = None
     finished_at: datetime | None = None
 
@@ -252,4 +295,9 @@ class IngestReport:
             ],
             "unmapped_columns": self.unmapped_columns,
             "profile": {"code": self.profile_code, "label": self.profile_label},
+            "detected_country": {
+                "code": self.detected_country_code,
+                "raw": self.detected_country_raw,
+            },
+            "rows_stored": self.rows_stored,
         }

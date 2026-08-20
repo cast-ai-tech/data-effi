@@ -246,7 +246,7 @@ def build_header_map(headers: list[str], kind: BatchKind) -> tuple[dict[int, str
 
     Returns (position -> field, unmapped headers). Unmapped headers are reported
     back to the user rather than dropped in silence: a column named `Valor Neto`
-    that Norte ignored is exactly the kind of thing that makes a dashboard lie.
+    that Data Effi ignored is exactly the kind of thing that makes a dashboard lie.
     """
     aliases = COLUMNS_BY_KIND[kind]
     lookup: dict[str, str] = {}

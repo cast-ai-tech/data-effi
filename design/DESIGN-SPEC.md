@@ -1,6 +1,6 @@
-# Norte — Especificación de diseño
+# Data Effi — Especificación de diseño
 
-Fuente: `Norte.dc.html` (prototipo dark-mode BI para ecommerce COD en LATAM).
+Fuente: `DataEffi.dc.html` (prototipo dark-mode BI para ecommerce COD en LATAM).
 Destino: Next.js + Tailwind. Todos los valores son literales del prototipo.
 
 ---
@@ -95,7 +95,7 @@ Fondos translúcidos de acento (badges/estados):
 | Ciclo de caja ("Tu plata vuelve en…") | 18px | 700 | — | primary |
 | KPI móvil | 18px | 800 | — | primary |
 | Título de alerta (detalle móvil) | 16px | 700 | lh 1.4 | primary |
-| Logo "Norte" / título del topbar | 15px | 700 | `-.01em` | primary |
+| Logo "Data Effi" / título del topbar | 15px | 700 | `-.01em` | primary |
 | Emoji de bandera en nav | 15px | — | `line-height:1` | — |
 | Dropzone principal (onboarding) | 15px | 600 | — | primary |
 | Header de sección móvil ("Alertas") | 15px | 700 | — | primary |
@@ -217,7 +217,7 @@ Fuera de esos tres, **no hay sombras**: la jerarquía se construye sólo con fon
 
 ### 4.1 Sidebar
 - Ancho: **224px expandido / 64px colapsado** (`transition: width .15s ease`), `flex-shrink:0`, fondo `#0D1017`, `border-right:1px solid rgba(255,255,255,0.08)`.
-- **Header** (`20px 18px`, `border-bottom:1px solid rgba(255,255,255,0.06)`): cuadrado `28×28`, radio `7px`, fondo `#33E5B0`, letra "N" 14px/800 color `#06110C`; junto a él "Norte" 15px/700/`-.01em` (se oculta al colapsar).
+- **Header** (`20px 18px`, `border-bottom:1px solid rgba(255,255,255,0.06)`): cuadrado `28×28`, radio `7px`, fondo `#33E5B0`, letras "DE" 14px/800 color `#06110C`; junto a él "Data Effi" 15px/700/`-.01em` (se oculta al colapsar).
 - **Lista**: `flex:1; overflow-y:auto; padding:14px 10px; gap:2px`.
 - **Nav item**
   - Base: `display:flex; align-items:center; gap:10px; padding:9px 10px; border-radius:8px; font-size:13px; cursor:pointer`
@@ -544,7 +544,7 @@ dropzone → lista de filas de archivo (`gap:10px`: 2 correctas/en progreso + 1 
 - `pauta_colombia_ago.csv` — "Detectado: Meta Ads · Reporte de pauta (Colombia)" — 64%
 - `movimientos_gt.xlsx` — "Falló la validación" — *"Recaudo promedio fuera de rango — posible archivo en centavos. No se cargó nada."*
 - Historial: `15/08 · guias_ago_ecuador.xlsx · 212 nuevas · 431 act. · Alexander` — `14/08 · dropi_reporte.csv · 88 nuevas · 120 act. · Alexander`
-- Buzón de ingesta: `ingesta-a8f3@norte.app`
+- Buzón de ingesta: `ingesta-a8f3@dataeffi.app`
 - Dropzone: "Arrastra tus archivos aquí" / "Soporta múltiples archivos a la vez · CSV, XLSX"
 
 ### Configuración
