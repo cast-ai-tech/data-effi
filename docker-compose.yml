@@ -113,6 +113,12 @@ services:
       args:
         NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-http://localhost:8000}
     container_name: norte_web
+    environment:
+      # Docker overwrites HOSTNAME with the container id, and Next's standalone
+      # server binds to whatever HOSTNAME says - so it ends up listening on a
+      # name nothing else resolves. Setting it here wins over that default.
+      HOSTNAME: 0.0.0.0
+      PORT: 3000
     ports:
       - "${WEB_PORT:-3000}:3000"
     depends_on:
