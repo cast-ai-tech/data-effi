@@ -265,9 +265,42 @@ Más abajo, en el historial de cargas, haz clic en tu archivo. Ahí ves cuántas
 leyó, cuántas eran nuevas, y una línea que dice **"Columnas ignoradas"** con el nombre
 exacto de cada columna que Norte no supo interpretar.
 
-### Qué columnas necesita tu archivo
+### Si exportas desde Effi ERP: no tienes que hacer nada
 
-No tienes que renombrar nada ni acomodar tu Excel. Norte ya conoce las formas más
+Norte **reconoce los dos reportes de Effi tal como salen**, sin que toques una sola
+columna. Cuando subas uno, la pantalla te lo dice: *"Detectado: Effi · Reporte de guías
+de transporte"*.
+
+| Reporte de Effi | Qué trae | Súbelo como |
+|---|---|---|
+| `Reporte de Guías de transporte AAAA-MM-DD.xlsx` | 87 columnas: guías, estados, destinos, fletes y valores | **Guías** |
+| `Reporte de movimientos de dinero Effi ....xls` | 56 columnas: el movimiento de tu Wallet, plata que entra y sale | **Movimientos de dinero** |
+
+**Sube los dos.** Con las guías solas, Norte estima tus costos; con los movimientos,
+usa la plata real que entró y salió de tu Wallet. La diferencia entre "estimado" y
+"real" es exactamente la diferencia entre un tablero bonito y uno en el que puedes
+confiar para decidir.
+
+Tres cosas que Norte hace por ti con estos archivos:
+
+1. **El "`.xls`" de movimientos no es un Excel de verdad** — Effi lo exporta como una
+   tabla de página web con nombre de Excel. Norte lo detecta por dentro y lo lee igual.
+   No necesitas abrirlo ni convertirlo.
+2. **Los cruza solos.** El reporte de dinero solo menciona el número de la
+   transportadora (`LC54718007`), nunca el número interno de Effi. Norte los amarra por
+   ese número, así que cada peso queda pegado a su guía.
+3. **Separa "entregado" de "cobrado".** Effi marca la liquidación aparte: una guía
+   entregada el lunes puede pagarse el viernes. Norte te muestra las dos fechas y cuánta
+   plata está entregada pero todavía no liquidada.
+
+Además distingue un estado que casi nadie mira: **"Disponible para retiro en oficina"**.
+En un reporte real de 1.649 guías, **278 estaban ahí** — ni entregadas ni devueltas,
+esperando que el cliente pasara a recogerlas. Es la plata más fácil de recuperar que
+tienes, y por eso Norte no la mete en el montón de "novedad".
+
+### Qué columnas necesita tu archivo (si NO viene de Effi)
+
+Para un Excel armado a mano o de otra plataforma, no tienes que renombrar nada. Norte ya conoce las formas más
 comunes en que viene escrita cada columna en LATAM. Estas son:
 
 | Qué es | Cómo puede llamarse la columna en tu archivo | ¿Obligatoria? |
@@ -380,8 +413,8 @@ guardados y vuelven cuando lo enciendas otra vez.
   del JWT **más** Row-Level Security sobre la variable de sesión `norte.tenant_id` —
   sin ella las vistas devuelven cero filas (falla cerrado, no abierto).
 - **API FastAPI** (`api/`): autenticación con JWT, ingesta sobre una cola acotada,
-  KPIs, configuración, capa de IA (NL→SQL contra un rol de solo lectura restringido a
-  `mart`) y disparador del worker.
+  KPIs, configuración, capa de IA (Google Gemini, con NL→SQL contra un rol de solo
+  lectura restringido a `mart`) y disparador del worker.
 - **Pipeline de ingesta** (`pipeline/`): un solo camino para todo archivo, venga de
   subida manual, buzón o fetch Tier 3. Idempotencia por `sha256(bytes)`, merge que
   nunca retrocede un estado terminal, y columnas y estados no reconocidos reportados
@@ -456,8 +489,15 @@ explícito si falta alguna, y la API se niega a arrancar con un secreto corto o 
 valor de relleno todavía puesto.
 
 `POSTGRES_READONLY_PASSWORD` pasa a ser obligatoria en cuanto habilites la capa de IA
-(`AI_ENABLED=true` más `ANTHROPIC_API_KEY`): el NL→SQL se niega a correr sin un rol de
+(`AI_ENABLED=true` más `GEMINI_API_KEY`): el NL→SQL se niega a correr sin un rol de
 solo lectura.
+
+La capa de IA usa **Google Gemini**. La llave se saca en
+https://aistudio.google.com/apikey, se pega en `GEMINI_API_KEY` dentro de tu `.env`, y
+no se comparte ni se sube a Git. El modelo por defecto es `gemini-2.5-flash` y se
+cambia con `AI_MODEL`. `AI_DAILY_TOKEN_BUDGET` pone un techo de gasto por día y por
+tenant: cuando se agota, el copiloto lo dice y los tableros siguen funcionando igual.
+Con `AI_ENABLED=false` Norte arranca sin llave y sin copiloto; nada más se ve afectado.
 
 ### Documentación
 

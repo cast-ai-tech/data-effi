@@ -128,6 +128,8 @@ export interface BatchDetail {
     }>;
     errors?: Array<{ row: number; message: string }>;
     unmapped_columns?: string[];
+    /** Which known report shape the file matched, if any. */
+    profile?: { code: string | null; label: string | null };
   };
   discrepancies: Array<{
     entity: string;

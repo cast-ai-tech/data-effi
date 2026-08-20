@@ -32,6 +32,7 @@ class RowOutcome(str, Enum):
 # overwritten by a later file - a later file may only FILL IN what is missing.
 STATIC_FIELDS: tuple[str, ...] = (
     "external_order_id",
+    "carrier_tracking_number",
     "customer_hash",
     "carrier_name",
     "geo_level1",
@@ -45,6 +46,8 @@ STATIC_FIELDS: tuple[str, ...] = (
     "dispatched_at",
     "delivered_at",
     "returned_at",
+    "expected_delivery_date",
+    "service_level",
 )
 
 # Fields that carry money. The newest file wins, but any change against a
@@ -56,6 +59,17 @@ MONEY_FIELDS: tuple[str, ...] = (
     "return_freight_cost",
     "product_cost",
     "platform_fee",
+    "insurance_cost",
+    "collection_fee",
+)
+
+# Fields that reflect the LATEST known state and are therefore refreshed on
+# every load, like the status itself. A guide settled yesterday is settled
+# today; a guide not yet settled may become settled tomorrow.
+PROGRESS_FIELDS: tuple[str, ...] = (
+    "settled_at",
+    "settled_with_collection",
+    "status_detail",
 )
 
 
@@ -69,6 +83,10 @@ class ShipmentInput:
     status_code: str
 
     status_raw: str | None = None
+    # The carrier's own number. Effi's money report cites only this one, so it
+    # is what links a wallet movement back to a guide.
+    carrier_tracking_number: str | None = None
+    status_detail: str | None = None
     external_order_id: str | None = None
     customer_hash: str | None = None
 
@@ -84,6 +102,12 @@ class ShipmentInput:
     delivered_at: datetime | None = None
     returned_at: datetime | None = None
     last_status_at: datetime | None = None
+    expected_delivery_date: date | None = None
+    # When the money actually reached the merchant's wallet. Delivered is not
+    # the same as paid, and in COD the gap is where cash flow dies.
+    settled_at: datetime | None = None
+    settled_with_collection: bool | None = None
+    service_level: str | None = None
 
     declared_value: Decimal | None = None
     cod_collected: Decimal | None = None
@@ -91,6 +115,8 @@ class ShipmentInput:
     return_freight_cost: Decimal | None = None
     product_cost: Decimal | None = None
     platform_fee: Decimal | None = None
+    insurance_cost: Decimal | None = None
+    collection_fee: Decimal | None = None
 
     source_row_number: int = 0
 
@@ -178,6 +204,11 @@ class IngestReport:
     sanity_issues: list[SanityIssue] = field(default_factory=list)
     errors: list[RowError] = field(default_factory=list)
     unmapped_columns: list[str] = field(default_factory=list)
+    # Which known report shape this file matched, if any. Shown to the user as
+    # "Detectado: Effi · Reporte de guías" so they can tell at a glance that
+    # Norte understood the file rather than guessing at it.
+    profile_code: str | None = None
+    profile_label: str | None = None
     started_at: datetime | None = None
     finished_at: datetime | None = None
 
@@ -220,4 +251,5 @@ class IngestReport:
                 {"row": e.row_number, "message": e.message} for e in self.errors
             ],
             "unmapped_columns": self.unmapped_columns,
+            "profile": {"code": self.profile_code, "label": self.profile_label},
         }

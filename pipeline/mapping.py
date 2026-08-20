@@ -40,6 +40,10 @@ STATUS_CANON: dict[str, CanonStatus] = {
         CanonStatus("picked_up", "Recogida", 30, False, False, False, "pipeline"),
         CanonStatus("in_transit", "En tránsito", 40, False, False, False, "pipeline"),
         CanonStatus("out_for_delivery", "En reparto", 50, False, False, False, "pipeline"),
+        # The parcel reached the carrier's office and the customer has not come
+        # for it. Neither delivered nor returned, and the most recoverable
+        # failure mode there is - 17% of a real Ecuadorian export sat here.
+        CanonStatus("in_office", "En oficina", 52, False, False, False, "pipeline"),
         CanonStatus("delivery_issue", "Novedad", 55, False, False, False, "pipeline"),
         CanonStatus("delivered", "Entregada", 60, True, True, False, "delivered"),
         CanonStatus("returning", "En devolución", 70, False, False, False, "returned"),
@@ -77,6 +81,25 @@ STATUS_ALIASES: dict[str, str] = {
     "anulada": "cancelled",
     "extraviado": "lost",
     "perdida": "lost",
+    # --- Effi vocabulary, verbatim from real exports (mirrors migration 008) ---
+    "entregada a destino": "delivered",
+    "disponible para retiro en oficina": "in_office",
+    "devolucion a origen": "returning",
+    "cancelada por transportadora": "cancelled",
+    "generada effi": "created",
+    "ingresando en agencia": "in_transit",
+    "ingresando operativo": "in_transit",
+    "en ruta a concesion": "in_transit",
+    "en distribucion a cliente": "out_for_delivery",
+    "reportado entregado en agencia": "in_office",
+    "reportado entregado en app": "delivered",
+    "entregado en agencia": "in_office",
+    "retirado en oficina": "delivered",
+    "devuelto a origen": "returned",
+    "devolucion entregada": "returned",
+    "anulada por transportadora": "cancelled",
+    "siniestro": "lost",
+    "extravio": "lost",
 }
 
 DEFAULT_STATUS = "created"

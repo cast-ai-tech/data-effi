@@ -36,6 +36,9 @@ seed-demo: ## Carga el workspace de demostración (3 países con datos reales)
 reset-demo: ## Borra la demo y la vuelve a cargar
 	docker compose exec -T api python -m scripts.seed_demo --reset
 
+check-effi: ## Analiza reportes reales de Effi sin cargarlos a tu workspace: make check-effi FILES="ruta/*.xlsx"
+	.venv/Scripts/python.exe -m scripts.check_real_effi $(FILES)
+
 worker-job: ## Ejecuta un job del worker: make worker-job JOB=refresh_fx
 	docker compose exec -T worker python -m worker.main $(JOB)
 

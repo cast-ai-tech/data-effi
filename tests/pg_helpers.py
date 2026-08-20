@@ -102,9 +102,31 @@ def recreate_test_database() -> str:
 
 
 def apply_migrations(dsn: str) -> None:
+    """Apply every migration to a fresh database, recording them in the ledger.
+
+    The database is new here, so everything is pending - but the ledger is still
+    written so this database behaves exactly like a production one on the next
+    run of scripts.migrate.
+    """
+    import hashlib
+
     with psycopg.connect(dsn, autocommit=True) as conn:
+        conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS public.schema_migration (
+                filename   text PRIMARY KEY,
+                checksum   char(64) NOT NULL,
+                applied_at timestamptz NOT NULL DEFAULT now()
+            )
+            """
+        )
         for path in sorted(MIGRATIONS_DIR.glob("*.sql")):
             conn.execute(path.read_text(encoding="utf-8"))
+            conn.execute(
+                "INSERT INTO public.schema_migration (filename, checksum) VALUES (%s, %s) "
+                "ON CONFLICT (filename) DO NOTHING",
+                (path.name, hashlib.sha256(path.read_bytes()).hexdigest()),
+            )
 
 
 def _prepare_app_role(admin_dsn_value: str, app_dsn: str) -> None:

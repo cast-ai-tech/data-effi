@@ -286,6 +286,11 @@ function BatchResult({ batchId }: { batchId: string }) {
 
   return (
     <div className="mt-2 space-y-1.5">
+      {report.profile?.label && (
+        <p className="text-[11.5px] text-accent">
+          Detectado: {report.profile.label}
+        </p>
+      )}
       <p className="text-[11.5px] text-ink-2">
         {batch.rows_total} filas · <b className="text-positive">{batch.rows_inserted} nuevas</b> ·{" "}
         {batch.rows_updated} actualizadas · {batch.rows_skipped} sin cambios ·{" "}
@@ -302,9 +307,12 @@ function BatchResult({ batchId }: { batchId: string }) {
       )}
 
       {unmapped.length > 0 && (
-        <p className="text-[11px] text-ink-dim">
-          Columnas ignoradas: {unmapped.join(", ")}
-        </p>
+        <details className="text-[11px] text-ink-dim">
+          <summary className="cursor-pointer hover:text-ink-muted">
+            {unmapped.length} columnas del archivo no se usaron
+          </summary>
+          <p className="mt-1 leading-relaxed">{unmapped.join(" · ")}</p>
+        </details>
       )}
 
       {sanity.slice(0, 3).map((issue, index) => (

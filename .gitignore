@@ -30,6 +30,13 @@ uploads/
 data/
 *.db
 
+# Real customer exports. These carry names, phone numbers, national id numbers
+# and home addresses of real people. The fixtures in tests/ reproduce their
+# STRUCTURE with invented values; the originals never belong in git.
+Reporte*.xls
+Reporte*.xlsx
+*_real_export.*
+
 # OS / editors
 .DS_Store
 Thumbs.db

@@ -34,6 +34,7 @@ from pipeline.mapping import (
 )
 from pipeline.models import (
     MONEY_FIELDS,
+    PROGRESS_FIELDS,
     STATIC_FIELDS,
     BatchContext,
     BatchKind,
@@ -57,6 +58,11 @@ from pipeline.normalize import (
     parse_datetime,
     parse_decimal,
     parse_int,
+)
+from pipeline.profiles import (
+    apply_transform,
+    build_profile_header_map,
+    detect_profile,
 )
 from pipeline.readers import iter_records, read_tabular
 
@@ -135,6 +141,8 @@ class ShipmentRecord:
     currency_code: str
     status_code: str
     status_raw: str | None = None
+    status_detail: str | None = None
+    carrier_tracking_number: str | None = None
     external_order_id: str | None = None
     customer_hash: str | None = None
     carrier_name: str | None = None
@@ -148,12 +156,18 @@ class ShipmentRecord:
     delivered_at: datetime | None = None
     returned_at: datetime | None = None
     last_status_at: datetime | None = None
+    expected_delivery_date: date | None = None
+    settled_at: datetime | None = None
+    settled_with_collection: bool | None = None
+    service_level: str | None = None
     declared_value: Decimal | None = None
     cod_collected: Decimal | None = None
     freight_cost: Decimal | None = None
     return_freight_cost: Decimal | None = None
     product_cost: Decimal | None = None
     platform_fee: Decimal | None = None
+    insurance_cost: Decimal | None = None
+    collection_fee: Decimal | None = None
     first_batch_id: UUID | None = None
     last_batch_id: UUID | None = None
 
@@ -207,6 +221,17 @@ def merge_shipment(existing: ShipmentRecord, incoming: ShipmentInput) -> MergeOu
             continue
         current_value = getattr(existing, field_name, None)
         if current_value is None:
+            outcome.updates[field_name] = new_value
+
+    # --- progress fields: newest wins, no discrepancy ---------------------
+    # Settlement and the carrier's own status wording are facts about NOW, not
+    # descriptions of the shipment. A guide that was unsettled yesterday and is
+    # settled today must show as settled - filling a gap is not enough.
+    for field_name in PROGRESS_FIELDS:
+        new_value = getattr(incoming, field_name, None)
+        if new_value is None:
+            continue
+        if getattr(existing, field_name, None) != new_value:
             outcome.updates[field_name] = new_value
 
     # --- money: newest wins, discrepancies recorded ---------------------
@@ -316,6 +341,8 @@ class MemoryStore:
                 currency_code=shipment.currency_code,
                 status_code=shipment.status_code,
                 status_raw=shipment.status_raw,
+                status_detail=shipment.status_detail,
+                carrier_tracking_number=shipment.carrier_tracking_number,
                 external_order_id=shipment.external_order_id,
                 customer_hash=shipment.customer_hash,
                 carrier_name=shipment.carrier_name,
@@ -329,16 +356,24 @@ class MemoryStore:
                 delivered_at=shipment.delivered_at,
                 returned_at=shipment.returned_at,
                 last_status_at=shipment.last_status_at,
+                expected_delivery_date=shipment.expected_delivery_date,
+                settled_at=shipment.settled_at,
+                settled_with_collection=shipment.settled_with_collection,
+                service_level=shipment.service_level,
                 declared_value=shipment.declared_value,
                 cod_collected=shipment.cod_collected,
                 freight_cost=shipment.freight_cost,
                 return_freight_cost=shipment.return_freight_cost,
                 product_cost=shipment.product_cost,
                 platform_fee=shipment.platform_fee,
+                insurance_cost=shipment.insurance_cost,
+                collection_fee=shipment.collection_fee,
                 first_batch_id=ctx.batch_id,
                 last_batch_id=ctx.batch_id,
             )
-            self._relink_orphans(ctx, shipment.tracking_number)
+            self._relink_orphans(
+                ctx, shipment.tracking_number, shipment.carrier_tracking_number
+            )
             return UpsertResult(RowOutcome.INSERTED, shipment.tracking_number)
 
         outcome = merge_shipment(existing, shipment)
@@ -364,6 +399,15 @@ class MemoryStore:
             candidate = (ctx.connection_id, movement.tracking_number_raw)
             if candidate in self.shipments:
                 shipment_id = movement.tracking_number_raw
+            else:
+                # The number cited may be the carrier's, not the guide's own.
+                for (connection_id, tracking), record in self.shipments.items():
+                    if (
+                        connection_id == ctx.connection_id
+                        and record.carrier_tracking_number == movement.tracking_number_raw
+                    ):
+                        shipment_id = tracking
+                        break
 
         if existing is None:
             self.movements[key] = MovementRecord(
@@ -409,23 +453,46 @@ class MemoryStore:
 
     def relink_orphans(self, tenant_id: UUID | None = None) -> int:
         """Attach movements that arrived before their shipment did."""
+        by_carrier_number = {
+            (connection_id, record.carrier_tracking_number): tracking
+            for (connection_id, tracking), record in self.shipments.items()
+            if record.carrier_tracking_number
+        }
+
         linked = 0
         for (connection_id, _), movement in self.movements.items():
             if movement.shipment_id is not None or not movement.tracking_number_raw:
                 continue
             if tenant_id is not None and movement.tenant_id != tenant_id:
                 continue
+
             if (connection_id, movement.tracking_number_raw) in self.shipments:
                 movement.shipment_id = movement.tracking_number_raw
                 linked += 1
+            elif (connection_id, movement.tracking_number_raw) in by_carrier_number:
+                movement.shipment_id = by_carrier_number[
+                    (connection_id, movement.tracking_number_raw)
+                ]
+                linked += 1
         return linked
 
-    def _relink_orphans(self, ctx: BatchContext, tracking_number: str) -> None:
+    def _relink_orphans(
+        self, ctx: BatchContext, tracking_number: str, carrier_tracking: str | None = None
+    ) -> None:
+        """Attach waiting movements to a guide that just arrived.
+
+        Matches on the carrier's number as well: Effi's wallet report cites only
+        that one, so without it every real movement stays an orphan.
+        """
+        keys = {tracking_number}
+        if carrier_tracking:
+            keys.add(carrier_tracking)
+
         for (connection_id, _), movement in self.movements.items():
             if (
                 connection_id == ctx.connection_id
                 and movement.shipment_id is None
-                and movement.tracking_number_raw == tracking_number
+                and movement.tracking_number_raw in keys
             ):
                 movement.shipment_id = tracking_number
 
@@ -564,12 +631,35 @@ class IngestEngine:
         report.batch_id = ctx.batch_id
 
         headers, rows = read_tabular(payload, source_name)
-        header_map, unmapped = build_header_map(headers, kind)
-        report.unmapped_columns = unmapped
 
-        missing = [
-            column for column in REQUIRED_COLUMNS[kind] if column not in header_map.values()
-        ]
+        # A recognised report (Effi's exports, for now) is mapped column by
+        # column, by exact name. Anything else falls back to alias matching,
+        # which is right for a spreadsheet a human assembled by hand.
+        profile = detect_profile(headers, kind)
+        if profile is not None:
+            header_map, unmapped = build_profile_header_map(headers, profile)
+            logger.info("recognised source profile: %s", profile.code)
+        else:
+            header_map, unmapped = build_header_map(headers, kind)
+
+        report.unmapped_columns = unmapped
+        report.profile_code = profile.code if profile else None
+        report.profile_label = profile.label if profile else None
+
+        required = (
+            ("tracking_number",)
+            if profile is not None and profile.kind is BatchKind.SHIPMENTS
+            else REQUIRED_COLUMNS[kind]
+        )
+        mapped_fields = set(header_map.values())
+        if profile is not None and profile.kind is BatchKind.SHIPMENTS:
+            # The profile derives tracking_number from two possible columns.
+            mapped_fields |= {"tracking_number"} if (
+                "carrier_tracking_number" in mapped_fields
+                or "external_order_id" in mapped_fields
+            ) else set()
+
+        missing = [column for column in required if column not in mapped_fields]
         if missing:
             report.finished_at = datetime.now(UTC)
             report.errors.append(
@@ -586,7 +676,8 @@ class IngestEngine:
         for row_number, mapped, raw in iter_records(headers, rows, header_map):
             report.rows_total += 1
             try:
-                handler(ctx, report, row_number, mapped, default_currency)
+                fields = apply_transform(profile, mapped) if profile else mapped
+                handler(ctx, report, row_number, fields, default_currency)
             except Exception as exc:
                 report.rows_failed += 1
                 report.errors.append(RowError(row_number, str(exc), raw))
@@ -636,6 +727,10 @@ class IngestEngine:
             currency_code=normalize_currency(mapped.get("currency_code"), default_currency),
             status_code=status_code,
             status_raw=clean_text(mapped.get("status_raw")),
+            status_detail=clean_text(mapped.get("status_detail")),
+            carrier_tracking_number=normalize_tracking(
+                mapped.get("carrier_tracking_number")
+            ),
             external_order_id=clean_text(mapped.get("external_order_id")),
             customer_hash=hash_customer(mapped.get("customer_identifier"), self._pii_salt),
             carrier_name=clean_text(mapped.get("carrier_name")),
@@ -649,14 +744,36 @@ class IngestEngine:
             delivered_at=parse_datetime(mapped.get("delivered_at")),
             returned_at=parse_datetime(mapped.get("returned_at")),
             last_status_at=parse_datetime(mapped.get("last_status_at")),
+            expected_delivery_date=parse_date(mapped.get("expected_delivery_date")),
+            settled_at=parse_datetime(mapped.get("settled_at")),
+            settled_with_collection=mapped.get("settled_with_collection")
+            if isinstance(mapped.get("settled_with_collection"), bool)
+            else None,
+            service_level=clean_text(mapped.get("service_level")),
             declared_value=_abs_or_none(parse_decimal(mapped.get("declared_value"))),
             cod_collected=_abs_or_none(parse_decimal(mapped.get("cod_collected"))),
             freight_cost=_abs_or_none(parse_decimal(mapped.get("freight_cost"))),
             return_freight_cost=_abs_or_none(parse_decimal(mapped.get("return_freight_cost"))),
             product_cost=_abs_or_none(parse_decimal(mapped.get("product_cost"))),
             platform_fee=_abs_or_none(parse_decimal(mapped.get("platform_fee"))),
+            insurance_cost=_abs_or_none(parse_decimal(mapped.get("insurance_cost"))),
+            collection_fee=_abs_or_none(parse_decimal(mapped.get("collection_fee"))),
             source_row_number=row_number,
         )
+
+        # A guide holding several products cannot be represented by a model with
+        # one product per shipment. Say so instead of storing the first one and
+        # letting the product report quietly under-count.
+        extra_products = mapped.get("_extra_products") or 0
+        if extra_products:
+            report.sanity_issues.append(
+                SanityIssue(
+                    row_number, tracking, "multi_product_guide",
+                    f"La guía lleva {extra_products + 1} productos distintos; se registró "
+                    f"solo '{shipment.product_name}'. El resto no entra en el reporte "
+                    f"por producto.",
+                )
+            )
 
         issues = check_shipment(shipment, self._today)
         report.sanity_issues.extend(issues)
@@ -684,7 +801,14 @@ class IngestEngine:
             return
 
         movement_date = parse_date(mapped.get("movement_date")) or self._today
-        type_code, recognized = resolve_movement_type(mapped.get("movement_type_raw"))
+
+        # A recognised profile already resolved the type against that platform's
+        # own vocabulary; the generic alias table is the fallback.
+        if "_movement_type_code" in mapped:
+            type_code = mapped["_movement_type_code"]
+            recognized = bool(mapped.get("_movement_type_recognized"))
+        else:
+            type_code, recognized = resolve_movement_type(mapped.get("movement_type_raw"))
 
         if type_code is None:
             # Infer from the sign when the concept column is missing or unknown.

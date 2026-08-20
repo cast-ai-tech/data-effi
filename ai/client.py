@@ -127,34 +127,47 @@ def call_llm(
     max_tokens: int = 1024,
     temperature: float = 0.2,
 ) -> LlmResponse:
-    """One call to Anthropic. Every failure becomes AiUnavailable."""
+    """One call to Gemini. Every failure becomes AiUnavailable."""
     try:
         settings.require_ai()
     except RuntimeError as exc:
         raise AiUnavailable(
             "El copiloto no está configurado en este despliegue. "
-            "Falta ANTHROPIC_API_KEY o AI_ENABLED.",
+            "Falta GEMINI_API_KEY o AI_ENABLED.",
             reason="not_configured",
         ) from exc
 
     try:
-        import anthropic
+        from google import genai
+        from google.genai import types
     except ImportError as exc:      # pragma: no cover - declared dependency
-        raise AiUnavailable("Falta la librería anthropic en el servidor.", reason="missing_dep") from exc
-
-    client = anthropic.Anthropic(
-        api_key=settings.anthropic_api_key,
-        timeout=float(settings.ai_request_timeout_seconds),
-        max_retries=1,
-    )
+        raise AiUnavailable(
+            "Falta la librería google-genai en el servidor.", reason="missing_dep"
+        ) from exc
 
     try:
-        message = client.messages.create(
+        # HttpOptions.timeout is in MILLISECONDS; the setting is in seconds.
+        # Building the client counts as a failure path too: a malformed key or a
+        # bad transport config must degrade, not escape as a raw exception.
+        client = genai.Client(
+            api_key=settings.gemini_api_key,
+            http_options=types.HttpOptions(
+                timeout=settings.ai_request_timeout_seconds * 1000,
+            ),
+        )
+        response = client.models.generate_content(
             model=settings.ai_model,
-            max_tokens=max_tokens,
-            temperature=temperature,
-            system=system,
-            messages=[{"role": "user", "content": user_message}],
+            contents=user_message,
+            config=types.GenerateContentConfig(
+                # Gemini takes the system prompt here, not as a message role.
+                system_instruction=system,
+                max_output_tokens=max_tokens,
+                temperature=temperature,
+                # Thinking tokens are charged against max_output_tokens. Left on,
+                # a 600-token brief spends its whole budget reasoning and comes
+                # back empty, so the callers' token ceilings mean what they say.
+                thinking_config=types.ThinkingConfig(thinking_budget=0),
+            ),
         )
     except Exception as exc:
         logger.warning("LLM call failed: %s", type(exc).__name__)
@@ -163,10 +176,38 @@ def call_llm(
             reason="upstream_error",
         ) from exc
 
-    text = "".join(block.text for block in message.content if getattr(block, "type", "") == "text")
+    # `response.text` is None when there is no candidate to read: a safety block,
+    # a truncated answer, a recitation stop. Silence is not an answer, so it
+    # degrades like any other failure instead of returning an empty string.
+    text = (response.text or "").strip()
+    if not text:
+        finish_reason = _finish_reason(response)
+        logger.warning("LLM returned no text (finish_reason=%s)", finish_reason)
+        raise AiUnavailable(
+            "El modelo no devolvió ninguna respuesta"
+            f"{f' ({finish_reason})' if finish_reason else ''}. "
+            "Reformula la pregunta o vuelve a intentarlo en un momento.",
+            reason="empty_response",
+        )
+
+    # usage_metadata is absent on some responses; missing counts are 0, never a
+    # crash. Undercounting the budget is survivable, taking the dashboard down
+    # over a bookkeeping field is not.
+    usage = getattr(response, "usage_metadata", None)
     return LlmResponse(
-        text=text.strip(),
-        input_tokens=message.usage.input_tokens,
-        output_tokens=message.usage.output_tokens,
+        text=text,
+        input_tokens=getattr(usage, "prompt_token_count", None) or 0,
+        output_tokens=getattr(usage, "candidates_token_count", None) or 0,
         model=settings.ai_model,
     )
+
+
+def _finish_reason(response: Any) -> str | None:
+    """The model's stated reason for stopping, when it gave one."""
+    candidates = getattr(response, "candidates", None) or []
+    if not candidates:
+        return None
+    reason = getattr(candidates[0], "finish_reason", None)
+    if reason is None:
+        return None
+    return getattr(reason, "name", None) or str(reason)

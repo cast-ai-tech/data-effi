@@ -57,8 +57,8 @@ class Settings(BaseSettings):
 
     # --- ai ---
     ai_enabled: bool = False
-    anthropic_api_key: str | None = None
-    ai_model: str = "claude-sonnet-5"
+    gemini_api_key: str | None = None
+    ai_model: str = "gemini-2.5-flash"
     ai_daily_token_budget: int = 200_000
     ai_request_timeout_seconds: int = 45
 
@@ -92,8 +92,8 @@ class Settings(BaseSettings):
         """Called by the AI router. Fails loudly rather than half-working."""
         if not self.ai_enabled:
             raise RuntimeError("AI_ENABLED is false")
-        if not self.anthropic_api_key:
-            raise RuntimeError("ANTHROPIC_API_KEY is not set")
+        if not self.gemini_api_key:
+            raise RuntimeError("GEMINI_API_KEY is not set")
         if not self.database_url_readonly:
             raise RuntimeError("DATABASE_URL_READONLY is not set; NL->SQL refuses to run without it")
 

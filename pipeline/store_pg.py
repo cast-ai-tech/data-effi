@@ -24,7 +24,7 @@ from uuid import UUID
 
 import psycopg
 from psycopg import sql
-from psycopg.rows import dict_row
+from psycopg.rows import dict_row, tuple_row
 
 from pipeline.ingest import BatchAlreadyExists
 from pipeline.models import (
@@ -46,6 +46,7 @@ logger = logging.getLogger(__name__)
 # dimension resolution turns names into ids.
 STATIC_COLUMNS: tuple[str, ...] = (
     "external_order_id",
+    "carrier_tracking_number",
     "customer_hash",
     "carrier_id",
     "geo_id",
@@ -57,6 +58,8 @@ STATIC_COLUMNS: tuple[str, ...] = (
     "dispatched_at",
     "delivered_at",
     "returned_at",
+    "expected_delivery_date",
+    "service_level",
 )
 
 # Money columns: newest wins, discrepancies recorded. Same list as MONEY_FIELDS.
@@ -67,6 +70,17 @@ MONEY_COLUMNS: tuple[str, ...] = (
     "return_freight_cost",
     "product_cost",
     "platform_fee",
+    "insurance_cost",
+    "collection_fee",
+)
+
+# Columns that describe the CURRENT state rather than the shipment itself.
+# Refreshed on every load: a guide settled since the last file must show as
+# settled, and COALESCE-on-null would never let that through.
+PROGRESS_COLUMNS: tuple[str, ...] = (
+    "settled_at",
+    "settled_with_collection",
+    "status_detail",
 )
 
 ALL_SHIPMENT_COLUMNS: tuple[str, ...] = (
@@ -79,6 +93,7 @@ ALL_SHIPMENT_COLUMNS: tuple[str, ...] = (
     "last_status_at",
     *STATIC_COLUMNS,
     *MONEY_COLUMNS,
+    *PROGRESS_COLUMNS,
     "first_batch_id",
     "last_batch_id",
 )
@@ -120,6 +135,10 @@ def _build_shipment_upsert() -> str:
         f"{column} = COALESCE(EXCLUDED.{column}, core.shipment.{column})"
         for column in MONEY_COLUMNS
     ]
+    assignments += [
+        f"{column} = COALESCE(EXCLUDED.{column}, core.shipment.{column})"
+        for column in PROGRESS_COLUMNS
+    ]
 
     change_conditions = [
         "core.status_advance(core.shipment.status_code, EXCLUDED.status_code) "
@@ -134,7 +153,7 @@ def _build_shipment_upsert() -> str:
     change_conditions += [
         f"(EXCLUDED.{column} IS NOT NULL "
         f"AND core.shipment.{column} IS DISTINCT FROM EXCLUDED.{column})"
-        for column in MONEY_COLUMNS
+        for column in (*MONEY_COLUMNS, *PROGRESS_COLUMNS)
     ]
 
     return (
@@ -167,6 +186,10 @@ class PostgresStore:
     """
 
     def __init__(self, conn: psycopg.Connection) -> None:
+        # Every cursor below states its own row_factory. Inheriting the
+        # connection's would make this class silently depend on how the caller
+        # opened it - a connection created with dict_row used to fail here with
+        # `KeyError: 0`, which tells you nothing about what went wrong.
         self._conn = conn
         # Per-run dimension caches. Cleared with reset_cache() between batches
         # when the same store instance is reused by a long-lived worker.
@@ -191,7 +214,7 @@ class PostgresStore:
     # =====================================================================
 
     def batch_exists(self, tenant_id: UUID, connection_id: UUID, content_hash: str) -> bool:
-        with self._conn.cursor() as cur:
+        with self._conn.cursor(row_factory=tuple_row) as cur:
             cur.execute(
                 """
                 SELECT 1 FROM raw.load_batch
@@ -320,8 +343,10 @@ class PostgresStore:
             "tracking_number": shipment.tracking_number,
             "status_code": shipment.status_code,
             "status_raw": shipment.status_raw,
+            "status_detail": shipment.status_detail,
             "last_status_at": shipment.last_status_at,
             "external_order_id": shipment.external_order_id,
+            "carrier_tracking_number": shipment.carrier_tracking_number,
             "customer_hash": shipment.customer_hash,
             "carrier_id": carrier_id,
             "geo_id": geo_id,
@@ -333,12 +358,18 @@ class PostgresStore:
             "dispatched_at": shipment.dispatched_at,
             "delivered_at": shipment.delivered_at,
             "returned_at": shipment.returned_at,
+            "expected_delivery_date": shipment.expected_delivery_date,
+            "settled_at": shipment.settled_at,
+            "settled_with_collection": shipment.settled_with_collection,
+            "service_level": shipment.service_level,
             "declared_value": shipment.declared_value,
             "cod_collected": shipment.cod_collected,
             "freight_cost": shipment.freight_cost,
             "return_freight_cost": shipment.return_freight_cost,
             "product_cost": shipment.product_cost,
             "platform_fee": shipment.platform_fee,
+            "insurance_cost": shipment.insurance_cost,
+            "collection_fee": shipment.collection_fee,
             "first_batch_id": ctx.batch_id,
             "last_batch_id": ctx.batch_id,
         }
@@ -430,9 +461,13 @@ class PostgresStore:
                     )
                     VALUES (
                         %(tenant_id)s, %(connection_id)s, %(country_code)s,
+                        -- Effi's wallet cites the CARRIER's number, not the
+                        -- guide's own, so both are candidates.
                         (SELECT id FROM core.shipment
                           WHERE connection_id = %(connection_id)s
-                            AND tracking_number = %(tracking_number_raw)s),
+                            AND (tracking_number = %(tracking_number_raw)s
+                                 OR carrier_tracking_number = %(tracking_number_raw)s)
+                          LIMIT 1),
                         %(tracking_number_raw)s, %(movement_type_code)s, %(movement_date)s,
                         %(amount)s, %(currency_code)s, %(external_ref)s, %(description)s,
                         %(dedupe_key)s, %(batch_id)s
@@ -500,7 +535,7 @@ class PostgresStore:
         return UpsertResult(outcome, entity_key, discrepancies=discrepancies)
 
     def relink_orphans(self, tenant_id: UUID | None = None) -> int:
-        with self._conn.cursor() as cur:
+        with self._conn.cursor(row_factory=tuple_row) as cur:
             cur.execute("SELECT core.relink_orphan_movements(%s)", (tenant_id,))
             row = cur.fetchone()
             return int(row[0]) if row else 0
@@ -592,7 +627,7 @@ class PostgresStore:
         if key in self._product_cache:
             return self._product_cache[key]
 
-        with self._conn.cursor() as cur:
+        with self._conn.cursor(row_factory=tuple_row) as cur:
             cur.execute(
                 "SELECT product_id FROM core.product_alias WHERE tenant_id = %s AND alias_norm = %s",
                 (ctx.tenant_id, norm),
@@ -658,7 +693,7 @@ class PostgresStore:
             conflict=sql.SQL(", ").join(sql.Identifier(c) for c in conflict_columns),
         )
 
-        with self._conn.transaction(), self._conn.cursor() as cur:
+        with self._conn.transaction(), self._conn.cursor(row_factory=tuple_row) as cur:
             cur.execute(statement, insert_values)
             row = cur.fetchone()
             if row:
