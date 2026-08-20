@@ -1,0 +1,23 @@
+# Norte - backend runtime dependencies (Python 3.12)
+# Pinned to minor versions: reproducible installs without freezing security patches.
+
+# --- ingestion pipeline ---
+openpyxl==3.1.5
+psycopg[binary]==3.2.3
+
+# --- API (phase 2) ---
+fastapi==0.115.6
+uvicorn[standard]==0.34.0
+pydantic==2.10.4
+pydantic-settings==2.7.0
+python-multipart==0.0.20
+argon2-cffi==23.1.0
+pyjwt==2.10.1
+
+# --- worker (phase 3) ---
+apscheduler==3.11.0
+httpx==0.28.1
+
+# --- AI layer (phase 5) ---
+anthropic==0.42.0
+sqlglot==26.0.1

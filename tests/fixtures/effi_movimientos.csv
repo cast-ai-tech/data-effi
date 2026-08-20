@@ -1,0 +1,11 @@
+Guia;Fecha;Concepto;Valor;Referencia;Descripcion
+E-1001;04/07/2026;Recaudo;89.900;MOV-0001;Recaudo contraentrega
+E-1001;04/07/2026;Flete;12.000;MOV-0002;Flete de envio
+E-1001;04/07/2026;Costo producto;35.000;MOV-0003;Costo proveedor
+E-1003;05/07/2026;Recaudo;149.900;MOV-0004;Recaudo contraentrega
+E-1003;05/07/2026;Flete;14.000;MOV-0005;Flete de envio
+E-1005;06/07/2026;Recaudo;179.800;MOV-0006;Recaudo contraentrega
+E-1005;06/07/2026;Flete;12.000;MOV-0007;Flete de envio
+E-1002;05/07/2026;Flete devolucion;12.000;MOV-0008;Flete de devolucion
+E-1011;09/07/2026;Recaudo;149.900;MOV-0009;Recaudo de guia aun no cargada
+E-1011;09/07/2026;Flete;15.000;MOV-0010;Flete de guia aun no cargada

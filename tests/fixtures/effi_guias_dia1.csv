@@ -1,0 +1,11 @@
+Guia;Fecha;Estado;Transportadora;Ciudad;Departamento;Producto;Cantidad;Telefono;Valor;Flete;Costo Producto;Fecha Entrega
+E-1001;01/07/2026;ENTREGADO;Interrapidisimo;Bogotá;Cundinamarca;Faja Reductora;1;3001234567;89.900;12.000;35.000;04/07/2026
+E-1002;01/07/2026;DEVUELTO;Interrapidisimo;Medellín;Antioquia;Faja Reductora;1;3009876543;89.900;12.000;35.000;
+E-1003;01/07/2026;ENTREGADO;Envia;Cali;Valle del Cauca;Reloj Inteligente;1;3151112233;149.900;14.000;62.000;05/07/2026
+E-1004;02/07/2026;EN TRANSITO;Envia;Barranquilla;Atlántico;Reloj Inteligente;1;3204445566;149.900;14.000;62.000;
+E-1005;02/07/2026;ENTREGADO;Interrapidisimo;BOGOTA;Cundinamarca;Faja Reductora;2;3012223344;179.800;12.000;70.000;06/07/2026
+E-1006;02/07/2026;NOVEDAD;Coordinadora;Bucaramanga;Santander;Faja Reductora;1;3005556677;89.900;15.000;35.000;
+E-1007;03/07/2026;ENTREGADO;Coordinadora;Bogota;Cundinamarca;Reloj Inteligente;1;3187778899;149.900;15.000;62.000;07/07/2026
+E-1008;03/07/2026;CANCELADO;Envia;Pereira;Risaralda;Faja Reductora;1;3123334455;89.900;0;0;
+E-1009;03/07/2026;DEVUELTO;Envia;Cartagena;Bolívar;Reloj Inteligente;1;3009998877;149.900;14.000;62.000;
+E-1010;04/07/2026;ENTREGADO;Interrapidisimo;Bogotá;Cundinamarca;Faja Reductora;1;3016667788;89.900;12.000;35.000;08/07/2026

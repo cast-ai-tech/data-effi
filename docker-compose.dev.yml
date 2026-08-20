@@ -1,0 +1,27 @@
+# Minimal stack for local development and tests: just PostgreSQL.
+# The full stack (db + api + worker + web) lands in docker-compose.yml at phase 6.
+#
+# Every value comes from the environment. Copy .env.example to .env first:
+#   cp .env.example .env   (and fill in the blanks)
+services:
+  db:
+    image: postgres:16-alpine
+    container_name: norte_db
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:?POSTGRES_USER is required}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}
+      POSTGRES_DB: ${POSTGRES_DB:?POSTGRES_DB is required}
+      # Deterministic collation so ORDER BY matches between dev and CI.
+      POSTGRES_INITDB_ARGS: "--locale=C --encoding=UTF8"
+    ports:
+      - "${POSTGRES_PORT:-5433}:5432"
+    volumes:
+      - norte_pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 3s
+      timeout: 5s
+      retries: 20
+
+volumes:
+  norte_pgdata:

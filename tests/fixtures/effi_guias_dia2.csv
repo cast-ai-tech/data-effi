@@ -1,0 +1,6 @@
+Guia;Fecha;Estado;Transportadora;Ciudad;Departamento;Producto;Cantidad;Telefono;Valor;Flete;Costo Producto;Fecha Entrega
+E-1002;01/07/2026;EN TRANSITO;Interrapidisimo;Medellín;Antioquia;Faja Reductora;1;3009876543;89.900;12.000;35.000;
+E-1003;01/07/2026;ENTREGADO;Envia;Cali;Valle del Cauca;Reloj Inteligente;1;3151112233;159.900;14.000;62.000;05/07/2026
+E-1004;02/07/2026;ENTREGADO;Envia;Barranquilla;Atlántico;Reloj Inteligente;1;3204445566;149.900;14.000;62.000;09/07/2026
+E-1011;05/07/2026;ENTREGADO;Coordinadora;Cali;Valle del Cauca;Reloj Inteligente;1;3141234567;149.900;15.000;62.000;09/07/2026
+E-1012;05/07/2026;EN TRANSITO;Coordinadora;Manizales;Caldas;Faja Reductora;1;3159876543;89.900;15.000;35.000;
