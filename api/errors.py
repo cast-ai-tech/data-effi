@@ -59,6 +59,32 @@ class Conflict(ApiError):
         super().__init__("conflict", message, status_code=status.HTTP_409_CONFLICT, **kwargs)
 
 
+class InvalidDateRange(ApiError):
+    """A range whose end is before its start.
+
+    422 rather than 400, and its own code rather than the generic validation
+    envelope, because the two dates are individually valid - it is the pair that
+    is wrong, and the client needs to tell the two cases apart to point at the
+    right field.
+    """
+
+    def __init__(self, message: str) -> None:
+        # Starlette renamed the 422 constant; the numeric code is unchanged.
+        super().__init__("invalid_date_range", message, status_code=422)
+
+
+class InvalidDateField(ApiError):
+    """A `date_field` that names no date this platform has.
+
+    Its own code, separate from `invalid_date_range`, because the fix is a
+    different one: the caller picked an impossible value, not an impossible
+    pair.
+    """
+
+    def __init__(self, message: str) -> None:
+        super().__init__("invalid_date_field", message, status_code=422)
+
+
 class RateLimited(ApiError):
     def __init__(
         self, message: str = "Demasiados intentos. Espera un minuto e inténtalo de nuevo."

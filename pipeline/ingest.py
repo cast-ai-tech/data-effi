@@ -25,7 +25,9 @@ from decimal import Decimal
 from typing import Any, Protocol
 from uuid import UUID, uuid4
 
+from pipeline.crypto import encrypt_pii, pii_available
 from pipeline.mapping import (
+    MOVEMENT_TYPE_SIGNS,
     REQUIRED_COLUMNS,
     STATUS_CANON,
     build_header_map,
@@ -175,6 +177,11 @@ class ShipmentRecord:
     carrier_tracking_number: str | None = None
     external_order_id: str | None = None
     customer_hash: str | None = None
+    customer_name_enc: bytes | None = None
+    customer_phone_enc: bytes | None = None
+    customer_document_enc: bytes | None = None
+    customer_address_enc: bytes | None = None
+    customer_city_name: str | None = None
     carrier_name: str | None = None
     geo_level1: str | None = None
     city_name: str | None = None
@@ -182,6 +189,7 @@ class ShipmentRecord:
     supplier_name: str | None = None
     store_name: str | None = None
     quantity: int = 1
+    created_at_source: datetime | None = None
     dispatched_at: datetime | None = None
     delivered_at: datetime | None = None
     returned_at: datetime | None = None
@@ -342,6 +350,12 @@ class MemoryStore:
     def batch_exists(self, tenant_id: UUID, connection_id: UUID, content_hash: str) -> bool:
         return (tenant_id, connection_id, content_hash) in self.batches
 
+    def clear_batch_rows(self, ctx) -> int:
+        """In-memory twin of the Postgres store's reprocess cleanup."""
+        before = len(self.movements)
+        self.movements = [m for m in self.movements if getattr(m, "batch_id", None) != ctx.batch_id]
+        return before - len(self.movements)
+
     def register_batch(
         self,
         *,
@@ -352,10 +366,15 @@ class MemoryStore:
         source_name: str,
         kind: BatchKind,
         content_hash: str,
+        reprocess: bool = False,
     ) -> BatchContext:
         key = (tenant_id, connection_id, content_hash)
         if key in self.batches:
-            raise BatchAlreadyExists(content_hash)
+            if not reprocess:
+                raise BatchAlreadyExists(content_hash)
+            # Same behaviour as Postgres: reopen the batch that exists rather
+            # than minting a second one, so its previous rows stay findable.
+            return self.batches[key]
         ctx = BatchContext(
             batch_id=uuid4(),
             tenant_id=tenant_id,
@@ -393,6 +412,11 @@ class MemoryStore:
                 carrier_tracking_number=shipment.carrier_tracking_number,
                 external_order_id=shipment.external_order_id,
                 customer_hash=shipment.customer_hash,
+                customer_name_enc=shipment.customer_name_enc,
+                customer_phone_enc=shipment.customer_phone_enc,
+                customer_document_enc=shipment.customer_document_enc,
+                customer_address_enc=shipment.customer_address_enc,
+                customer_city_name=shipment.customer_city_name,
                 carrier_name=shipment.carrier_name,
                 geo_level1=shipment.geo_level1,
                 city_name=shipment.city_name,
@@ -400,6 +424,7 @@ class MemoryStore:
                 supplier_name=shipment.supplier_name,
                 store_name=shipment.store_name,
                 quantity=shipment.quantity,
+                created_at_source=shipment.created_at_source,
                 dispatched_at=shipment.dispatched_at,
                 delivered_at=shipment.delivered_at,
                 returned_at=shipment.returned_at,
@@ -631,6 +656,52 @@ def check_movement(movement: MovementInput, today: date) -> list[SanityIssue]:
 
 
 # =============================================================================
+# Contact data
+#
+# Two representations of the same four columns, produced side by side because
+# they answer different questions and neither can answer the other's:
+#
+#   customer_hash    "is this the same person?"  -> grouping, metrics, joins
+#   customer_*_enc   "who do I call back?"       -> the orders table, the card
+#
+# The hash is computed from the phone whether or not encryption is available;
+# it needs no key. The ciphertext needs one, and when there is none the load
+# still runs - it simply carries no contact data. That is a degradation the
+# batch report states out loud rather than a failure, because refusing to
+# ingest would cost the operator every metric in the file over a setting they
+# can fix afterwards.
+# =============================================================================
+
+# Canonical field the profile produced -> the column its ciphertext lands in.
+CONTACT_FIELDS: tuple[tuple[str, str], ...] = (
+    ("customer_name", "customer_name_enc"),
+    ("customer_identifier", "customer_phone_enc"),
+    ("customer_document", "customer_document_enc"),
+    ("customer_address", "customer_address_enc"),
+)
+
+PII_KEY_MISSING_WARNING = (
+    "Sin PII_ENCRYPTION_KEY: se guardó el hash del cliente pero no los datos de "
+    "contacto. Los pedidos se cargaron completos; la tabla de órdenes mostrará "
+    "el cliente como referencia (#A1B2C3) hasta que configures la llave."
+)
+
+
+def _encrypt_contact(mapped: dict[str, Any], *, enabled: bool) -> dict[str, bytes | None]:
+    """Ciphertext for the four contact columns, or four Nones without a key.
+
+    Never returns, logs or raises with a plaintext value in it: a traceback is
+    the last place a customer's phone number should turn up.
+    """
+    if not enabled:
+        return {column: None for _, column in CONTACT_FIELDS}
+    return {
+        column: encrypt_pii(clean_text(mapped.get(source)))
+        for source, column in CONTACT_FIELDS
+    }
+
+
+# =============================================================================
 # Engine
 # =============================================================================
 
@@ -651,6 +722,11 @@ class IngestEngine:
         self._store = store
         self._pii_salt = pii_salt
         self._today = today or datetime.now(UTC).date()
+        # Asked once per engine, not once per row: the answer cannot change
+        # mid-file, and a missing key would otherwise raise and be swallowed
+        # 1,649 times over. Engines are built per job (worker/jobs.py), so a key
+        # added to the environment takes effect on the next upload.
+        self._encrypt_contact = pii_available()
         # Keep every original column. Costs storage, and buys the ability to
         # answer a question about a column nobody mapped - without asking the
         # user to upload the file again.
@@ -667,6 +743,7 @@ class IngestEngine:
         country_code: str,
         platform_code: str,
         default_currency: str,
+        reprocess: bool = False,
     ) -> IngestReport:
         digest = content_hash(payload)
         report = IngestReport(
@@ -677,7 +754,18 @@ class IngestEngine:
             started_at=datetime.now(UTC),
         )
 
-        if self._store.batch_exists(tenant_id, connection_id, digest):
+        # Refusing the same bytes twice is what keeps an accidental double
+        # upload from doubling somebody's revenue. But the engine itself
+        # changes: encryption arrived, a movement date turned out to be
+        # inverted. Then the SAME file legitimately yields different rows, and
+        # the operator has no way to say so - the guard that protects them
+        # becomes the thing standing between them and correct data.
+        #
+        # `reprocess` is that way. The merge rules do the rest: status only
+        # advances, money keeps the newest value and records a discrepancy,
+        # static fields fill gaps. Running a file through twice cannot
+        # double-count, which is why this is safe to offer.
+        if not reprocess and self._store.batch_exists(tenant_id, connection_id, digest):
             report.already_loaded = True
             report.finished_at = datetime.now(UTC)
             logger.info("batch already loaded, skipping: %s (%s)", source_name, digest[:12])
@@ -692,6 +780,7 @@ class IngestEngine:
                 source_name=source_name,
                 kind=kind,
                 content_hash=digest,
+                reprocess=reprocess,
             )
         except BatchAlreadyExists:
             # Lost a race against a concurrent upload of the same bytes. That is
@@ -701,6 +790,18 @@ class IngestEngine:
             return report
 
         report.batch_id = ctx.batch_id
+
+        # Reprocessing reopens the same batch, so whatever the previous run
+        # wrote is still attached to it. Rows keyed by a stable source id would
+        # simply match again, but a source without ids has no such key - and
+        # then re-running would append a second copy of every row. Clearing the
+        # batch first makes reprocessing mean "replace", which is what the
+        # operator asked for.
+        if reprocess:
+            removed = self._store.clear_batch_rows(ctx)
+            if removed:
+                logger.info("reprocess cleared %s previous rows of batch %s",
+                            removed, ctx.batch_id)
 
         headers, rows = read_tabular(payload, source_name)
 
@@ -717,6 +818,19 @@ class IngestEngine:
         report.unmapped_columns = unmapped
         report.profile_code = profile.code if profile else None
         report.profile_label = profile.label if profile else None
+
+        # The file carries contact columns and there is no key to encrypt them
+        # with. Said once, about the batch, and only for a file that actually
+        # has something to encrypt - warning about a spreadsheet with no
+        # customer column would be noise.
+        if not self._encrypt_contact and any(
+            source in header_map.values() for source, _ in CONTACT_FIELDS
+        ):
+            report.warnings.append(PII_KEY_MISSING_WARNING)
+            logger.warning(
+                "PII_ENCRYPTION_KEY is not configured: %s loaded with customer "
+                "hashes only, contact columns left NULL", source_name,
+            )
 
         # The file usually says what country it is about. Believe it, and refuse
         # to import it into a connection for somewhere else.
@@ -829,6 +943,7 @@ class IngestEngine:
             )
 
         quantity = parse_int(mapped.get("quantity"), default=1) or 1
+        contact = _encrypt_contact(mapped, enabled=self._encrypt_contact)
 
         shipment = ShipmentInput(
             tracking_number=tracking,
@@ -842,6 +957,11 @@ class IngestEngine:
             ),
             external_order_id=clean_text(mapped.get("external_order_id")),
             customer_hash=hash_customer(mapped.get("customer_identifier"), self._pii_salt),
+            **contact,
+            # The city as the guide wrote it, kept next to the shipment so the
+            # orders table can label a row even when the geo dimension could not
+            # resolve the spelling into a known city.
+            customer_city_name=clean_text(mapped.get("city_name")),
             carrier_name=clean_text(mapped.get("carrier_name")),
             geo_level1=clean_text(mapped.get("geo_level1")),
             city_name=clean_text(mapped.get("city_name")),
@@ -849,6 +969,7 @@ class IngestEngine:
             supplier_name=clean_text(mapped.get("supplier_name")),
             store_name=clean_text(mapped.get("store_name")),
             quantity=max(quantity, 1),
+            created_at_source=parse_datetime(mapped.get("created_at_source")),
             dispatched_at=parse_datetime(mapped.get("dispatched_at")),
             delivered_at=parse_datetime(mapped.get("delivered_at")),
             returned_at=parse_datetime(mapped.get("returned_at")),
@@ -956,6 +1077,27 @@ class IngestEngine:
 
         tracking = normalize_tracking(mapped.get("tracking_number_raw"))
         external_ref = clean_text(mapped.get("external_ref"))
+
+        # The schema stores a positive magnitude and takes direction from the
+        # type's sign, so the file's own sign has to be dropped - but not
+        # silently. When the two disagree the row is a reversal, a correction or
+        # a misclassification, and abs() turns all three into the opposite of
+        # what happened: a refunded collection would be recorded as revenue.
+        # Nothing in the operator's current data triggers this; the point is
+        # that the day it does, it is reported instead of absorbed.
+        expected_sign = MOVEMENT_TYPE_SIGNS.get(type_code or "")
+        if expected_sign is not None and amount != 0:
+            file_sign = 1 if amount > 0 else -1
+            if file_sign != expected_sign:
+                report.sanity_issues.append(
+                    SanityIssue(
+                        row_number, external_ref or str(row_number),
+                        "movement_sign_conflict",
+                        f"El archivo trae {amount} para «{mapped.get('movement_type_raw')}», "
+                        "que normalmente va en sentido contrario. Puede ser una "
+                        "reversión o una corrección: se guardó por su magnitud.",
+                    )
+                )
         magnitude = abs(amount)
 
         movement = MovementInput(
@@ -963,8 +1105,21 @@ class IngestEngine:
             movement_date=movement_date,
             amount=magnitude,
             currency_code=normalize_currency(mapped.get("currency_code"), default_currency),
-            dedupe_key=dedupe_key(
-                ctx.connection_id, tracking, external_ref, type_code, movement_date, magnitude
+            # When the source gives the movement its own id, THAT is the
+            # identity - nothing else. Including the date looked harmless and
+            # was not: the day a date mapping is corrected, every movement gets
+            # a new key, re-ingestion inserts instead of matching, and revenue
+            # doubles. That happened here - 20,918.25 became 41,814.51 - and it
+            # is precisely the failure the dedupe key exists to prevent.
+            #
+            # The fallback still uses the date, because a row with no id has
+            # nothing else to be identified by.
+            dedupe_key=(
+                dedupe_key(ctx.connection_id, external_ref)
+                if external_ref
+                else dedupe_key(
+                    ctx.connection_id, tracking, None, type_code, movement_date, magnitude
+                )
             ),
             tracking_number_raw=tracking,
             external_ref=external_ref,

@@ -23,9 +23,9 @@ import {
 
 import { Card, EmptyState, ErrorState, SkeletonRows } from "@/components/ui";
 import type { WidgetProps } from "@/components/widgets/types";
+import { useRangedApi } from "@/lib/date-range";
 import type { FormatCountry } from "@/lib/format";
 import { formatDayShort, formatMoney, formatNumber, formatPercent } from "@/lib/format";
-import { useApi } from "@/lib/hooks";
 import type { CpaRow } from "@/lib/types";
 
 interface DayPoint {
@@ -95,13 +95,9 @@ function ChartTooltip({
 // Widget
 // ---------------------------------------------------------------------------
 
-export default function CpaRoas({ countryCode, country, dateFrom, dateTo }: WidgetProps) {
-  const params = new URLSearchParams({ country: countryCode });
-  if (dateFrom) params.set("date_from", dateFrom);
-  if (dateTo) params.set("date_to", dateTo);
-
-  const { data, error, loading, reload } = useApi<CpaRow[]>(
-    `/kpis/cpa?${params.toString()}`,
+export default function CpaRoas({ countryCode, country }: WidgetProps) {
+  const { data, error, loading, reload } = useRangedApi<CpaRow[]>(
+    `/kpis/cpa?country=${countryCode}`,
   );
 
   const model = useMemo(() => {

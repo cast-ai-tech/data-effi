@@ -18,8 +18,8 @@ import { Area, AreaChart, ResponsiveContainer, XAxis, YAxis } from "recharts";
 
 import { Card, Delta, EmptyState, ErrorState, SkeletonRows } from "@/components/ui";
 import type { WidgetProps } from "@/components/widgets/types";
+import { useRangedApi } from "@/lib/date-range";
 import { formatMoney, formatNumber, formatPercent } from "@/lib/format";
-import { useApi } from "@/lib/hooks";
 import type { DailyContribution } from "@/lib/types";
 
 /** How many trailing points a sparkline shows. Older than this is not a trend. */
@@ -100,18 +100,9 @@ function trailing(rows: DailyContribution[], pick: (row: DailyContribution) => n
 // Widget
 // ---------------------------------------------------------------------------
 
-export default function KpiContribution({
-  countryCode,
-  country,
-  dateFrom,
-  dateTo,
-}: WidgetProps) {
-  const params = new URLSearchParams({ country: countryCode });
-  if (dateFrom) params.set("date_from", dateFrom);
-  if (dateTo) params.set("date_to", dateTo);
-
-  const { data, error, loading, reload } = useApi<DailyContribution[]>(
-    `/kpis/daily-contribution?${params.toString()}`,
+export default function KpiContribution({ countryCode, country }: WidgetProps) {
+  const { data, error, loading, reload } = useRangedApi<DailyContribution[]>(
+    `/kpis/daily-contribution?country=${countryCode}`,
   );
 
   const kpis = useMemo<Kpi[] | null>(() => {

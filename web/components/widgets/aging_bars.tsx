@@ -15,8 +15,8 @@ import { useMemo } from "react";
 
 import type { WidgetProps } from "@/components/widgets/types";
 import { Card, EmptyState, ErrorState, SkeletonRows, cx } from "@/components/ui";
+import { useRangedApi } from "@/lib/date-range";
 import { formatMoney, formatNumber } from "@/lib/format";
-import { useApi } from "@/lib/hooks";
 import type { AgingRow } from "@/lib/types";
 
 /** 0-3, 4-7, 8-12, 13-20, 21+ — read positionally from `bucket_order`. */
@@ -26,7 +26,7 @@ const BUCKET_COLOURS = ["#21c08a", "#5fcb9e", "#f5a83c", "#ff6259", "#ff6259"];
 const AT_RISK_FROM_INDEX = 3;
 
 export default function AgingBars({ countryCode, country }: WidgetProps) {
-  const { data, error, loading, reload } = useApi<AgingRow[]>(
+  const { data, error, loading, reload } = useRangedApi<AgingRow[]>(
     `/kpis/aging?country=${countryCode}`,
   );
 

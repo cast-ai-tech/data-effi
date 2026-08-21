@@ -25,6 +25,10 @@ from pipeline.store_pg import PostgresStore
 logger = logging.getLogger(__name__)
 
 
+class CountryUndeterminedError(ValueError):
+    """A global connection received a file that does not say which country it is."""
+
+
 class IngestQueue:
     def __init__(self, settings: Settings) -> None:
         self._settings = settings
@@ -69,10 +73,9 @@ class IngestQueue:
             job = fetch_one(
                 conn,
                 """
-                SELECT j.*, c.country_code, c.platform_code, co.currency_code
+                SELECT j.*, c.country_code, c.platform_code
                 FROM raw.upload_job j
                 JOIN core.connection c ON c.id = j.connection_id
-                JOIN core.country co ON co.code = c.country_code
                 WHERE j.id = %s
                 """,
                 (job_id,),
@@ -98,6 +101,7 @@ class IngestQueue:
 
         try:
             with connection(service=True) as conn:
+                country_code, currency_code = self._resolve_country(conn, job, payload)
                 store = PostgresStore(conn)
                 engine = IngestEngine(store, pii_salt=self._settings.pii_hash_salt)
                 report = engine.ingest(
@@ -106,9 +110,10 @@ class IngestQueue:
                     kind=BatchKind(job["kind"]),
                     tenant_id=job["tenant_id"],
                     connection_id=job["connection_id"],
-                    country_code=job["country_code"],
+                    country_code=country_code,
                     platform_code=job["platform_code"],
-                    default_currency=job["currency_code"],
+                    default_currency=currency_code,
+                    reprocess=bool(job.get("reprocess")),
                 )
 
                 status = "duplicate" if report.already_loaded else (
@@ -139,6 +144,98 @@ class IngestQueue:
             report.rows_skipped, report.rows_failed,
         )
 
+        if status == "done":
+            self._refresh_recommendations(job["tenant_id"], country_code)
+
+    def _resolve_country(
+        self, conn, job: dict, payload: bytes
+    ) -> tuple[str, str]:
+        """Work out which country this load belongs to, and in what currency.
+
+        A country-scoped connection answers this by existing. A GLOBAL one -
+        manual upload, a webhook, a published sheet (migration 012) - does not,
+        by design: the file itself says where it is from, so making the operator
+        pick first would ask for something the system already has.
+
+        Order: the connection, then the file, then the workspace when it runs a
+        single country. Anything else is a question only a person can answer,
+        so the job fails saying exactly that instead of guessing a country and
+        silently filing a week of Ecuadorian guides under Colombia.
+        """
+        country_code = job["country_code"] or self._country_from_file(job, payload)
+
+        if country_code is None:
+            active = fetch_all(
+                conn,
+                "SELECT country_code FROM core.workspace_country "
+                "WHERE tenant_id = %s AND is_active ORDER BY country_code",
+                (job["tenant_id"],),
+            )
+            if len(active) == 1:
+                country_code = active[0]["country_code"]
+            else:
+                raise CountryUndeterminedError(
+                    "No pudimos determinar el país de este archivo: no trae una "
+                    "columna de país y tu workspace tiene varios activos. Agrega la "
+                    "columna de país al reporte o cárgalo desde una conexión de ese país."
+                )
+
+        row = fetch_one(
+            conn, "SELECT currency_code FROM core.country WHERE code = %s", (country_code,)
+        )
+        if row is None:
+            raise CountryUndeterminedError(
+                f"El país '{country_code}' no está soportado por Data Effi."
+            )
+        return country_code, row["currency_code"]
+
+    @staticmethod
+    def _country_from_file(job: dict, payload: bytes) -> str | None:
+        """Peek at the file just to read its country column.
+
+        Yes, this parses the file a second time - the engine parses it again to
+        actually load it. A few milliseconds is a fair price for not needing a
+        country before the file has been opened.
+        """
+        from pipeline.profiles import detect_country, detect_profile
+        from pipeline.readers import read_tabular
+
+        try:
+            headers, rows = read_tabular(payload, job["filename"])
+            profile = detect_profile(headers, BatchKind(job["kind"]))
+        except Exception:
+            # Unreadable is the engine's error to report, with its own message.
+            return None
+        if profile is None:
+            return None
+
+        detected, _raw = detect_country(headers, rows, profile)
+        return detected
+
+    def _refresh_recommendations(self, tenant_id: UUID, country_code: str) -> None:
+        """Re-derive the operation's own normals now that new guides landed.
+
+        DELIBERATELY NO LLM CALL. Ingestion is allowed to depend on the database
+        and nothing else: a file upload that fails because a model was
+        unreachable is a broken product. The detection is SQL, so the
+        recommendations an operator sees straight after an upload already
+        reflect the file they just uploaded.
+
+        Runs in a TENANT context, not a service one: the mart views it reads
+        filter by `core.current_tenant_id()`, and the memory rows it writes
+        belong to this tenant alone.
+        """
+        from ai.recommendations import refresh_after_batch
+
+        try:
+            with connection(tenant_id) as conn:
+                refresh_after_batch(conn, tenant_id, country_code)
+        except Exception:
+            # An ingestion that succeeded stays succeeded. This is a side effect.
+            logger.warning(
+                "post-ingestion refresh failed for tenant %s", tenant_id, exc_info=True
+            )
+
     def _fail(self, job_id: UUID, message: str) -> None:
         with connection(service=True) as conn:
             execute(
@@ -153,7 +250,7 @@ def _human_error(exc: Exception) -> str:
     """Turn a parser exception into something a non-technical user can act on."""
     from pipeline.readers import EmptyFileError, UnsupportedFileError
 
-    if isinstance(exc, UnsupportedFileError | EmptyFileError):
+    if isinstance(exc, UnsupportedFileError | EmptyFileError | CountryUndeterminedError):
         return str(exc)
     return f"No se pudo procesar el archivo ({type(exc).__name__}). Revisa el formato."
 

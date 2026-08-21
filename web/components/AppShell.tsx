@@ -11,61 +11,26 @@ import { usePathname, useRouter } from "next/navigation";
 import { useMemo, useState } from "react";
 
 import { CopilotPanel } from "@/components/CopilotPanel";
+import { DateFieldPicker, ExcludedByFieldBand } from "@/components/DateFieldPicker";
+import { DateRangePicker } from "@/components/DateRangePicker";
 import { Chip, StatusDot, cx } from "@/components/ui";
 import { api, clearTokens } from "@/lib/api";
+import { DEFAULT_FIELD, useDateRange } from "@/lib/date-range";
 import { countryFlag, formatRelative } from "@/lib/format";
 import { useApi, usePersistentState } from "@/lib/hooks";
 import type { Connection, Country, User } from "@/lib/types";
 
-export type RangePreset = "hoy" | "7d" | "30d" | "cohorte";
-
-export interface DateRange {
-  preset: RangePreset;
-  from?: string;
-  to?: string;
-}
-
-/** Turns a preset into the ISO dates the API expects. */
-export function resolveRange(preset: RangePreset): DateRange {
-  const today = new Date();
-  const iso = (date: Date) =>
-    `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(
-      date.getDate(),
-    ).padStart(2, "0")}`;
-
-  if (preset === "hoy") return { preset, from: iso(today), to: iso(today) };
-
-  if (preset === "cohorte") {
-    const first = new Date(today.getFullYear(), today.getMonth(), 1);
-    return { preset, from: iso(first), to: iso(today) };
-  }
-
-  const days = preset === "7d" ? 7 : 30;
-  const start = new Date(today);
-  start.setDate(start.getDate() - days + 1);
-  return { preset, from: iso(start), to: iso(today) };
-}
-
-const RANGE_LABELS: Record<RangePreset, string> = {
-  hoy: "Hoy",
-  "7d": "7 días",
-  "30d": "30 días",
-  cohorte: "Mes",
-};
-
-export function AppShell({
-  children,
-  range,
-  onRangeChange,
-}: {
-  children: React.ReactNode;
-  range?: DateRange;
-  onRangeChange?: (range: DateRange) => void;
-}) {
+/**
+ * The range selector lives HERE, not on the dashboard page, because it applies
+ * to every tab. A filter that only exists on one screen is a filter the reader
+ * has to re-apply after every click, and one they will forget is still on.
+ */
+export function AppShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const router = useRouter();
   const [collapsed, setCollapsed] = usePersistentState("dataeffi.sidebar.collapsed", false);
   const [copilotOpen, setCopilotOpen] = useState(false);
+  const { range, field } = useDateRange();
 
   const { data: countries } = useApi<Country[]>("/config/countries");
   const { data: user } = useApi<User>("/auth/me");
@@ -82,6 +47,49 @@ export function AppShell({
     const match = /^\/([a-z]{2})(?:\/|$)/.exec(pathname);
     return match ? match[1].toUpperCase() : null;
   }, [pathname]);
+
+  /**
+   * The picker is shown only where it does something.
+   *
+   * Órdenes, Clientes, Productos and Configuración carry their own filters and
+   * their own paging; parking a date range above them that changes nothing on
+   * screen is the same lie as an unlabelled unfiltered card. When one of those
+   * screens starts honouring the range, add it here.
+   */
+  const rangeApplies = useMemo(
+    () => pathname === "/global" || /^\/[a-z]{2}$/.test(pathname),
+    [pathname],
+  );
+
+  // Which country's `date_format` the picker writes its dates in. On a screen
+  // that is not a country dashboard - Órdenes, Conexiones - the first active
+  // country stands in, which is right for the single-country workspaces that
+  // are the common case and harmless for the rest.
+  const formatCountry = useMemo(
+    () =>
+      activeCountries.find((country) => country.code === currentCountry) ??
+      activeCountries[0],
+    [activeCountries, currentCountry],
+  );
+
+  /**
+   * The range, as a query string to hang off the dashboard links.
+   *
+   * Switching country must not silently reset the filter: an operator
+   * comparing Colombia and México in July would be shown México's whole
+   * history and never be told the window changed under them.
+   */
+  const rangeSuffix = useMemo(() => {
+    const params = new URLSearchParams();
+    if (range.from) params.set("from", range.from);
+    if (range.to) params.set("to", range.to);
+    // The chosen date travels with the range. Landing on México measured by
+    // creation after reading Colombia by delivery would compare two different
+    // questions and look like a difference in performance.
+    if (field !== DEFAULT_FIELD) params.set("field", field);
+    const query = params.toString();
+    return query ? `?${query}` : "";
+  }, [range, field]);
 
   async function signOut() {
     try {
@@ -112,7 +120,7 @@ export function AppShell({
 
         <nav className="flex flex-1 flex-col gap-0.5 overflow-y-auto p-2.5">
           <NavItem
-            href="/global"
+            href={`/global${rangeSuffix}`}
             active={pathname === "/global"}
             collapsed={collapsed}
             icon={<GridIcon />}
@@ -125,13 +133,13 @@ export function AppShell({
             </p>
           )}
           {activeCountries.map((country) => (
-            <NavItem
+            <CountryNav
               key={country.code}
-              href={`/${country.code.toLowerCase()}`}
-              active={currentCountry === country.code}
+              country={country}
+              open={currentCountry === country.code}
               collapsed={collapsed}
-              icon={<span className="text-[15px] leading-none">{countryFlag(country.code)}</span>}
-              label={country.name}
+              pathname={pathname}
+              rangeSuffix={rangeSuffix}
             />
           ))}
 
@@ -143,6 +151,13 @@ export function AppShell({
             collapsed={collapsed}
             icon={<UploadIcon />}
             label="Cargar datos"
+          />
+          <NavItem
+            href="/connections"
+            active={pathname.startsWith("/connections")}
+            collapsed={collapsed}
+            icon={<PlugIcon />}
+            label="Conexiones"
           />
           <NavItem
             href="/settings"
@@ -187,28 +202,18 @@ export function AppShell({
           <div className="min-w-0" />
 
           <div className="flex items-center gap-2.5">
-            {range && onRangeChange && (
-              <div className="flex items-center gap-0.5 rounded-[8px] border border-line-strong bg-surface p-0.5">
-                {(Object.keys(RANGE_LABELS) as RangePreset[]).map((preset) => (
-                  <button
-                    key={preset}
-                    type="button"
-                    onClick={() => onRangeChange(resolveRange(preset))}
-                    className={cx(
-                      "rounded-[6px] px-2.5 py-1 text-[11.5px] font-medium transition-colors",
-                      range.preset === preset
-                        ? "bg-range-active text-ink"
-                        : "text-ink-muted hover:text-ink-2",
-                    )}
-                  >
-                    {RANGE_LABELS[preset]}
-                  </button>
-                ))}
-              </div>
+            {/* WHICH date is asked for here; which date each widget actually
+                used is reported on the card, because four endpoints have a
+                fixed basis and cannot honour the choice. See `DateBasisNote`. */}
+            {rangeApplies && (
+              <>
+                <DateFieldPicker />
+                <DateRangePicker country={formatCountry} />
+              </>
             )}
 
             <Link
-              href="/settings"
+              href="/connections"
               className="flex items-center gap-1.5 rounded-full border border-line-strong bg-surface px-2.5 py-1 text-[11px] no-underline"
               title={health.detail}
             >
@@ -217,6 +222,11 @@ export function AppShell({
             </Link>
           </div>
         </header>
+
+        {/* Directly under the header and above everything else: if the chosen
+            date hid most of the operation, that has to be read before any
+            number on the screen is. */}
+        {rangeApplies && <ExcludedByFieldBand country={formatCountry} />}
 
         <main className="flex-1 overflow-y-auto px-5 py-5">{children}</main>
       </div>
@@ -236,6 +246,82 @@ export function AppShell({
         countryCode={currentCountry}
       />
     </div>
+  );
+}
+
+/**
+ * One country, and its sections when you are inside it.
+ *
+ * The sections hang off the country rather than sitting at the top level
+ * because that is what they are: Ecuador's guides and Colombia's guides are
+ * different lists in different currencies, and a single "Órdenes" entry would
+ * have to invent an answer to "whose?".
+ *
+ * It expands on the country you are in and collapses the rest. There is no
+ * toggle: an operator lands here to work one country at a time, and four
+ * countries each showing four sections is sixteen rows of menu to read past.
+ */
+function CountryNav({
+  country,
+  open,
+  collapsed,
+  pathname,
+  rangeSuffix,
+}: {
+  country: Country;
+  open: boolean;
+  collapsed: boolean;
+  pathname: string;
+  /** Carried onto the dashboard links only - see `rangeSuffix` in AppShell. */
+  rangeSuffix: string;
+}) {
+  const base = `/${country.code.toLowerCase()}`;
+
+  // `href` is what the reader navigates to; `match` is what decides whether the
+  // item is lit. They differ on the dashboard, whose link carries the range.
+  const sections = [
+    { match: base, href: `${base}${rangeSuffix}`, label: "Tablero", icon: <GridIcon />, exact: true },
+    { match: `${base}/orders`, href: `${base}/orders`, label: "Órdenes", icon: <ReceiptIcon />, exact: false },
+    { match: `${base}/customers`, href: `${base}/customers`, label: "Clientes", icon: <PersonIcon />, exact: false },
+    { match: `${base}/products`, href: `${base}/products`, label: "Productos", icon: <TagIcon />, exact: false },
+  ];
+
+  return (
+    <>
+      <NavItem
+        href={`${base}${rangeSuffix}`}
+        active={open}
+        collapsed={collapsed}
+        icon={<span className="text-[15px] leading-none">{countryFlag(country.code)}</span>}
+        label={country.name}
+      />
+
+      {open && (
+        <div
+          className={cx(
+            "flex flex-col gap-0.5",
+            // Collapsed, the rail is 64px wide and an indent would push the
+            // icons off-centre; the flag above is enough of an anchor.
+            !collapsed && "ml-[19px] border-l border-line-subtle pl-2",
+          )}
+        >
+          {sections.map((section) => (
+            <NavItem
+              key={section.match}
+              href={section.href}
+              active={
+                section.exact
+                  ? pathname === section.match
+                  : pathname.startsWith(section.match)
+              }
+              collapsed={collapsed}
+              icon={section.icon}
+              label={section.label}
+            />
+          ))}
+        </div>
+      )}
+    </>
   );
 }
 
@@ -345,6 +431,89 @@ function UploadIcon() {
         strokeLinejoin="round"
       />
       <path d="M2.5 11v1.5A1.5 1.5 0 0 0 4 14h8a1.5 1.5 0 0 0 1.5-1.5V11" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" />
+    </svg>
+  );
+}
+
+/** A slip of paper with lines: one guide, not a report about many. */
+function ReceiptIcon() {
+  return (
+    <svg viewBox="0 0 16 16" fill="none" className="size-4" aria-hidden>
+      <path
+        d="M3.5 2.2h9v11.6l-1.8-1.1-1.8 1.1-1.9-1.1-1.8 1.1-1.7-1.1V2.2Z"
+        stroke="currentColor"
+        strokeWidth="1.4"
+        strokeLinejoin="round"
+      />
+      <path
+        d="M6 5.6h4M6 8.2h4"
+        stroke="currentColor"
+        strokeWidth="1.4"
+        strokeLinecap="round"
+      />
+    </svg>
+  );
+}
+
+/** A person: the screen is about people, not about their parcels. */
+function PersonIcon() {
+  return (
+    <svg viewBox="0 0 16 16" fill="none" className="size-4" aria-hidden>
+      <circle cx="8" cy="5.4" r="2.6" stroke="currentColor" strokeWidth="1.4" />
+      <path
+        d="M2.9 13.6c0-2.5 2.3-4.2 5.1-4.2s5.1 1.7 5.1 4.2"
+        stroke="currentColor"
+        strokeWidth="1.4"
+        strokeLinecap="round"
+      />
+    </svg>
+  );
+}
+
+/** A box with a tag: the catalogue, not a chart. */
+function TagIcon() {
+  return (
+    <svg viewBox="0 0 16 16" fill="none" className="size-4" aria-hidden>
+      <path
+        d="M2.5 5.6 8 2.6l5.5 3v4.8L8 13.4l-5.5-3V5.6Z"
+        stroke="currentColor"
+        strokeWidth="1.4"
+        strokeLinejoin="round"
+      />
+      <path
+        d="M2.5 5.6 8 8.6m0 0 5.5-3M8 8.6v4.8"
+        stroke="currentColor"
+        strokeWidth="1.4"
+        strokeLinejoin="round"
+      />
+    </svg>
+  );
+}
+
+/** Two links of a chain: a source wired in, not a chart. */
+function PlugIcon() {
+  return (
+    <svg viewBox="0 0 16 16" fill="none" className="size-4" aria-hidden>
+      <path
+        d="M7.4 4.6 8.9 3.1a2.9 2.9 0 0 1 4.1 4.1L11.5 8.7"
+        stroke="currentColor"
+        strokeWidth="1.4"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+      <path
+        d="M8.6 11.4 7.1 12.9a2.9 2.9 0 0 1-4.1-4.1L4.5 7.3"
+        stroke="currentColor"
+        strokeWidth="1.4"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+      <path
+        d="M6.3 9.7 9.7 6.3"
+        stroke="currentColor"
+        strokeWidth="1.4"
+        strokeLinecap="round"
+      />
     </svg>
   );
 }

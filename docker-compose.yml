@@ -14,15 +14,25 @@ x-app-env: &app-env
   POSTGRES_READONLY_PASSWORD: ${POSTGRES_READONLY_PASSWORD:-}
   JWT_SECRET: ${JWT_SECRET:?JWT_SECRET is required}
   PII_HASH_SALT: ${PII_HASH_SALT:?PII_HASH_SALT is required}
+  # Reversible encryption for the contact details the orders table renders.
+  # Distinct from PII_HASH_SALT: the salt makes identity irreversible for
+  # grouping, this key makes name and phone readable again for the operator.
+  # Not marked required - without it the platform runs and simply reports
+  # pii_visible=false, which is the correct behaviour for a deployment that
+  # chose not to store contact data at all.
+  PII_ENCRYPTION_KEY: ${PII_ENCRYPTION_KEY:-}
   WORKER_TRIGGER_SECRET: ${WORKER_TRIGGER_SECRET:?WORKER_TRIGGER_SECRET is required}
   CORS_ORIGINS: ${CORS_ORIGINS:-http://localhost:3000}
+  # The origin outside callers (n8n, Make, Zapier) use to reach the API.
+  # Empty falls back to the request host, which behind a proxy is internal.
+  PUBLIC_API_URL: ${PUBLIC_API_URL:-}
   MAX_UPLOAD_MB: ${MAX_UPLOAD_MB:-25}
   INGEST_MAX_CONCURRENCY: ${INGEST_MAX_CONCURRENCY:-4}
   LOG_LEVEL: ${LOG_LEVEL:-INFO}
   ENVIRONMENT: ${ENVIRONMENT:-development}
   AI_ENABLED: ${AI_ENABLED:-false}
   GEMINI_API_KEY: ${GEMINI_API_KEY:-}
-  AI_MODEL: ${AI_MODEL:-gemini-2.5-flash}
+  AI_MODEL: ${AI_MODEL:-gemini-3.6-flash}
   AI_DAILY_TOKEN_BUDGET: ${AI_DAILY_TOKEN_BUDGET:-200000}
   TIER3_FETCH_ENABLED: ${TIER3_FETCH_ENABLED:-false}
   FX_PROVIDER_URL: ${FX_PROVIDER_URL:-https://open.er-api.com/v6/latest}

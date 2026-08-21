@@ -24,8 +24,8 @@ import {
   cx,
 } from "@/components/ui";
 import type { WidgetProps } from "@/components/widgets/types";
+import { useRangedApi } from "@/lib/date-range";
 import { formatNumber, formatPercent } from "@/lib/format";
-import { useApi } from "@/lib/hooks";
 import type { GeoRow, TrafficLight } from "@/lib/types";
 
 type LightTone = "positive" | "warning" | "negative" | "neutral";
@@ -110,7 +110,7 @@ function groupByLevel1(rows: GeoRow[]): GeoGroup[] {
 }
 
 export default function GeoTrafficLight({ countryCode, country }: WidgetProps) {
-  const { data, error, loading, reload } = useApi<GeoRow[]>(
+  const { data, error, loading, reload } = useRangedApi<GeoRow[]>(
     `/kpis/geo?country=${countryCode}`,
     [countryCode],
   );

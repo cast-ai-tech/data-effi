@@ -45,13 +45,69 @@ export interface Country {
   maturation_days_suggested: number | null;
 }
 
+/** Where a platform lives: one connection per country, or one per workspace. */
+export type PlatformScope = "country" | "global";
+
+/** Catalogue shelf. Drives the headings on the connections screen. */
+export type PlatformCategory =
+  | "pauta"
+  | "tienda"
+  | "crm"
+  | "fulfillment"
+  | "automatizacion"
+  | "archivos"
+  | "analitica"
+  | "otros";
+
+/** What the platform needs to prove who you are. */
+export type PlatformAuthType =
+  | "none"
+  | "file"
+  | "api_key"
+  | "oauth2"
+  | "session"
+  | "webhook";
+
+/**
+ * Whether it works TODAY.
+ *
+ * `planned` rows are listed and refused on creation: hiding them would make the
+ * roadmap invisible, which is worse than a greyed-out card.
+ */
+export type PlatformAvailability = "available" | "beta" | "planned";
+
+/** Data coming in, going out, or both. */
+export type PlatformDirection = "in" | "out" | "both";
+
+/**
+ * One row of `mart.v_platform_catalogue` - the whole catalogue, country or not.
+ *
+ * `GET /config/platforms` with no `country` returns these.
+ */
 export interface Platform {
   platform_code: string;
   platform_name: string;
   tier: number;
+  scope: PlatformScope;
+  category: PlatformCategory;
+  auth_type: PlatformAuthType;
+  availability: PlatformAvailability;
+  direction: PlatformDirection;
   data_domains: string[];
   requires_consent: boolean;
+  setup_hint: string | null;
   docs_url: string | null;
+  /** Countries where it can be connected. Empty for global platforms. */
+  available_countries: string[];
+}
+
+/**
+ * The same platform seen from one country: `GET /config/platforms?country=XX`.
+ *
+ * Only this variant knows whether anything is already connected, so the counts
+ * live here rather than being optional on `Platform`.
+ */
+export interface CountryPlatform extends Platform {
   connection_count: number;
   active_connection_count: number;
   is_connected: boolean;
@@ -60,10 +116,13 @@ export interface Platform {
 export interface Connection {
   connection_id: string;
   connection_name: string;
-  country_code: string;
+  /** NULL for a global connection: the file declares its own country. */
+  country_code: string | null;
   platform_code: string;
   platform_name: string;
   tier: number;
+  scope: PlatformScope;
+  category: PlatformCategory;
   status: string;
   health: "ok" | "stale" | "error" | "never_synced" | "disabled";
   consent_granted_at: string | null;
@@ -72,6 +131,31 @@ export interface Connection {
   hours_since_sync: number | null;
   batches_7d: number | null;
   failed_batches_7d: number | null;
+  /** True once a webhook token exists. The token itself is never returned. */
+  has_webhook: boolean;
+}
+
+/** What a webhook connection accepts, when the caller does not say. */
+export type WebhookKind = "shipments" | "movements" | "ads" | "cs";
+
+/**
+ * `POST /config/connections/{id}/webhook`, returned exactly once. Owner only.
+ *
+ * The database keeps only the SHA-256, so this is the only moment the token
+ * exists in readable form anywhere: there is no endpoint to read it back,
+ * deliberately, exactly like a refresh token. `url` already carries the token
+ * in its path (the receiver is POST /ingest/webhook/{token}), which makes the
+ * URL itself a credential - it must never reach a log, an analytics call, the
+ * page title or the browser history.
+ */
+export interface WebhookSecret {
+  connection_id: string;
+  token: string;
+  url: string;
+  default_kind: WebhookKind | null;
+  created_at: string;
+  /** Spanish copy written by the API. Show it as it comes. */
+  message: string;
 }
 
 export interface UploadJob {
@@ -128,6 +212,8 @@ export interface BatchDetail {
     }>;
     errors?: Array<{ row: number; message: string }>;
     unmapped_columns?: string[];
+    /** Batch-wide degradations that cost no rows, e.g. a missing encryption key. */
+    warnings?: string[];
     /** Which known report shape the file matched, if any. */
     profile?: { code: string | null; label: string | null };
   };
@@ -183,6 +269,16 @@ export interface CarrierRow {
   revenue: number | null;
   contribution: number | null;
   currency_code: string | null;
+  /**
+   * `muestra_corta` = fewer than 10 terminal guides behind those percentages
+   * (migration 021). The rates are still sent - a blank row explains nothing -
+   * but they must not be presented as measured.
+   *
+   * Optional because `api/schemas.py::CarrierRow` does not declare the field
+   * yet, so it never reaches the wire. The marker lights up on its own the day
+   * it does.
+   */
+  sample_quality?: "suficiente" | "muestra_corta" | null;
 }
 
 export interface GeoRow {
@@ -496,12 +592,51 @@ export interface ProductCatalogueRow {
   catalogue_margin_pct: number | null;
 }
 
+/** Who wrote a cost: a person, a file, or the guides themselves. */
+export type ProductCostSource = "manual" | "import" | "observed";
+
+/** One row of `core.product_cost_history`, newest first from the API. */
+export interface ProductCostEntry {
+  id: number;
+  unit_cost: number;
+  currency_code: string | null;
+  source: ProductCostSource;
+  changed_by: string | null;
+  changed_at: string;
+}
+
+/**
+ * GET /products/{id}: the row plus how its cost moved over time.
+ *
+ * The history is the only way to see a supplier quietly raising a price - the
+ * catalogue alone shows today's number and forgets it ever changed.
+ */
+export interface ProductDetail {
+  product: ProductCatalogueRow;
+  cost_history: ProductCostEntry[];
+}
+
 /**
  * Body for POST /products and PATCH /products/{id}.
  *
  * `supplier_name` is text, not an id: the operator types the supplier the way
- * it appears on the invoice, and the API resolves it. `reviewed_at` is set
- * server-side - the client cannot claim a human confirmed something.
+ * it appears on the invoice, and the API resolves it (get-or-create).
+ *
+ * PATCH is keyed on which fields are PRESENT, not on their values:
+ *
+ * - a field left out is not touched
+ * - a field sent as `null` is cleared
+ *
+ * So a PATCH must carry only what the operator actually changed. Serialising
+ * the whole form would send nulls for boxes nobody opened and wipe them.
+ *
+ * `reviewed_at` is set server-side, and SENDING `unit_cost` IS what marks the
+ * product reviewed - which makes it the one field worth re-sending unchanged,
+ * when the operator is deliberately confirming the number.
+ *
+ * `name` and `is_active` are NOT NULL: send them changed or not at all.
+ * `is_active` is PATCH-only - a product is born active, and `{is_active: false}`
+ * archives it.
  */
 export interface ProductWrite {
   name?: string;
@@ -514,5 +649,188 @@ export interface ProductWrite {
   weight_kg?: number | null;
   currency_code?: string | null;
   notes?: string | null;
+  /** PATCH only. `false` archives the product, `true` restores it. */
   is_active?: boolean;
+}
+
+// ---------------------------------------------------------------------------
+// Orders, customers and the honest contribution split (migration 015).
+//
+// Contact columns are ciphertext in the database. The API decrypts them and
+// answers with `pii_visible`, so the UI is told WHY a name is missing instead
+// of having to guess from a null.
+// ---------------------------------------------------------------------------
+
+/** The four ends a guide can reach. `pipeline` is the only non-terminal one. */
+export type StatusBucket = "pipeline" | "delivered" | "returned" | "dead";
+
+/**
+ * One row of `mart.v_orders`, after the API decrypted what it was allowed to.
+ *
+ * `customer_name` and `customer_phone` are null EITHER because the server
+ * would not decrypt them (see `pii_visible` on the envelope) OR because that
+ * guide never carried them. `customer_ref` survives both cases: it is derived
+ * from the deterministic hash, so it is the same label across every order of
+ * the same person.
+ */
+export interface OrderRow {
+  shipment_id: string;
+  tracking_number: string;
+  carrier_tracking_number: string | null;
+  created_date: string;
+  delivered_at: string | null;
+  status_code: string;
+  status_label: string;
+  status_bucket: StatusBucket;
+  is_terminal: boolean;
+  /**
+   * The deterministic hash, and the only key that routes to a customer:
+   * `customer_ref` is six characters for a human to read, not an identifier.
+   */
+  customer_hash: string | null;
+  customer_ref: string | null;
+  customer_name: string | null;
+  customer_phone: string | null;
+  city_name: string | null;
+  province_name: string | null;
+  product_name: string | null;
+  quantity: number | null;
+  carrier_name: string | null;
+  revenue_amount: number | null;
+  freight_amount: number | null;
+  cogs_amount: number | null;
+  fee_amount: number | null;
+  contribution: number | null;
+  currency_code: string | null;
+  days_open: number | null;
+  movement_count: number | null;
+}
+
+/**
+ * The two extra fields ONLY `GET /orders/{shipment_id}` returns.
+ *
+ * They are absent from the list rows entirely - not even as null - so that a
+ * page of two hundred guides never decrypts two hundred addresses. Nothing
+ * that renders an `OrderRow` may reach for them.
+ */
+export interface OrderDetailRow extends OrderRow {
+  customer_address: string | null;
+  customer_document: string | null;
+}
+
+/** A status change or a movement of money. Both live on the same thread. */
+export type TimelineEventKind = "estado" | "dinero";
+
+export interface TimelineEvent {
+  event_kind: TimelineEventKind;
+  event_label: string;
+  amount: number | null;
+  currency_code: string | null;
+  event_date: string;
+  reference: string | null;
+}
+
+export interface OrderDetail {
+  order: OrderDetailRow;
+  timeline: TimelineEvent[];
+  /**
+   * Repeated here, not inherited from the list.
+   *
+   * Without it the card cannot tell "you may not see this phone" from "this
+   * guide never carried one", and those are different sentences for the
+   * operator: one is a permission, the other is a gap in the upload.
+   */
+  pii_visible: boolean;
+}
+
+/**
+ * A server-paginated list.
+ *
+ * `pii_visible` belongs to the envelope, not the row: it is a statement about
+ * this reader and this server, identical for every row in the page.
+ */
+export interface Paged<T> {
+  rows: T[];
+  page: number;
+  page_size: number;
+  total: number;
+  pii_visible: boolean;
+}
+
+export type OrdersPage = Paged<OrderRow>;
+export type CustomersPage = Paged<CustomerRow>;
+
+/**
+ * A grade, never a score out of a hundred.
+ *
+ * `nuevo` is not a compliment or a complaint: with fewer than two closed
+ * orders there is no basis for either, and saying so is more useful than
+ * inventing a 50%.
+ */
+export type CustomerGrade = "nuevo" | "excelente" | "bueno" | "regular" | "riesgo";
+
+/** One row of `mart.v_customer_metrics`: one person, in one country. */
+export interface CustomerRow {
+  customer_hash: string;
+  customer_ref: string | null;
+  customer_name: string | null;
+  customer_phone: string | null;
+  orders: number;
+  delivered: number;
+  returned: number;
+  open_orders: number;
+  revenue: number | null;
+  contribution: number | null;
+  contribution_per_order: number | null;
+  delivery_rate_pct: number | null;
+  customer_grade: CustomerGrade;
+  main_city: string | null;
+  first_order_date: string | null;
+  last_order_date: string | null;
+  days_since_last_order: number | null;
+  distinct_products: number | null;
+  currency_code: string | null;
+}
+
+/**
+ * The customer as `GET /customers/{customer_hash}` returns them.
+ *
+ * Address and document exist ONLY here, for the same reason an order's do: a
+ * page of fifty customers must not decrypt fifty addresses to render a table
+ * that shows none of them.
+ */
+export interface CustomerDetailRow extends CustomerRow {
+  customer_address: string | null;
+  customer_document: string | null;
+}
+
+export interface CustomerDetail {
+  customer: CustomerDetailRow;
+  /** The most recent guides, capped server-side at `CUSTOMER_ORDERS_CAP`. */
+  orders: OrderRow[];
+  pii_visible: boolean;
+}
+
+/**
+ * `mart.v_contribution_split`: what closed, next to what is still out.
+ *
+ * `net_contribution` is deliberately NOT the headline anywhere in the UI. It
+ * sums a matured cohort with one that has charged its costs and collected
+ * nothing yet, which reads as a loss whenever the young cohort is large - a
+ * statement about timing, not about profitability.
+ */
+export interface ContributionSplit {
+  country_code: string;
+  currency_code: string | null;
+  shipments: number;
+  closed_shipments: number;
+  open_shipments: number;
+  realised_revenue: number | null;
+  realised_cost: number | null;
+  realised_contribution: number | null;
+  realised_margin_pct: number | null;
+  capital_in_street: number | null;
+  committed_revenue: number | null;
+  net_contribution: number | null;
+  maturity_pct: number | null;
 }

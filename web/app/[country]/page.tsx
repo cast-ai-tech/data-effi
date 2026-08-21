@@ -12,7 +12,7 @@
 import { useParams, useRouter, useSearchParams } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
 
-import { AppShell, resolveRange, type DateRange } from "@/components/AppShell";
+import { AppShell } from "@/components/AppShell";
 import { WidgetRenderer } from "@/components/WidgetRenderer";
 import { TABS, type TabKey } from "@/components/widgets/registry";
 import { Card, EmptyState, SkeletonRows, cx } from "@/components/ui";
@@ -36,7 +36,9 @@ export default function CountryDashboard() {
 
   const countryCode = (params.country ?? "").toUpperCase();
 
-  const [range, setRange] = useState<DateRange>(() => resolveRange("30d"));
+  // The date range is not held here any more: it lives in the URL and every
+  // widget reads it through `useRangedApi`, so it survives a tab switch, a
+  // change of country, and a copy-pasted link.
   const [tab, setTab] = useState<TabKey>(() => {
     const requested = search.get("tab");
     return (TABS.find((t) => t.key === requested)?.key ?? "finanzas") as TabKey;
@@ -81,12 +83,7 @@ export default function CountryDashboard() {
   }
 
   return (
-    <AppShell
-      range={range}
-      onRangeChange={(next) => {
-        setRange(next);
-      }}
-    >
+    <AppShell>
       <header className="mb-5 flex items-end justify-between gap-4">
         <div>
           <h1 className="flex items-center gap-2.5 text-[22px] font-bold tracking-tight">
@@ -110,7 +107,11 @@ export default function CountryDashboard() {
             type="button"
             onClick={() => {
               setTab(item.key);
-              router.replace(`/${countryCode.toLowerCase()}?tab=${item.key}`, {
+              // Rebuild from the current query, never from scratch: writing
+              // `?tab=x` alone would drop the date range the reader just set.
+              const next = new URLSearchParams(search.toString());
+              next.set("tab", item.key);
+              router.replace(`/${countryCode.toLowerCase()}?${next.toString()}`, {
                 scroll: false,
               });
             }}
@@ -153,12 +154,7 @@ export default function CountryDashboard() {
               key={widget.widget_code}
               className={cx(FULL_WIDTH.has(widget.widget_code) && "xl:col-span-2")}
             >
-              <WidgetRenderer
-                widget={widget}
-                country={country}
-                dateFrom={range.from}
-                dateTo={range.to}
-              />
+              <WidgetRenderer widget={widget} country={country} />
             </div>
           ))}
         </div>

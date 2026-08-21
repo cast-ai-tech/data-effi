@@ -74,7 +74,24 @@ def main() -> int:
 
         # Re-assert grants in case new tables or views appeared since 007.
         cur.execute("GRANT USAGE ON SCHEMA mart TO norte_readonly")
+        # A blanket grant plus the ALTER DEFAULT PRIVILEGES in migration 007 is
+        # what silently handed the copilot every row-level view created after
+        # it. Migration 025 withdrew both; re-granting here would reopen the
+        # hole on every fresh database, so the explicit list is the source of
+        # truth and this only removes what should never have been given.
         cur.execute("GRANT SELECT ON ALL TABLES IN SCHEMA mart TO norte_readonly")
+        cur.execute(
+            "ALTER DEFAULT PRIVILEGES IN SCHEMA mart "
+            "REVOKE SELECT ON TABLES FROM norte_readonly"
+        )
+        cur.execute("REVOKE SELECT ON ALL TABLES IN SCHEMA mart FROM norte_readonly")
+        # Grants mirror the validator's allow list exactly. Importing it here is
+        # deliberate: two hand-maintained lists drift, and the drift is silent
+        # in the direction that matters.
+        from ai.nl2sql import ALLOWED_VIEWS
+
+        for view in sorted(ALLOWED_VIEWS):
+            cur.execute(f"GRANT SELECT ON mart.{view} TO norte_readonly")
         cur.execute("GRANT USAGE ON SCHEMA core, raw, stg, mart TO norte_app")
         cur.execute(
             "GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA core, raw TO norte_app"

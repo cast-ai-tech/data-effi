@@ -24,7 +24,7 @@ from fastapi import APIRouter, Depends, Query, Response, status
 
 from api.db import fetch_all, fetch_one
 from api.deps import CurrentUserDep, DbDep, require_role
-from api.errors import Conflict, NotFound
+from api.errors import ApiError, Conflict, NotFound
 from api.schemas import (
     CatalogueStatus,
     ProductCatalogueRow,
@@ -41,6 +41,26 @@ router = APIRouter(prefix="/products", tags=["products"])
 AnalystDep = Annotated[object, Depends(require_role("analyst"))]
 
 COST_HISTORY_LIMIT = 20
+
+# PATCH field -> column. This dict is the ONLY thing that can put a column name
+# into the UPDATE statement; it is written here, never taken from the request.
+# `supplier_name` is absent on purpose: it resolves to supplier_id separately.
+_UPDATABLE_COLUMNS: dict[str, str] = {
+    "name": "name",
+    "sku": "sku",
+    "category": "category",
+    "unit_cost": "unit_cost",
+    "list_price": "list_price",
+    "target_margin_pct": "target_margin_pct",
+    "weight_kg": "weight_kg",
+    "currency_code": "currency_code",
+    "notes": "notes",
+    "is_active": "is_active",
+}
+
+# Columns the schema declares NOT NULL. Sending them as an explicit null is a
+# request error, not a database error.
+_NOT_NULL_FIELDS = ("name", "is_active")
 
 
 @router.get("", response_model=list[ProductCatalogueRow], summary="Catálogo de productos")
@@ -162,6 +182,19 @@ def create_product(
 def update_product(
     product_id: UUID, payload: ProductUpdateRequest, conn: DbDep, user: AnalystDep
 ) -> ProductCatalogueRow:
+    """Update only the fields the caller actually sent.
+
+    PATCH has to tell three things apart, and a fixed list of COALESCE cannot:
+
+        field absent          -> leave it exactly as it is
+        field sent with value -> set it
+        field sent as null    -> CLEAR it
+
+    COALESCE collapses the first and third into one, so clearing a field does
+    nothing and the operator sees the old value reappear on its own. Pydantic
+    already knows which keys arrived in the body - `model_fields_set` - so the
+    SET clause is built from that and a column whitelist below.
+    """
     existing = fetch_one(
         conn,
         "SELECT id FROM core.product WHERE id = %s AND tenant_id = %s",
@@ -169,6 +202,20 @@ def update_product(
     )
     if existing is None:
         raise NotFound("Ese producto no existe en tu workspace")
+
+    sent = payload.model_fields_set
+
+    # NOT NULL columns. An explicit null here would hit a database constraint,
+    # so it is refused with the same envelope as any other invalid field rather
+    # than surfacing as a 500.
+    for field in _NOT_NULL_FIELDS:
+        if field in sent and getattr(payload, field) is None:
+            raise ApiError(
+                "validation_error",
+                f"'{field}' no puede quedar vacío.",
+                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                detail={"fields": [{"field": field, "reason": "no acepta null"}]},
+            )
 
     if payload.name:
         clash = fetch_one(
@@ -180,51 +227,46 @@ def update_product(
         if clash is not None:
             raise Conflict(f"Ya existe otro producto llamado '{payload.name}'")
 
-    supplier_id = _resolve_supplier(conn, user.tenant_id, payload.supplier_name)
-    touched_cost = payload.unit_cost is not None
+    # Only columns named in _UPDATABLE_COLUMNS can reach the SQL text, and every
+    # value is bound as a parameter.
+    assignments: list[str] = []
+    params: dict[str, Any] = {"product_id": product_id, "tenant_id": user.tenant_id}
+
+    for field, column in _UPDATABLE_COLUMNS.items():
+        if field in sent:
+            assignments.append(f"{column} = %({field})s")
+            params[field] = getattr(payload, field)
+
+    if "name" in sent:
+        assignments.append("name_norm = core.normalize_text(%(name)s)")
+
+    if "supplier_name" in sent:
+        # Null and empty both mean "no supplier" - _resolve_supplier returns
+        # None for either - and None clears the column because it only appears
+        # in the SET when the caller sent the field at all.
+        assignments.append("supplier_id = %(supplier_id)s")
+        params["supplier_id"] = _resolve_supplier(conn, user.tenant_id, payload.supplier_name)
+
+    if "unit_cost" in sent:
+        # Typing a cost is a person vouching for it; clearing one withdraws
+        # that. Leaving reviewed_at behind would keep v_product_catalogue and
+        # v_dropshipping_margin reporting the product as confirmed by the
+        # operator when it no longer has a cost at all.
+        confirmed = payload.unit_cost is not None
+        assignments.append("reviewed_at = %(reviewed_at)s")
+        assignments.append("reviewed_by = %(reviewed_by)s")
+        params["reviewed_at"] = datetime.now(UTC) if confirmed else None
+        params["reviewed_by"] = user.id if confirmed else None
+
+    # An empty body is a no-op, not an UPDATE with nothing to set.
+    if not assignments:
+        return _catalogue_row(conn, product_id, missing="No se pudo leer el producto")
 
     fetch_one(
         conn,
-        """
-        UPDATE core.product SET
-            name              = COALESCE(%(name)s, name),
-            name_norm         = COALESCE(core.normalize_text(%(name)s), name_norm),
-            sku               = COALESCE(%(sku)s, sku),
-            category          = COALESCE(%(category)s, category),
-            supplier_id       = COALESCE(%(supplier_id)s, supplier_id),
-            unit_cost         = COALESCE(%(unit_cost)s, unit_cost),
-            list_price        = COALESCE(%(list_price)s, list_price),
-            target_margin_pct = COALESCE(%(target_margin_pct)s, target_margin_pct),
-            weight_kg         = COALESCE(%(weight_kg)s, weight_kg),
-            currency_code     = COALESCE(%(currency_code)s, currency_code),
-            notes             = COALESCE(%(notes)s, notes),
-            -- Typing a cost is a person vouching for it. That is exactly what
-            -- mart.v_product_catalogue reports as the difference between a
-            -- product a report invented and one the operator confirmed.
-            reviewed_at       = CASE WHEN %(touched_cost)s::boolean
-                                     THEN %(reviewed_at)s::timestamptz ELSE reviewed_at END,
-            reviewed_by       = CASE WHEN %(touched_cost)s::boolean
-                                     THEN %(reviewed_by)s::uuid ELSE reviewed_by END
-        WHERE id = %(product_id)s AND tenant_id = %(tenant_id)s
-        RETURNING id
-        """,
-        {
-            "name": payload.name,
-            "sku": payload.sku,
-            "category": payload.category,
-            "supplier_id": supplier_id,
-            "unit_cost": payload.unit_cost,
-            "list_price": payload.list_price,
-            "target_margin_pct": payload.target_margin_pct,
-            "weight_kg": payload.weight_kg,
-            "currency_code": payload.currency_code,
-            "notes": payload.notes,
-            "touched_cost": touched_cost,
-            "reviewed_at": datetime.now(UTC) if touched_cost else None,
-            "reviewed_by": user.id if touched_cost else None,
-            "product_id": product_id,
-            "tenant_id": user.tenant_id,
-        },
+        f"UPDATE core.product SET {', '.join(assignments)} "
+        "WHERE id = %(product_id)s AND tenant_id = %(tenant_id)s RETURNING id",
+        params,
     )
     return _catalogue_row(conn, product_id, missing="No se pudo leer el producto actualizado")
 

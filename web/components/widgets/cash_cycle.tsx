@@ -13,12 +13,12 @@ import { useMemo } from "react";
 
 import { Card, EmptyState, ErrorState, SkeletonRows } from "@/components/ui";
 import type { WidgetProps } from "@/components/widgets/types";
+import { useRangedApi } from "@/lib/date-range";
 import { formatMoney, formatNumber } from "@/lib/format";
-import { useApi } from "@/lib/hooks";
 import type { CashCycleRow } from "@/lib/types";
 
 export default function CashCycle({ countryCode, country }: WidgetProps) {
-  const { data, error, loading, reload } = useApi<CashCycleRow[]>(
+  const { data, error, loading, reload } = useRangedApi<CashCycleRow[]>(
     `/kpis/cash-cycle?country=${countryCode}`,
   );
 

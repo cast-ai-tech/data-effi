@@ -19,6 +19,7 @@ import pytest
 from pipeline.ingest import IngestEngine, MemoryStore
 from pipeline.mapping import STATUS_CANON, resolve_status
 from pipeline.models import BatchKind
+from pipeline.normalize import normalize_text
 from pipeline.profiles import (
     EFFI_GUIDES,
     EFFI_MOVEMENTS,
@@ -123,25 +124,37 @@ def test_an_unrelated_spreadsheet_is_not_claimed_by_a_profile():
     assert detect_profile(["Guia", "Fecha", "Estado", "Valor"]) is None
 
 
-def test_profile_never_maps_customer_pii():
-    """Names, national ids and street addresses have no field to land in.
+def test_every_mapped_contact_column_is_still_declared_as_pii():
+    """The guides profile maps the recipient's four contact columns on purpose.
 
-    The phone is mapped only so the engine can hash it; there is no column map
-    entry that would store any of these as given.
+    They feed the encrypted columns of core.shipment, because the orders table
+    has to show the operator who to call back. What must never slip is the OTHER
+    destination: `redact_row` hashes by `pii_columns`, so a column that gains a
+    map entry without staying on that list would start landing in the raw
+    archive in the clear.
     """
-    forbidden = (
-        "destinatario",
-        "id destinatario",
-        "direccion destinatario",
-        "nombre destinatario guia inicial",
-        "direccion destinatario guia inicial",
-    )
-    for profile in (EFFI_GUIDES, EFFI_MOVEMENTS):
-        for header in forbidden:
-            assert header not in profile.columns, f"{profile.code} maps PII column {header!r}"
+    # Header as Effi writes it -> the canonical field it has to land in.
+    contact_columns = {
+        "Destinatario": "customer_name",
+        "Teléfonos destinatario": "customer_identifier",
+        "ID. destinatario": "customer_document",
+        "Dirección destinatario": "customer_address",
+    }
+    for header, expected_field in contact_columns.items():
+        key = normalize_text(header)
+        assert EFFI_GUIDES.columns.get(key) == expected_field, (
+            f"{header!r} no longer maps to {expected_field!r}"
+        )
+        assert key in EFFI_GUIDES.pii_columns_norm, (
+            f"{header!r} is mapped but no longer declared PII: the raw archive "
+            f"would keep it readable"
+        )
 
-    # The one PII column that IS mapped goes to the field that gets hashed.
-    assert EFFI_GUIDES.columns["telefonos destinatario"] == "customer_identifier"
+    # Movements store no contact data at all, so none of theirs is mapped.
+    for header in EFFI_MOVEMENTS.pii_columns_norm:
+        assert header not in EFFI_MOVEMENTS.columns, (
+            f"effi_movimientos maps PII column {header!r} with nowhere safe to put it"
+        )
 
 
 # =============================================================================
@@ -254,7 +267,7 @@ def test_guides_load_with_the_profile(pii_salt, guides_bytes):
     assert report.rows_inserted == 4
     assert report.rows_failed == 0
     # 87 columns in, a couple of dozen mapped: the rest are reported, not hidden.
-    assert len(report.unmapped_columns) > 40
+    assert len(report.unmapped_columns) >= 40
 
 
 def test_the_carrier_number_becomes_the_tracking_number(pii_salt, guides_bytes):
@@ -330,9 +343,12 @@ def test_a_multi_product_guide_is_reported_not_silently_truncated(pii_salt, guid
     assert issues[0].entity_key == "TEST-0004"
 
 
-def test_customer_phone_is_hashed_and_the_rest_of_the_pii_never_arrives(
-    pii_salt, guides_bytes
-):
+def test_no_contact_value_is_readable_in_a_stored_shipment(pii_salt, guides_bytes):
+    """The name and the phone are stored - as ciphertext and as a hash.
+
+    Neither is legible in the record, which is the whole point: a `repr` of the
+    store is what ends up in a log line, a traceback or a debugger session.
+    """
     store = MemoryStore()
     engine = IngestEngine(store, pii_salt=pii_salt, today=TODAY)
     _ingest(engine, guides_bytes, "guias.xlsx", BatchKind.SHIPMENTS)

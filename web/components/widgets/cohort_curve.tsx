@@ -27,8 +27,8 @@ import {
 
 import type { WidgetProps } from "@/components/widgets/types";
 import { Card, EmptyState, ErrorState, SkeletonRows } from "@/components/ui";
+import { useRangedApi } from "@/lib/date-range";
 import { formatDate, formatPercent, parseIsoDate } from "@/lib/format";
-import { useApi } from "@/lib/hooks";
 import type { CohortRow } from "@/lib/types";
 
 /** Most recent week first: accent for "now", neutral grey for the oldest. */
@@ -73,7 +73,7 @@ function isoWeekKey(date: Date): string {
 }
 
 export default function CohortCurve({ countryCode, country }: WidgetProps) {
-  const { data, error, loading, reload } = useApi<CohortRow[]>(
+  const { data, error, loading, reload } = useRangedApi<CohortRow[]>(
     `/kpis/cohorts?country=${countryCode}&only_observable=true`,
   );
 

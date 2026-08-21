@@ -22,6 +22,9 @@ ignore = [
 "api/routers/kpis.py" = ["S608"]
 "api/routers/ingest.py" = ["S608"]
 "api/routers/config.py" = ["S608"]
+"api/routers/products.py" = ["S608"]
+"api/routers/orders.py" = ["S608"]
+"api/routers/customers.py" = ["S608"]
 # The demo seeder: DEMO_PASSWORD is a published demo credential (it is printed on
 # screen and written in the README), RNG is seeded for reproducible demo data and
 # never used for anything security-related, and the two S608 sites interpolate

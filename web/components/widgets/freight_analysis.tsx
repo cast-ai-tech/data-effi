@@ -27,9 +27,9 @@ import { useMemo, useState } from "react";
 
 import { Card, EmptyState, ErrorState, MicroBar, SkeletonRows, cx } from "@/components/ui";
 import type { WidgetProps } from "@/components/widgets/types";
+import { useRangedApi } from "@/lib/date-range";
 import type { FormatCountry } from "@/lib/format";
 import { formatMoney, formatNumber, formatPercent } from "@/lib/format";
-import { useApi } from "@/lib/hooks";
 import type { FreightAnalysisRow } from "@/lib/types";
 
 /** A service level nobody filled in. Not worth repeating in every label. */
@@ -111,7 +111,7 @@ function ComponentBar({
 }
 
 export default function FreightAnalysis({ countryCode, country }: WidgetProps) {
-  const { data, error, loading, reload } = useApi<FreightAnalysisRow[]>(
+  const { data, error, loading, reload } = useRangedApi<FreightAnalysisRow[]>(
     `/kpis/freight?country=${countryCode}`,
   );
 

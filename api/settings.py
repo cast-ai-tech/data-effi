@@ -47,6 +47,13 @@ class Settings(BaseSettings):
     api_host: str = "0.0.0.0"      # noqa: S104 - containers bind all interfaces
     api_port: int = 8000
     cors_origins: str = "http://localhost:3000"
+    # The origin an OUTSIDE caller uses to reach this API - what n8n, Make or
+    # Zapier will POST to. Behind a proxy the request's own host is the internal
+    # one (`http://api:8000`), and a webhook URL built from it is unusable by the
+    # only party that matters. That URL is shown to the operator exactly once, so
+    # it cannot be allowed to be wrong. Unset falls back to the request's host,
+    # which is right in local development and nowhere else.
+    public_api_url: str | None = None
     max_upload_mb: int = 25
     ingest_max_concurrency: int = 4
     rate_limit_auth_per_minute: int = 10
@@ -58,7 +65,11 @@ class Settings(BaseSettings):
     # --- ai ---
     ai_enabled: bool = False
     gemini_api_key: str | None = None
-    ai_model: str = "gemini-2.5-flash"
+    ai_model: str = "gemini-3.6-flash"
+    # Cap, not switch. Gemini 3.x refuses a budget of 0 with a 400, and thinking
+    # tokens are billed against max_output_tokens, so an uncapped budget lets a
+    # short answer spend its whole ceiling reasoning and return empty.
+    ai_thinking_budget: int = 128
     ai_daily_token_budget: int = 200_000
     ai_request_timeout_seconds: int = 45
 
@@ -80,9 +91,32 @@ class Settings(BaseSettings):
             raise ValueError(f"{info.field_name} still holds the placeholder value")
         return value
 
+    @field_validator("public_api_url")
+    @classmethod
+    def _must_be_an_origin(cls, value: str | None) -> str | None:
+        if value is None or not value.strip():
+            return None
+        cleaned = value.strip().rstrip("/")
+        if not cleaned.startswith(("http://", "https://")):
+            raise ValueError(
+                "PUBLIC_API_URL must start with http:// or https:// "
+                "(e.g. https://api.dataeffi.co)"
+            )
+        return cleaned
+
     @property
     def cors_origin_list(self) -> list[str]:
         return [origin.strip() for origin in self.cors_origins.split(",") if origin.strip()]
+
+    def public_url_for(self, path: str, *, fallback_base: str) -> str:
+        """Absolute URL an outside caller can actually reach.
+
+        `fallback_base` is the request's own base, used only when PUBLIC_API_URL
+        is unset. Anything handed to a third party - a webhook URL above all -
+        must go through here rather than reading the request host directly.
+        """
+        base = self.public_api_url or fallback_base.rstrip("/")
+        return f"{base}/{path.lstrip('/')}"
 
     @property
     def max_upload_bytes(self) -> int:

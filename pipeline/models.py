@@ -30,10 +30,21 @@ class RowOutcome(str, Enum):
 
 # Fields that describe *what the shipment is*. Once known they are never
 # overwritten by a later file - a later file may only FILL IN what is missing.
+#
+# The encrypted contact fields belong here for a reason beyond "the name does
+# not change": Fernet is randomised, so re-encrypting an unchanged phone number
+# produces different bytes every time. Refreshing them on every load would
+# rewrite the row on every load, and "nothing changed" would stop being
+# detectable - the batch report would claim updates that never happened.
 STATIC_FIELDS: tuple[str, ...] = (
     "external_order_id",
     "carrier_tracking_number",
     "customer_hash",
+    "customer_name_enc",
+    "customer_phone_enc",
+    "customer_document_enc",
+    "customer_address_enc",
+    "customer_city_name",
     "carrier_name",
     "geo_level1",
     "city_name",
@@ -42,6 +53,7 @@ STATIC_FIELDS: tuple[str, ...] = (
     "store_name",
     "quantity",
     "created_date",
+    "created_at_source",
     "currency_code",
     "dispatched_at",
     "delivered_at",
@@ -101,7 +113,19 @@ class ShipmentInput:
     carrier_tracking_number: str | None = None
     status_detail: str | None = None
     external_order_id: str | None = None
+    # Who the customer IS: deterministic, irreversible, what every metric groups
+    # by. Never rendered.
     customer_hash: str | None = None
+    # What the operator READS: Fernet ciphertext, decrypted by the API for
+    # owner/analyst only. None when PII_ENCRYPTION_KEY is not configured - the
+    # load still happens, it just carries no contact data.
+    customer_name_enc: bytes | None = None
+    customer_phone_enc: bytes | None = None
+    customer_document_enc: bytes | None = None
+    customer_address_enc: bytes | None = None
+    # Plain text on purpose. A city names a place, not a person, and every
+    # geographic metric needs to read it.
+    customer_city_name: str | None = None
 
     carrier_name: str | None = None
     geo_level1: str | None = None
@@ -111,6 +135,7 @@ class ShipmentInput:
     store_name: str | None = None
     quantity: int = 1
 
+    created_at_source: datetime | None = None
     dispatched_at: datetime | None = None
     delivered_at: datetime | None = None
     returned_at: datetime | None = None
@@ -243,6 +268,11 @@ class IngestReport:
     sanity_issues: list[SanityIssue] = field(default_factory=list)
     errors: list[RowError] = field(default_factory=list)
     unmapped_columns: list[str] = field(default_factory=list)
+    # Things that went differently than intended for the WHOLE batch, without
+    # costing a single row. A per-row problem is a SanityIssue; a missing
+    # encryption key is not - it degrades every row identically, and saying so
+    # 1,649 times would bury it.
+    warnings: list[str] = field(default_factory=list)
     # Which known report shape this file matched, if any. Shown to the user as
     # "Detectado: Effi · Reporte de guías" so they can tell at a glance that
     # Data Effi understood the file rather than guessing at it.
@@ -294,6 +324,7 @@ class IngestReport:
                 {"row": e.row_number, "message": e.message} for e in self.errors
             ],
             "unmapped_columns": self.unmapped_columns,
+            "warnings": self.warnings,
             "profile": {"code": self.profile_code, "label": self.profile_label},
             "detected_country": {
                 "code": self.detected_country_code,

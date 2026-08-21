@@ -110,6 +110,17 @@ def generate_invitation_token() -> tuple[str, str]:
     return token, hash_token(token)
 
 
+def create_webhook_token() -> tuple[str, str]:
+    """Return (token, sha256) for an ingestion webhook.
+
+    Same shape as a refresh token and for the same reason: this string is the
+    only credential the caller presents, so the database keeps nothing that
+    could be replayed against `/ingest/webhook/{token}`.
+    """
+    token = secrets.token_urlsafe(32)
+    return token, hash_token(token)
+
+
 def constant_time_equals(left: str, right: str) -> bool:
     """For comparing shared secrets (worker trigger), never for passwords."""
     return secrets.compare_digest(left, right)

@@ -14,7 +14,7 @@ import { Button, Card, Chip, SkeletonRows, cx } from "@/components/ui";
 import { ApiError, api } from "@/lib/api";
 import { countryFlag } from "@/lib/format";
 import { useApi } from "@/lib/hooks";
-import type { Country, Platform } from "@/lib/types";
+import type { Country, CountryPlatform } from "@/lib/types";
 
 const STEPS = ["Países", "Conexiones", "Histórico", "Calibración"] as const;
 
@@ -235,17 +235,17 @@ function CountryPlatforms({
   onCreated: (id: string) => void;
   onError: (message: string) => void;
 }) {
-  const { data: platforms, loading, reload } = useApi<Platform[]>(
+  const { data: platforms, loading, reload } = useApi<CountryPlatform[]>(
     `/config/platforms?country=${code}`,
   );
 
   const tiers = useMemo(() => {
-    const groups = { 1: [], 2: [], 3: [] } as Record<number, Platform[]>;
+    const groups = { 1: [], 2: [], 3: [] } as Record<number, CountryPlatform[]>;
     for (const platform of platforms ?? []) groups[platform.tier]?.push(platform);
     return groups;
   }, [platforms]);
 
-  async function connect(platform: Platform) {
+  async function connect(platform: CountryPlatform) {
     try {
       await api.post("/config/connections", {
         country_code: code,

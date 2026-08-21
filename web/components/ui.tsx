@@ -8,6 +8,7 @@
  * threw up on it.
  */
 
+import { useEffect, useState } from "react";
 import type { ReactNode } from "react";
 
 export function cx(...parts: Array<string | false | null | undefined>): string {
@@ -277,6 +278,93 @@ export function SectionTitle({ children, hint }: { children: ReactNode; hint?: s
         {children}
       </h2>
       {hint && <span className="text-[11px] text-ink-dim">{hint}</span>}
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Progressive disclosure for long lists
+//
+// A table widget that renders every row it receives stops being a widget: with
+// 47 cities the office table is taller than the screen and pushes everything
+// below it out of view. Cutting the list silently is worse - the reader cannot
+// tell whether the rest exists. So the list is capped, the cap is stated, and
+// opening it is one click.
+// ---------------------------------------------------------------------------
+
+/** How many rows a capped list shows, and grows by, at a time. */
+export const PAGE_STEP = 10;
+
+/**
+ * Reveal a long list in steps.
+ *
+ * Returns the slice to render plus what the button needs. Collapsing is offered
+ * only once the list is fully open, because a "ver menos" next to "ver más"
+ * reads as a pair of opposite actions when it is really an undo.
+ */
+export function useShowMore<T>(rows: readonly T[], step: number = PAGE_STEP) {
+  const [visible, setVisible] = useState(step);
+
+  // A new country or a refreshed load must not keep the previous expansion:
+  // the reader is looking at a different list now.
+  useEffect(() => {
+    setVisible(step);
+  }, [rows, step]);
+
+  const shown = visible >= rows.length ? rows : rows.slice(0, visible);
+  const remaining = rows.length - shown.length;
+
+  return {
+    shown,
+    remaining,
+    total: rows.length,
+    isExpanded: remaining === 0 && rows.length > step,
+    showMore: () => setVisible((n) => n + step),
+    collapse: () => setVisible(step),
+  };
+}
+
+export function ShowMore({
+  remaining,
+  total,
+  shownCount,
+  onMore,
+  onCollapse,
+  noun = "filas",
+  step = PAGE_STEP,
+}: {
+  remaining: number;
+  total: number;
+  shownCount: number;
+  onMore: () => void;
+  onCollapse: () => void;
+  noun?: string;
+  step?: number;
+}) {
+  if (total <= step) return null;
+
+  return (
+    <div className="mt-2 flex items-center justify-between gap-3 border-t border-line-subtle pt-2.5">
+      <span className="text-[11px] text-ink-dim">
+        {shownCount} de {total} {noun}
+      </span>
+      {remaining > 0 ? (
+        <button
+          type="button"
+          onClick={onMore}
+          className="rounded-[6px] border border-line-strong px-2.5 py-1 text-[11.5px] font-medium text-ink-2 transition-colors hover:bg-sunken"
+        >
+          Ver {Math.min(step, remaining)} más
+        </button>
+      ) : (
+        <button
+          type="button"
+          onClick={onCollapse}
+          className="rounded-[6px] px-2.5 py-1 text-[11.5px] font-medium text-ink-dim transition-colors hover:text-ink-2"
+        >
+          Ver menos
+        </button>
+      )}
     </div>
   );
 }

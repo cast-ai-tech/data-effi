@@ -1,5 +1,8 @@
 import type { Metadata, Viewport } from "next";
 import { Inter } from "next/font/google";
+import { Suspense } from "react";
+
+import { DateRangeProvider } from "@/lib/date-range";
 
 import "./globals.css";
 
@@ -25,7 +28,17 @@ export const viewport: Viewport = {
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="es" className={inter.variable}>
-      <body className="min-h-screen bg-page text-ink antialiased">{children}</body>
+      <body className="min-h-screen bg-page text-ink antialiased">
+        {/*
+          The range lives in the query string, so the provider reads
+          `useSearchParams` and therefore needs a Suspense boundary here. It
+          wraps the whole app on purpose: every screen under it - dashboards,
+          órdenes, productos - reads the same filter.
+        */}
+        <Suspense fallback={null}>
+          <DateRangeProvider>{children}</DateRangeProvider>
+        </Suspense>
+      </body>
     </html>
   );
 }

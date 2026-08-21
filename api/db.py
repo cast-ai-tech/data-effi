@@ -27,7 +27,22 @@ _readonly_pool: ConnectionPool | None = None
 
 
 def init_pools(settings: Settings) -> None:
+    """Open the pools, replacing any that are already open.
+
+    Reassigning the globals without closing what they pointed at leaks every
+    connection the old pool had open: `min_size` of them are established
+    eagerly and never handed back, so they sit in the server holding whatever
+    locks their last statement took. A later TRUNCATE then deadlocks against
+    connections belonging to a pool nobody can reach any more.
+
+    That happens whenever two app instances overlap - the test suite creates
+    one TestClient per module - because the second startup overwrites the
+    global and the first shutdown then closes the SECOND pool. Closing first
+    makes a repeated startup idempotent instead.
+    """
     global _pool, _readonly_pool
+
+    close_pools()
 
     _pool = ConnectionPool(
         settings.database_url,

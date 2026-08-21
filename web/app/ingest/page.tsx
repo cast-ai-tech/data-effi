@@ -32,6 +32,10 @@ export default function IngestPage() {
   const [connectionId, setConnectionId] = useState<string>("");
   const [kind, setKind] = useState<string>("shipments");
   const [jobs, setJobs] = useState<UploadJob[]>([]);
+  // The File handles the operator picked, kept so "volver a procesar"
+  // can resend the same bytes: a browser cannot re-read a file it
+  // already uploaded.
+  const [lastFiles, setLastFiles] = useState<File[]>([]);
   const [dragging, setDragging] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
@@ -43,17 +47,21 @@ export default function IngestPage() {
   }, [connections, connectionId]);
 
   const upload = useCallback(
-    async (files: FileList | File[]) => {
+    async (files: FileList | File[], reprocess = false) => {
       if (!connectionId) {
         setError("Elige primero a qué conexión pertenecen estos archivos.");
         return;
       }
       setError(null);
 
+      const picked = Array.from(files);
+      setLastFiles(picked);
+
       const form = new FormData();
       form.append("connection_id", connectionId);
       form.append("kind", kind);
-      for (const file of Array.from(files)) form.append("files", file);
+      if (reprocess) form.append("reprocess", "true");
+      for (const file of picked) form.append("files", file);
 
       try {
         const response = await api.post<{ jobs: UploadJob[] }>("/ingest/upload", form);
@@ -182,7 +190,13 @@ export default function IngestPage() {
         <Card title="Procesando" className="mb-4">
           <div className="space-y-0">
             {jobs.map((job) => (
-              <JobRow key={job.id} job={job} />
+              <JobRow
+                key={job.id}
+                job={job}
+                onReprocess={
+                  lastFiles.length > 0 ? () => void upload(lastFiles, true) : undefined
+                }
+              />
             ))}
           </div>
         </Card>
@@ -193,7 +207,13 @@ export default function IngestPage() {
   );
 }
 
-function JobRow({ job: initial }: { job: UploadJob }) {
+function JobRow({
+  job: initial,
+  onReprocess,
+}: {
+  job: UploadJob;
+  onReprocess?: () => void;
+}) {
   const [job, setJob] = useState(initial);
   const finished = ["done", "failed", "duplicate"].includes(job.status);
 
@@ -266,9 +286,26 @@ function JobRow({ job: initial }: { job: UploadJob }) {
       )}
 
       {job.status === "duplicate" && (
-        <p className="mt-1.5 text-[11.5px] text-ink-dim">
-          Mismo contenido que una carga anterior. No se insertó nada, que es lo correcto.
-        </p>
+        <div className="mt-1.5 space-y-1.5">
+          <p className="text-[11.5px] leading-relaxed text-ink-dim">
+            Mismo contenido que una carga anterior, así que no se insertó nada. Eso es lo
+            que evita que subir dos veces el mismo archivo duplique tus cifras.
+          </p>
+          {onReprocess && (
+            <p className="text-[11.5px] leading-relaxed text-ink-dim">
+              Si Data Effi cambió desde entonces —por ejemplo al corregir cómo se lee una
+              columna— el mismo archivo puede producir datos distintos.{" "}
+              <button
+                type="button"
+                onClick={onReprocess}
+                className="font-medium text-accent underline underline-offset-2"
+              >
+                Vuelve a procesarlo
+              </button>{" "}
+              y se reemplaza lo cargado antes, sin duplicar.
+            </p>
+          )}
+        </div>
       )}
 
       {job.status === "done" && job.batch_id && <BatchResult batchId={job.batch_id} />}
@@ -355,13 +392,13 @@ function BatchHistory() {
           <table className="w-full min-w-[720px] text-[12px]">
             <thead>
               <tr className="text-[10.5px] uppercase tracking-wide text-ink-dim">
-                <th className="pb-2 text-left font-semibold">Archivo</th>
-                <th className="pb-2 text-left font-semibold">Conexión</th>
-                <th className="pb-2 text-right font-semibold">Filas</th>
-                <th className="pb-2 text-right font-semibold">Nuevas</th>
-                <th className="pb-2 text-right font-semibold">Actualizadas</th>
-                <th className="pb-2 text-right font-semibold">Errores</th>
-                <th className="pb-2 text-right font-semibold">Cuándo</th>
+                <th scope="col" className="pb-2 text-left font-semibold">Archivo</th>
+                <th scope="col" className="pb-2 text-left font-semibold">Conexión</th>
+                <th scope="col" className="pb-2 text-right font-semibold">Filas</th>
+                <th scope="col" className="pb-2 text-right font-semibold">Nuevas</th>
+                <th scope="col" className="pb-2 text-right font-semibold">Actualizadas</th>
+                <th scope="col" className="pb-2 text-right font-semibold">Errores</th>
+                <th scope="col" className="pb-2 text-right font-semibold">Cuándo</th>
               </tr>
             </thead>
             <tbody>

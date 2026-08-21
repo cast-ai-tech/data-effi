@@ -15,37 +15,43 @@ import { useMemo } from "react";
 
 import { Card, Chip, EmptyState, ErrorState, MicroBar, SkeletonRows } from "@/components/ui";
 import type { WidgetProps } from "@/components/widgets/types";
+import { useRangedApi } from "@/lib/date-range";
+import { useApi } from "@/lib/hooks";
 import type { FormatCountry } from "@/lib/format";
 import { countryFlag, formatMoney, formatNumber, formatPercent } from "@/lib/format";
-import { useApi } from "@/lib/hooks";
-import type { GlobalRow } from "@/lib/types";
-
-const CURRENCY_SYMBOLS: Record<string, string> = {
-  COP: "$",
-  MXN: "$",
-  CLP: "$",
-  USD: "$",
-  PEN: "S/",
-  GTQ: "Q",
-};
-
-/** Currencies whose everyday amounts are written without cents. */
-const ZERO_DECIMAL_CURRENCIES = new Set(["COP", "CLP"]);
+import type { Country, GlobalRow } from "@/lib/types";
 
 /**
  * Formatting rules for one row's local currency.
  *
- * The currency comes from the row; the separators stay the viewer's, because
- * the reader is one person with one set of reading habits.
+ * Taken from `core.country`, never from a table written here. A map in the
+ * frontend has to be edited every time a country is added, and the failure is
+ * silent: an unlisted currency falls back to "$", so Guaraníes render as
+ * dollars on a screen whose whole job is comparing countries.
+ *
+ * The currency comes from the row's own country; the separators stay the
+ * viewer's, because the reader is one person with one set of reading habits.
  */
-function localFormat(currencyCode: string | null, viewer: FormatCountry): FormatCountry {
+function localFormat(
+  countryCode: string,
+  currencyCode: string | null,
+  countries: Country[],
+  viewer: FormatCountry,
+): FormatCountry {
+  const source = countries.find((c) => c.code === countryCode);
+  if (source) {
+    return {
+      ...viewer,
+      currency_code: source.currency_code,
+      currency_symbol: source.currency_symbol,
+      decimal_places: source.decimal_places,
+    };
+  }
+  // A country the workspace no longer lists can still own historical rows. The
+  // code is shown instead of guessing a symbol: "PYG 1.500" is honest, "$ 1.500"
+  // is wrong.
   const code = (currencyCode ?? viewer.currency_code).toUpperCase();
-  return {
-    ...viewer,
-    currency_code: code,
-    currency_symbol: CURRENCY_SYMBOLS[code] ?? "$",
-    decimal_places: ZERO_DECIMAL_CURRENCIES.has(code) ? 0 : 2,
-  };
+  return { ...viewer, currency_code: code, currency_symbol: code, decimal_places: 2 };
 }
 
 function usdFormat(viewer: FormatCountry): FormatCountry {
@@ -67,7 +73,8 @@ function sortKey(row: GlobalRow): number {
 }
 
 export default function GlobalSummary({ country }: WidgetProps) {
-  const { data, error, loading, reload } = useApi<GlobalRow[]>("/kpis/global");
+  const { data, error, loading, reload } = useRangedApi<GlobalRow[]>("/kpis/global");
+  const countries = useApi<Country[]>("/config/countries");
 
   const rows = useMemo(
     () => [...(data ?? [])].sort((a, b) => sortKey(b) - sortKey(a)),
@@ -150,7 +157,12 @@ export default function GlobalSummary({ country }: WidgetProps) {
 
       <ul className="divide-y divide-line-row">
         {rows.map((row) => {
-          const local = localFormat(row.currency_code, country);
+          const local = localFormat(
+            row.country_code,
+            row.currency_code,
+            countries.data ?? [],
+            country,
+          );
           const contributionTone =
             row.contribution !== null && row.contribution < 0
               ? "text-negative"

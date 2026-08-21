@@ -70,3 +70,18 @@ def engine(memory_store, pii_salt):
 def database_url() -> str | None:
     """DSN for the Postgres-backed tests. Absent means those tests skip."""
     return os.environ.get("TEST_DATABASE_URL") or os.environ.get("DATABASE_URL")
+
+
+@pytest.fixture(scope="session", autouse=True)
+def _test_database_lifecycle():
+    """Sweep dead databases on the way in, drop ours on the way out.
+
+    Each pytest process owns a database named after its pid (see
+    `pg_helpers.TEST_DB_NAME`), so concurrent runs stop dropping each other's.
+    This fixture is what keeps that from leaking one database per run.
+    """
+    from tests.pg_helpers import drop_test_database, sweep_abandoned_test_databases
+
+    sweep_abandoned_test_databases()
+    yield
+    drop_test_database()

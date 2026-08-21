@@ -675,3 +675,21 @@ def test_layout_blocks_cpa_without_an_ads_connection(pg_dsn, guias_dia1, pii_sal
         assert widgets["cs_confirmation"]["state"] == "blocked"
     finally:
         conn.close()
+
+def test_movement_sign_mirror_matches_the_table(pg_conn):
+    """The Python mirror of movement_type.sign cannot drift from the table.
+
+    The ingestion loop reads it to decide whether a row's own sign contradicts
+    its type. A stale entry there would silently stop reporting reversals - the
+    exact failure the check exists to prevent.
+    """
+    from pipeline.mapping import MOVEMENT_TYPE_SIGNS
+
+    with pg_conn.cursor() as cur:
+        cur.execute("SELECT code, sign FROM core.movement_type")
+        in_db = dict(cur.fetchall())
+
+    assert MOVEMENT_TYPE_SIGNS == in_db, (
+        "pipeline/mapping.py:MOVEMENT_TYPE_SIGNS y core.movement_type.sign "
+        "dejaron de coincidir"
+    )

@@ -11,10 +11,18 @@
 
 import { useMemo } from "react";
 
-import { Card, EmptyState, ErrorState, SkeletonRows, cx } from "@/components/ui";
+import {
+  Card,
+  EmptyState,
+  ErrorState,
+  ShowMore,
+  SkeletonRows,
+  cx,
+  useShowMore,
+} from "@/components/ui";
 import type { WidgetProps } from "@/components/widgets/types";
+import { useRangedApi } from "@/lib/date-range";
 import { formatMoney, formatNumber } from "@/lib/format";
-import { useApi } from "@/lib/hooks";
 import type { OfficeRescueRow } from "@/lib/types";
 
 /**
@@ -52,6 +60,9 @@ const BANDS = [
   },
 ];
 
+/** Stable empty list: an inline [] would reset the expansion every render. */
+const EMPTY_CITIES: CityRow[] = [];
+
 interface CityRow {
   key: string;
   city_name: string;
@@ -85,7 +96,7 @@ function groupByCity(rows: OfficeRescueRow[]): CityRow[] {
 }
 
 export default function OfficeRescue({ countryCode, country }: WidgetProps) {
-  const { data, error, loading, reload } = useApi<OfficeRescueRow[]>(
+  const { data, error, loading, reload } = useRangedApi<OfficeRescueRow[]>(
     `/kpis/office-rescue?country=${countryCode}`,
   );
 
@@ -110,6 +121,10 @@ export default function OfficeRescue({ countryCode, country }: WidgetProps) {
       ),
     };
   }, [data]);
+
+  // Called before the early returns below: a hook cannot live behind a
+  // conditional. Until the model resolves it just paginates an empty list.
+  const cities = useShowMore(model?.cities ?? EMPTY_CITIES);
 
   const SUBTITLE = "Paquetes esperando que el cliente los recoja, por antigüedad y ciudad.";
 
@@ -208,7 +223,7 @@ export default function OfficeRescue({ countryCode, country }: WidgetProps) {
             </tr>
           </thead>
           <tbody>
-            {model.cities.map((city) => (
+            {cities.shown.map((city) => (
               <tr key={city.key} className="border-t border-line-row">
                 <td className="max-w-[220px] px-2 py-2 text-left">
                   <span className="block truncate text-ink-2">{city.city_name}</span>
@@ -238,6 +253,15 @@ export default function OfficeRescue({ countryCode, country }: WidgetProps) {
           </tfoot>
         </table>
       </div>
+
+      <ShowMore
+        remaining={cities.remaining}
+        total={cities.total}
+        shownCount={cities.shown.length}
+        onMore={cities.showMore}
+        onCollapse={cities.collapse}
+        noun="ciudades"
+      />
     </Card>
   );
 }

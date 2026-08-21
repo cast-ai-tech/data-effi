@@ -26,9 +26,9 @@ import {
 
 import { Card, EmptyState, ErrorState, SkeletonRows } from "@/components/ui";
 import type { WidgetProps } from "@/components/widgets/types";
+import { useRangedApi } from "@/lib/date-range";
 import type { FormatCountry } from "@/lib/format";
 import { formatMoney, formatNumber, formatPercent } from "@/lib/format";
-import { useApi } from "@/lib/hooks";
 import type { ProductRow } from "@/lib/types";
 
 /** The line between "arrives" and "does not arrive". */
@@ -95,7 +95,7 @@ function toPoints(rows: ProductRow[]): ScatterPoint[] {
 }
 
 export default function MarginDeliveryScatter({ countryCode, country }: WidgetProps) {
-  const { data, error, loading, reload } = useApi<ProductRow[]>(
+  const { data, error, loading, reload } = useRangedApi<ProductRow[]>(
     `/kpis/products?country=${countryCode}`,
     [countryCode],
   );

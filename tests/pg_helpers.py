@@ -22,7 +22,20 @@ from psycopg import sql
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 MIGRATIONS_DIR = REPO_ROOT / "migrations"
-TEST_DB_NAME = "norte_test"
+# Overridable so two suites can run at once without dropping each other's
+# database mid-run - which looks exactly like "PostgreSQL unreachable".
+# One database PER PROCESS, not one shared by all of them.
+#
+# `recreate_test_database()` issues DROP DATABASE. When two pytest runs overlap -
+# two developers, two agents, a CI job beside a local run - they take turns
+# dropping the database out from under each other, and the failures that surface
+# are deadlocks, "database norte_test does not exist", and duplicate-key errors
+# on pg_database. All of them look like product bugs and none of them are.
+#
+# Naming the database after the process removes the shared resource instead of
+# trying to schedule access to it. TEST_DB_NAME still overrides, so CI can pin a
+# name when it wants one.
+TEST_DB_NAME = os.environ.get("TEST_DB_NAME") or f"norte_test_{os.getpid()}"
 
 
 def load_dotenv(path: Path | None = None) -> dict[str, str]:
@@ -79,6 +92,40 @@ def resolve_test_dsn() -> str | None:
     return _swap_database(dsn, TEST_DB_NAME) if dsn else None
 
 
+def _readonly_url() -> str | None:
+    """The role behind the NL->SQL copilot: mart aggregates and nothing else.
+
+    An EMPTY environment variable is treated as unset here, unlike everywhere
+    else. The API test fixtures blank `DATABASE_URL_READONLY` on purpose, to
+    prove the API never needs that role - so honouring the blank would silently
+    skip every test that checks what the copilot can still read, which is the
+    one thing these helpers exist to answer.
+    """
+    dotenv = load_dotenv()
+    env = _env()
+    for key in ("TEST_DATABASE_URL_READONLY", "DATABASE_URL_READONLY"):
+        value = env.get(key) or dotenv.get(key)
+        if value:
+            return value
+    return None
+
+
+def resolve_readonly_test_dsn() -> str | None:
+    """Read-only-role DSN pointing at the test database.
+
+    Needed by any test that has to prove what the copilot can actually SELECT.
+    Asking `has_table_privilege` is not the same question: a grant on a view can
+    be perfectly in place while the view's body fails on something underneath.
+    """
+    dsn = _readonly_url()
+    return _swap_database(dsn, TEST_DB_NAME) if dsn else None
+
+
+# Arbitrary but fixed: every suite must pick the SAME number for the lock to
+# mean anything.
+_CLUSTER_SETUP_LOCK = 0x4E4F525445
+
+
 def recreate_test_database() -> str:
     """Drop and recreate the test database, apply migrations, return the app DSN."""
     admin = admin_dsn()
@@ -88,17 +135,104 @@ def recreate_test_database() -> str:
         raise RuntimeError("No DATABASE_URL available for the PostgreSQL tests")
 
     with psycopg.connect(admin, autocommit=True) as conn, conn.cursor() as cur:
-        cur.execute(
-            "SELECT pg_terminate_backend(pid) FROM pg_stat_activity "
-            "WHERE datname = %s AND pid <> pg_backend_pid()",
-            (TEST_DB_NAME,),
-        )
-        cur.execute(f'DROP DATABASE IF EXISTS "{TEST_DB_NAME}"')
-        cur.execute(f'CREATE DATABASE "{TEST_DB_NAME}"')
+        # Roles and databases live in catalogs shared by the whole cluster, not
+        # in the per-process database. Two suites reaching CREATE ROLE at the
+        # same moment collide on pg_authid with "tuple concurrently updated" -
+        # 106 errors in one run, every one of them looking like a product bug.
+        # The lock is held only for the catalog work; the tests themselves stay
+        # fully parallel because each has its own database.
+        cur.execute("SELECT pg_advisory_lock(%s)", (_CLUSTER_SETUP_LOCK,))
+        try:
+            cur.execute(
+                "SELECT pg_terminate_backend(pid) FROM pg_stat_activity "
+                "WHERE datname = %s AND pid <> pg_backend_pid()",
+                (TEST_DB_NAME,),
+            )
+            cur.execute(f'DROP DATABASE IF EXISTS "{TEST_DB_NAME}"')
+            cur.execute(f'CREATE DATABASE "{TEST_DB_NAME}"')
 
-    apply_migrations(admin_target)
-    _prepare_app_role(admin_target, app_target)
+            apply_migrations(admin_target)
+            _prepare_app_role(admin_target, app_target)
+        finally:
+            cur.execute("SELECT pg_advisory_unlock(%s)", (_CLUSTER_SETUP_LOCK,))
+
     return app_target
+
+
+def drop_test_database() -> None:
+    """Remove this process's database at the end of the session.
+
+    Per-process names solve the collisions but would otherwise leave one dead
+    database behind per run. Failures here are swallowed on purpose: a leftover
+    database is untidy, a crash during teardown hides the real test results.
+    """
+    admin = admin_dsn()
+    if not admin:
+        return
+    try:
+        with psycopg.connect(admin, autocommit=True) as conn, conn.cursor() as cur:
+            cur.execute(
+                "SELECT pg_terminate_backend(pid) FROM pg_stat_activity "
+                "WHERE datname = %s AND pid <> pg_backend_pid()",
+                (TEST_DB_NAME,),
+            )
+            cur.execute(f'DROP DATABASE IF EXISTS "{TEST_DB_NAME}"')
+    except Exception as exc:
+        # Swallowed on purpose: a leftover database is untidy, but a crash in
+        # teardown would hide the real test results.
+        print(f"aviso: no se pudo borrar {TEST_DB_NAME}: {exc}")
+
+
+def sweep_abandoned_test_databases() -> int:
+    """Delete per-process databases whose process is gone.
+
+    A run killed with Ctrl-C never reaches teardown. Without this the server
+    slowly fills with norte_test_* from crashed sessions.
+    """
+    admin = admin_dsn()
+    if not admin:
+        return 0
+    dropped = 0
+    try:
+        with psycopg.connect(admin, autocommit=True) as conn, conn.cursor() as cur:
+            cur.execute(
+                r"SELECT datname FROM pg_database WHERE datname LIKE 'norte\_test\_%%'"
+            )
+            names = [row[0] for row in cur.fetchall()]
+            for name in names:
+                if name == TEST_DB_NAME:
+                    continue
+                suffix = name.rsplit("_", 1)[-1]
+                if not suffix.isdigit() or _process_alive(int(suffix)):
+                    continue
+                cur.execute(
+                    "SELECT pg_terminate_backend(pid) FROM pg_stat_activity "
+                    "WHERE datname = %s AND pid <> pg_backend_pid()",
+                    (name,),
+                )
+                cur.execute(f'DROP DATABASE IF EXISTS "{name}"')
+                dropped += 1
+    except Exception:
+        return dropped
+
+    return dropped
+
+
+def _process_alive(pid: int) -> bool:
+    """True when a process with that id still exists.
+
+    Errs on the side of "alive": a database we are unsure about is left alone
+    rather than dropped under a running suite.
+    """
+    if pid <= 0:
+        return True
+    try:
+        os.kill(pid, 0)
+    except ProcessLookupError:
+        return False
+    except (PermissionError, OSError):
+        return True
+    return True
 
 
 def apply_migrations(dsn: str) -> None:
@@ -130,11 +264,26 @@ def apply_migrations(dsn: str) -> None:
 
 
 def _prepare_app_role(admin_dsn_value: str, app_dsn: str) -> None:
-    """Give norte_app the password the test DSN expects, and confirm its grants."""
+    """Give the two non-superuser roles the passwords the test DSNs expect.
+
+    `norte_readonly` gets no grants here on purpose. Migration 007 already gave
+    it exactly what it should have - SELECT on mart and nothing else - and the
+    point of connecting as that role in a test is to find out whether that is
+    still enough.
+    """
     env = _env()
     password = env.get("POSTGRES_APP_PASSWORD") or urlparse(app_dsn).password
     if not password:
         raise RuntimeError("POSTGRES_APP_PASSWORD is not set")
+
+    readonly_password = env.get("POSTGRES_READONLY_PASSWORD")
+    if readonly_password:
+        with psycopg.connect(admin_dsn_value, autocommit=True) as ro, ro.cursor() as ro_cur:
+            ro_cur.execute(
+                sql.SQL("ALTER ROLE norte_readonly WITH PASSWORD {}").format(
+                    sql.Literal(readonly_password)
+                )
+            )
 
     with psycopg.connect(admin_dsn_value, autocommit=True) as conn, conn.cursor() as cur:
         cur.execute(
@@ -175,6 +324,14 @@ def seed_workspace(
             "ON CONFLICT DO NOTHING",
             (tenant_id, country_code),
         )
+        # Migration 012 made scope explicit: a global platform (manual upload)
+        # must be created WITHOUT a country, a country one WITH. The database
+        # enforces it, so the helper has to ask rather than assume.
+        cur.execute("SELECT scope FROM core.platform WHERE code = %s", (platform_code,))
+        row = cur.fetchone()
+        scope = row[0] if row else "country"
+        connection_country = None if scope == "global" else country_code
+
         cur.execute(
             """
             INSERT INTO core.connection
@@ -182,7 +339,10 @@ def seed_workspace(
             VALUES (%s, %s, %s, %s, %s, 'active')
             ON CONFLICT (id) DO NOTHING
             """,
-            (connection_id, tenant_id, country_code, platform_code, f"conn-{connection_id}"),
+            (
+                connection_id, tenant_id, connection_country, platform_code,
+                f"conn-{connection_id}",
+            ),
         )
     conn.commit()
 

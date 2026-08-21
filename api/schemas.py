@@ -14,7 +14,7 @@ from __future__ import annotations
 
 from datetime import date, datetime
 from decimal import Decimal
-from typing import Any, Literal
+from typing import Any, Generic, Literal, TypeVar
 from uuid import UUID
 
 from pydantic import BaseModel, EmailStr, Field
@@ -22,6 +22,10 @@ from pydantic import BaseModel, EmailStr, Field
 Role = Literal["owner", "analyst", "viewer"]
 WidgetState = Literal["available", "degraded", "blocked"]
 CatalogueStatus = Literal["sin_costo", "sin_revisar", "costo_desactualizado", "ok"]
+
+# Whether a percentage was measured or merely computed. Below ten terminal
+# guides a delivery rate is arithmetic, not evidence - see migration 021.
+SampleQuality = Literal["suficiente", "muestra_corta"]
 
 
 # =============================================================================
@@ -113,26 +117,69 @@ class ActivateCountryRequest(BaseModel):
     maturation_days: int | None = Field(default=None, ge=1, le=120)
 
 
+PlatformScope = Literal["country", "global"]
+PlatformAvailability = Literal["available", "beta", "planned"]
+BatchKindName = Literal["shipments", "movements", "ads", "cs"]
+
+
 class PlatformResponse(BaseModel):
+    """One row of the integration catalogue.
+
+    Serves two views. `mart.v_available_platforms` knows how many connections a
+    country already has; `mart.v_platform_catalogue` is the full list including
+    what does not work yet, and carries no counts. The count fields therefore
+    default instead of being required - a catalogue row is not a broken row.
+    """
+
     platform_code: str
     platform_name: str
     tier: int
     data_domains: list[str]
     requires_consent: bool
-    docs_url: str | None
-    connection_count: int
-    active_connection_count: int
-    is_connected: bool
+    docs_url: str | None = None
+    connection_count: int = 0
+    active_connection_count: int = 0
+    is_connected: bool = False
+    # Migration 012: what the integration is, and whether it works today.
+    scope: PlatformScope
+    category: str
+    auth_type: str
+    availability: PlatformAvailability
+    direction: str
+    setup_hint: str | None = None
+    available_countries: list[str] = Field(
+        default_factory=list,
+        description="Países donde se puede conectar. Vacío en las plataformas globales.",
+    )
 
 
 class ConnectionCreateRequest(BaseModel):
-    country_code: str = Field(min_length=2, max_length=2)
+    country_code: str | None = Field(
+        default=None,
+        min_length=2,
+        max_length=2,
+        description=(
+            "Obligatorio en plataformas de alcance 'country'. Debe omitirse en las "
+            "globales: ahí el archivo dice de qué país es cada carga."
+        ),
+    )
     platform_code: str
     name: str = Field(min_length=1, max_length=120)
     store_name: str | None = None
     secret_ref: str | None = Field(
         default=None,
         description="NAME of the env var holding the credential. Never the credential itself.",
+    )
+    source_url: str | None = Field(
+        default=None,
+        description=(
+            "Solo para Google Sheets: la URL pública de la hoja publicada como CSV. "
+            "No es un secreto y no se guarda como tal."
+        ),
+    )
+    default_kind: BatchKindName | None = Field(
+        default=None,
+        description="Tipo de datos por defecto cuando la fuente no lo declara.",
     )
     consent_granted: bool = Field(
         default=False,
@@ -144,6 +191,8 @@ class ConnectionCreateRequest(BaseModel):
 class ConnectionUpdateRequest(BaseModel):
     name: str | None = None
     secret_ref: str | None = None
+    source_url: str | None = None
+    default_kind: BatchKindName | None = None
     status: Literal["pending", "active", "disabled"] | None = None
     sync_interval_minutes: int | None = Field(default=None, ge=15, le=10_080)
 
@@ -151,7 +200,8 @@ class ConnectionUpdateRequest(BaseModel):
 class ConnectionResponse(BaseModel):
     connection_id: UUID
     connection_name: str
-    country_code: str
+    # NULL on a global connection: it is not tied to any one country.
+    country_code: str | None = None
     platform_code: str
     platform_name: str
     tier: int
@@ -163,6 +213,23 @@ class ConnectionResponse(BaseModel):
     hours_since_sync: float | None
     batches_7d: int | None
     failed_batches_7d: int | None
+    # Migration 012.
+    scope: PlatformScope
+    category: str
+    has_webhook: bool = False
+
+
+class WebhookTokenResponse(BaseModel):
+    """The one and only time the plaintext token is ever shown."""
+
+    connection_id: UUID
+    token: str = Field(
+        description="Se muestra una sola vez. Guárdalo ahora; no se puede volver a ver."
+    )
+    url: str = Field(description="URL completa para pegar en n8n, Make o Zapier.")
+    default_kind: BatchKindName | None = None
+    created_at: datetime
+    message: str
 
 
 # =============================================================================
@@ -188,7 +255,7 @@ class UploadAcceptedResponse(BaseModel):
 
 
 class DetectResponse(BaseModel):
-    """What Norte understood about a file, before anything is stored."""
+    """What Data Effi understood about a file, before anything is stored."""
 
     filename: str
     format: str = Field(description="xlsx | html | csv | xls_binary")
@@ -200,7 +267,7 @@ class DetectResponse(BaseModel):
     column_count: int
     mapped_columns: dict[str, str] = Field(
         default_factory=dict,
-        description="Encabezado del archivo -> campo canonico de Norte.",
+        description="Encabezado del archivo -> campo canonico de Data Effi.",
     )
     unmapped_columns: list[str] = Field(default_factory=list)
 
@@ -209,7 +276,8 @@ class BatchSummary(BaseModel):
     batch_id: UUID
     connection_id: UUID
     connection_name: str
-    country_code: str
+    # NULL only on batches loaded before migration 013 through a global connection.
+    country_code: str | None = None
     platform_code: str
     source_name: str
     kind: str
@@ -250,7 +318,68 @@ class BatchDetail(BaseModel):
 
 # =============================================================================
 # KPIs
+#
+# THE DATE RANGE, AND SAYING WHICH DATE IT WAS
+#
+# A COD guide has several dates and they answer different questions: the day it
+# was created, the day it was delivered, the day the money settled. The default
+# everywhere is the CREATION date, because it is the only one every guide has -
+# a guide still in transit has no delivery date, so filtering on that one hides
+# exactly the guides the operator still has to chase.
+#
+# `date_basis` is on the response rather than on each row so an EMPTY result can
+# still say what it filtered on. "No hay datos" and "no hay guías CREADAS en ese
+# rango" are different sentences, and only the second one is useful.
+#
+#   creacion    - fecha de creación de la guía (el caso por defecto)
+#   despacho    - fecha de la relación de despacho (`date_field=despacho`)
+#   entrega     - fecha de entrega (`date_field=entrega`)
+#   interaccion - fecha de la gestión de servicio al cliente
+#   pauta       - fecha del gasto en pauta
+#   movimiento  - fecha en que se movió el dinero (reservado; hoy nadie lo usa,
+#                 ver la cabecera de la migración 018 sobre v_cash_cycle)
+#   null        - el endpoint no admite filtro por fecha, y lo dice en vez de
+#                 aceptar el parámetro y no aplicarlo
+#
+# `date_basis` reporta lo que se APLICÓ, no lo que se pidió. Un endpoint que no
+# puede honrar el `date_field` recibido devuelve la base que usó de verdad -
+# ver la cabecera de la migración 020 para los cuatro casos y su porqué.
 # =============================================================================
+
+DateBasis = Literal[
+    "creacion", "despacho", "entrega", "movimiento", "interaccion", "pauta"
+]
+
+# What the caller may ASK to filter on. A subset of the bases above: a guide has
+# these three dates, while "interaccion" and "pauta" belong to other sources and
+# are never a choice - the endpoints that use them have no other option.
+DateField = Literal["creacion", "despacho", "entrega"]
+DATE_FIELDS: tuple[str, ...] = ("creacion", "despacho", "entrega")
+
+RowT = TypeVar("RowT", bound=BaseModel)
+
+
+class KpiResponse(BaseModel, Generic[RowT]):
+    """Every KPI endpoint answers with this shape.
+
+    `date_from` and `date_to` are echoed back so the UI can label the widget with
+    the range the server actually used, instead of the one it believes it asked
+    for.
+    """
+
+    rows: list[RowT]
+    date_basis: DateBasis | None = Field(
+        default=None, description="Sobre qué fecha se filtró. Null = no admite filtro."
+    )
+    date_from: date | None = None
+    date_to: date | None = None
+    excluded_no_date: int | None = Field(
+        default=None,
+        description=(
+            "Guías que no pueden caer en ningún rango sobre esa fecha porque "
+            "todavía no la tienen. Null si no se aplicó rango o no aplica."
+        ),
+    )
 
 
 class DailyContributionRow(BaseModel):
@@ -295,6 +424,10 @@ class CarrierRow(BaseModel):
     revenue: float | None
     contribution: float | None
     currency_code: str | None
+    # From migration 021. Optional because a response built before that column
+    # existed is still a valid CarrierRow, and because a missing flag must read
+    # as "no sabemos" rather than as "suficiente".
+    sample_quality: SampleQuality | None = None
 
 
 class GeoRow(BaseModel):
@@ -539,6 +672,10 @@ class LayoutWidget(BaseModel):
 class LayoutResponse(BaseModel):
     country_code: str
     widgets: list[LayoutWidget]
+    # Always null: the layout says which widgets exist for a country, which is
+    # not a question a date range can narrow. Stated rather than omitted, so the
+    # UI can grey the picker out for this call instead of guessing.
+    date_basis: DateBasis | None = None
 
 
 # =============================================================================
@@ -610,7 +747,15 @@ class ProductCreateRequest(BaseModel):
 
 
 class ProductUpdateRequest(BaseModel):
-    """Every field optional. Omitting one leaves it exactly as it was."""
+    """Merge-patch semantics (RFC 7396), because PATCH has three cases:
+
+        campo ausente        -> queda como estaba
+        campo con valor      -> se guarda
+        campo en null        -> se BORRA
+
+    `name` e `is_active` son NOT NULL en la base: mandarlos en null es un 422,
+    no un borrado.
+    """
 
     name: str | None = Field(default=None, min_length=1, max_length=200)
     sku: str | None = Field(default=None, max_length=80)
@@ -621,7 +766,10 @@ class ProductUpdateRequest(BaseModel):
         ge=0,
         max_digits=14,
         decimal_places=2,
-        description="Al enviarlo, el producto queda marcado como revisado por ti.",
+        description=(
+            "Con valor, el producto queda marcado como revisado por ti. "
+            "En null, se borra el costo y también la marca de revisión."
+        ),
     )
     list_price: Decimal | None = Field(default=None, ge=0, max_digits=14, decimal_places=2)
     target_margin_pct: Decimal | None = Field(
@@ -630,6 +778,227 @@ class ProductUpdateRequest(BaseModel):
     weight_kg: Decimal | None = Field(default=None, ge=0, max_digits=10, decimal_places=3)
     currency_code: str | None = Field(default=None, min_length=3, max_length=3)
     notes: str | None = Field(default=None, max_length=2000)
+    is_active: bool | None = Field(
+        default=None,
+        description="Reactivar un producto desactivado. DELETE es lo que lo desactiva.",
+    )
+
+
+# =============================================================================
+# Contribution, split
+#
+# One net number reads as a loss whenever a young cohort is large: those guides
+# have paid freight, product and fee and collected nothing, because they have
+# not arrived yet. `mart.v_contribution_split` reports the two halves so the UI
+# can say "in the street" instead of "lost".
+# =============================================================================
+
+
+class ContributionSplitRow(BaseModel):
+    """mart.v_contribution_split - what closed, next to what is still moving."""
+
+    country_code: str
+    currency_code: str | None
+    shipments: int
+    closed_shipments: int
+    open_shipments: int
+    realised_revenue: float | None
+    realised_cost: float | None
+    realised_contribution: float | None
+    realised_margin_pct: float | None
+    capital_in_street: float | None
+    committed_revenue: float | None
+    net_contribution: float | None
+    maturity_pct: float | None = Field(
+        default=None,
+        description="Qué % de las guías ya cerró. Por debajo de ~60 la cifra realizada es "
+        "una muestra pequeña y la UI debe decirlo.",
+    )
+
+
+# =============================================================================
+# Orders and customers
+#
+# THE ONLY RESPONSES IN THIS FILE THAT CARRY A REAL PERSON'S DATA.
+#
+# `customer_name`, `customer_phone`, `customer_address` and `customer_document`
+# are decrypted by the API, never by the database, and only for owner/analyst.
+# For a viewer they are null - the server does not send them at all, so there is
+# nothing for the client to un-hide. `pii_visible` tells the UI which of the two
+# it is looking at, so an empty column can be labelled "sin permiso" instead of
+# "sin teléfono".
+#
+# `customer_ref` ('#A3F91C') is derived from the deterministic hash and is safe
+# for everyone: it is a stable label, not an identity. It is what a viewer sees
+# where an analyst sees a name.
+# =============================================================================
+
+CustomerGrade = Literal["nuevo", "excelente", "bueno", "regular", "riesgo"]
+OrderSort = Literal["recent", "contribution", "days_open"]
+CustomerSort = Literal["orders", "contribution", "revenue", "recent"]
+
+
+class OrderRow(BaseModel):
+    """One guide, as the orders table renders it."""
+
+    shipment_id: UUID
+    tracking_number: str
+    carrier_tracking_number: str | None
+    created_date: date
+    delivered_at: datetime | None
+    status_code: str
+    status_label: str
+    status_bucket: str
+    is_terminal: bool
+
+    # The route key for /customers/{customer_hash}. Null on a guide that never
+    # carried a phone or a document - there is nobody to group it with.
+    customer_hash: str | None
+    customer_ref: str | None = Field(
+        default=None, description="Etiqueta estable del cliente. Visible para todos los roles."
+    )
+    customer_name: str | None = Field(
+        default=None, description="Descifrado. Null para el rol viewer o sin llave configurada."
+    )
+    customer_phone: str | None = Field(
+        default=None, description="Descifrado. Null para el rol viewer o sin llave configurada."
+    )
+
+    city_name: str | None
+    province_name: str | None
+    product_name: str | None
+    quantity: int
+    carrier_name: str | None
+
+    revenue_amount: float | None
+    freight_amount: float | None
+    cogs_amount: float | None
+    fee_amount: float | None
+    contribution: float | None
+    currency_code: str | None
+
+    # Null once the guide is terminal: a closed guide is not open any number of days.
+    days_open: int | None
+    movement_count: int
+
+
+class OrderDetailRow(OrderRow):
+    """The same guide with the two fields only the detail card ever needs.
+
+    Address and document are separate from name and phone on purpose: the table
+    never shows them, so they are never decrypted for a list of 200 rows.
+    """
+
+    customer_address: str | None = None
+    customer_document: str | None = None
+
+
+class OrdersPage(BaseModel):
+    rows: list[OrderRow]
+    page: int
+    page_size: int
+    total: int
+    pii_visible: bool = Field(
+        description="False cuando el rol no puede ver datos de contacto, o cuando el "
+        "despliegue no tiene llave de cifrado. Los campos vienen en null."
+    )
+
+
+class OrderTimelineEvent(BaseModel):
+    """mart.v_order_timeline - a status change or a movement of money."""
+
+    event_kind: Literal["estado", "dinero"]
+    event_label: str
+    amount: float | None
+    currency_code: str | None
+    event_date: date
+    reference: str | None
+
+
+class OrderDetail(BaseModel):
+    order: OrderDetailRow
+    timeline: list[OrderTimelineEvent]
+    pii_visible: bool
+
+
+class CustomerRow(BaseModel):
+    """mart.v_customer_metrics - one person, however many guides they generated."""
+
+    customer_hash: str
+    customer_ref: str
+    customer_name: str | None = None
+    customer_phone: str | None = None
+
+    orders: int
+    delivered: int
+    returned: int
+    open_orders: int
+
+    revenue: float | None
+    contribution: float | None
+    contribution_per_order: float | None
+
+    # Over CLOSED orders only: an order still in transit is not a failed one.
+    delivery_rate_pct: float | None
+    customer_grade: CustomerGrade
+    main_city: str | None
+    first_order_date: date
+    last_order_date: date
+    days_since_last_order: int
+    distinct_products: int
+    currency_code: str | None
+
+
+class CustomerDetailRow(CustomerRow):
+    """The customer as the detail card shows them: contact data included.
+
+    Separate from `CustomerRow` for the same reason `OrderDetailRow` is separate
+    from `OrderRow` - the table must not be able to return these fields at all.
+    Opening ONE customer to read their address is what an operator does before
+    sending a parcel; decrypting two hundred addresses because someone scrolled
+    a list is not the same act, and a shared model would make them one call
+    away from each other.
+
+    Each field resolves to the most recent guide that carried it, so a customer
+    who corrected their address is seen corrected.
+    """
+
+    customer_address: str | None = Field(
+        default=None, description="Descifrado. Null para viewer o sin llave configurada."
+    )
+    customer_document: str | None = Field(
+        default=None, description="Descifrado. Null para viewer o sin llave configurada."
+    )
+    # NOT gated: a city is not an identity, and `main_city` has been visible to
+    # every role since 015. They are here because a street line without a city
+    # is not a usable address.
+    customer_city: str | None = Field(
+        default=None, description="Ciudad de la última guía. Visible para todos los roles."
+    )
+    customer_province: str | None = Field(
+        default=None, description="Provincia/departamento de la última guía."
+    )
+
+
+class CustomersPage(BaseModel):
+    rows: list[CustomerRow]
+    page: int
+    page_size: int
+    total: int
+    pii_visible: bool
+    # Same three fields as `KpiResponse`, for the same reason: the clientes tab
+    # shares the dashboard's date picker, and a page of customers filtered to a
+    # window has to be able to say so.
+    date_basis: DateBasis | None = None
+    date_from: date | None = None
+    date_to: date | None = None
+    excluded_no_date: int | None = None
+
+
+class CustomerDetail(BaseModel):
+    customer: CustomerDetailRow
+    orders: list[OrderRow]
+    pii_visible: bool
 
 
 # =============================================================================
@@ -668,6 +1037,14 @@ class AlertsResponse(BaseModel):
 class AskRequest(BaseModel):
     question: str = Field(min_length=3, max_length=500)
     country_code: str | None = Field(default=None, min_length=2, max_length=2)
+    conversation_id: UUID | None = Field(
+        default=None,
+        description=(
+            "Hilo al que pertenece la pregunta. Con él, un seguimiento como "
+            "'¿y en Guayas?' se resuelve contra lo que ya se preguntó. Sin él se "
+            "abre un hilo nuevo."
+        ),
+    )
 
 
 class AskResponse(BaseModel):
@@ -679,3 +1056,86 @@ class AskResponse(BaseModel):
     rejected: bool = False
     rejection_reason: str | None = None
     suggestions: list[str] = Field(default_factory=list)
+    conversation_id: UUID | None = None
+    message_id: UUID | None = Field(
+        default=None, description="Identificador de la respuesta, para enviar feedback."
+    )
+
+
+class ConversationSummary(BaseModel):
+    id: UUID
+    country_code: str | None
+    title: str | None
+    message_count: int
+    created_at: datetime
+    last_message_at: datetime
+
+
+class ConversationsResponse(BaseModel):
+    conversations: list[ConversationSummary]
+
+
+class MessageResponse(BaseModel):
+    id: UUID
+    role: Literal["user", "assistant"]
+    content: str
+    sql_executed: str | None = None
+    row_count: int | None = None
+    tokens: int = 0
+    created_at: datetime
+    helpful: bool | None = None
+    feedback_comment: str | None = None
+
+
+class ConversationDetail(BaseModel):
+    id: UUID
+    country_code: str | None
+    title: str | None
+    created_at: datetime
+    last_message_at: datetime
+    messages: list[MessageResponse]
+
+
+class FeedbackRequest(BaseModel):
+    message_id: UUID
+    helpful: bool
+    comment: str | None = Field(
+        default=None,
+        max_length=2000,
+        description=(
+            "Por qué la respuesta estuvo mal. Con un comentario, un 'no me sirvió' "
+            "se guarda como corrección y entra en las siguientes respuestas."
+        ),
+    )
+
+
+class FeedbackResponse(BaseModel):
+    stored: bool
+    learned: bool = Field(
+        description="True cuando el comentario quedó guardado como corrección duradera."
+    )
+    message: str
+
+
+class RecommendationResponse(BaseModel):
+    code: str
+    severity: Literal["info", "warning", "critical"]
+    country_code: str | None
+    title: str
+    finding: str
+    action: str
+    impact_amount: float | None
+    impact_currency: str | None
+    deep_link: str
+    detected_at: datetime
+
+
+class RecommendationsResponse(BaseModel):
+    country_code: str | None
+    recommendations: list[RecommendationResponse]
+    narrative: str | None = Field(
+        default=None,
+        description="Párrafo opcional del modelo sobre los hallazgos. Nunca los reemplaza.",
+    )
+    degraded: bool = False
+    degraded_reason: str | None = None

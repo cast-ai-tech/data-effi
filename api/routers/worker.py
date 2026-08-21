@@ -21,7 +21,13 @@ logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/worker", tags=["worker"])
 
-ALLOWED_JOBS = ("sync_tier3", "relink_orphans", "refresh_fx", "calibrate_maturation")
+ALLOWED_JOBS = (
+    "sync_tier3",
+    "sync_sheets",
+    "relink_orphans",
+    "refresh_fx",
+    "calibrate_maturation",
+)
 
 
 @router.post(

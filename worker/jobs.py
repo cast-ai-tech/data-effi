@@ -373,4 +373,163 @@ def _mark_connection_error(conn: psycopg.Connection, connection_id: UUID, messag
     conn.commit()
 
 
-JOB_NAMES = ("sync_tier3", "relink_orphans", "refresh_fx", "calibrate_maturation")
+# =============================================================================
+# Job: Google Sheets sync
+# =============================================================================
+
+SHEETS_PLATFORM_CODE = "google_sheets"
+
+
+def job_sync_sheets(conn: psycopg.Connection, *, pii_salt: str) -> dict[str, Any]:
+    """Re-read every connected Google Sheet published to the web.
+
+    A published sheet is a public CSV URL, so there is no consent to check and
+    no session to expire - but the rest is identical to the tier-3 sync: fetch
+    raw bytes, hand them to the same IngestEngine an upload uses, and mark the
+    connection with a readable error when it stops working. Re-reading the same
+    sheet twice is free: the content hash makes the second pass a no-op.
+    """
+    from connectors.sheets.published_csv import SheetFetchError
+
+    results: list[dict[str, Any]] = []
+
+    with conn.cursor(row_factory=dict_row) as cur:
+        cur.execute(
+            """
+            SELECT c.id, c.tenant_id, c.country_code, c.platform_code, c.name,
+                   c.secret_ref, c.source_url, c.default_kind
+            FROM core.connection c
+            WHERE c.platform_code = %s AND c.status = 'active'
+            ORDER BY c.name
+            """,
+            (SHEETS_PLATFORM_CODE,),
+        )
+        connections = cur.fetchall()
+
+    for connection_row in connections:
+        entry: dict[str, Any] = {
+            "connection_id": connection_row["id"],
+            "name": connection_row["name"],
+        }
+        try:
+            entry.update(_sync_one_sheet(conn, connection_row, pii_salt=pii_salt))
+            entry["status"] = "ok"
+        except (SheetFetchError, ValueError) as exc:
+            # ValueError covers InvalidSheetUrlError and the "no sabemos qué tipo
+            # de datos son" case. Both need a person, so the connection says so.
+            conn.rollback()
+            _mark_connection_error(conn, connection_row["id"], str(exc))
+            entry["status"] = "error"
+            entry["error"] = str(exc)
+
+        results.append(entry)
+
+    return {"connections": results, "count": len(results)}
+
+
+def _sync_one_sheet(
+    conn: psycopg.Connection, connection_row: dict[str, Any], *, pii_salt: str
+) -> dict[str, Any]:
+    from connectors.sheets.published_csv import PublishedSheetFetcher
+
+    raw_kind = connection_row["default_kind"]
+    if not raw_kind:
+        raise ValueError(
+            "Esta hoja no dice qué tipo de datos trae. Elige el tipo por defecto "
+            "de la conexión (guías, movimientos, pauta o servicio al cliente)."
+        )
+    kind = BatchKind(raw_kind)
+
+    fetcher = PublishedSheetFetcher.from_connection(
+        source_url=connection_row["source_url"],
+        secret_ref=connection_row["secret_ref"],
+    )
+    fetch = fetcher.fetch(kind)
+
+    country_code, currency_code = _country_for_connection(conn, connection_row, fetch)
+
+    engine = IngestEngine(PostgresStore(conn), pii_salt=pii_salt)
+    report = engine.ingest(
+        payload=fetch.payload,
+        source_name=fetch.filename,
+        kind=kind,
+        tenant_id=connection_row["tenant_id"],
+        connection_id=connection_row["id"],
+        country_code=country_code,
+        platform_code=connection_row["platform_code"],
+        default_currency=currency_code,
+    )
+
+    with conn.cursor() as cur:
+        cur.execute(
+            "UPDATE core.connection SET last_sync_at = now(), last_error = NULL WHERE id = %s",
+            (connection_row["id"],),
+        )
+    conn.commit()
+
+    return {
+        "kind": kind.value,
+        "country_code": country_code,
+        "already_loaded": report.already_loaded,
+        "inserted": report.rows_inserted,
+        "updated": report.rows_updated,
+        "failed": report.rows_failed,
+    }
+
+
+def _country_for_connection(
+    conn: psycopg.Connection, connection_row: dict[str, Any], fetch: Any
+) -> tuple[str, str]:
+    """Which country this sheet is about, and in what currency.
+
+    Google Sheets is a GLOBAL platform (migration 012): the connection carries no
+    country because the sheet itself is supposed to say. Same order the upload
+    queue uses - the connection, then the file, then the workspace when it runs
+    a single country - and the same refusal to guess when none of those answer.
+    """
+    from pipeline.profiles import detect_country, detect_profile
+    from pipeline.readers import read_tabular
+
+    country_code = connection_row["country_code"]
+
+    if country_code is None:
+        try:
+            headers, rows = read_tabular(fetch.payload, fetch.filename)
+            profile = detect_profile(headers, fetch.kind)
+        except Exception:
+            profile = None
+        if profile is not None:
+            country_code = detect_country(headers, rows, profile)[0]
+
+    if country_code is None:
+        with conn.cursor(row_factory=dict_row) as cur:
+            cur.execute(
+                "SELECT country_code FROM core.workspace_country "
+                "WHERE tenant_id = %s AND is_active ORDER BY country_code",
+                (connection_row["tenant_id"],),
+            )
+            active = cur.fetchall()
+        if len(active) != 1:
+            raise ValueError(
+                "No pudimos determinar el país de esta hoja: no trae columna de país "
+                "y tu workspace tiene varios activos. Agrega la columna de país a la "
+                "hoja."
+            )
+        country_code = active[0]["country_code"]
+
+    with conn.cursor(row_factory=dict_row) as cur:
+        cur.execute("SELECT currency_code FROM core.country WHERE code = %s", (country_code,))
+        country = cur.fetchone()
+    if country is None:
+        raise ValueError(f"El país '{country_code}' no está soportado por Data Effi.")
+
+    return country_code, country["currency_code"]
+
+
+JOB_NAMES = (
+    "sync_tier3",
+    "sync_sheets",
+    "relink_orphans",
+    "refresh_fx",
+    "calibrate_maturation",
+)

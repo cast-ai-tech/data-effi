@@ -222,16 +222,18 @@ def seed(conn: psycopg.Connection) -> None:
             )
             config["store_id"] = cur.fetchone()["id"]
 
+            # One global manual-upload connection for the whole workspace: the
+            # file declares its own country, so three would be two too many.
             config["connection_id"] = _connection(
-                cur, code, "manual_xlsx", f"Carga manual {code}", config["store_id"]
+                cur, code, "manual_xlsx", "Carga manual", None
             )
             if config["has_ads"]:
                 config["ads_connection_id"] = _connection(
-                    cur, code, "meta_ads", f"Meta Ads {code}", config["store_id"]
+                    cur, code, "ads_manual", f"Pauta {code}", config["store_id"]
                 )
             if config["has_cs"]:
                 config["cs_connection_id"] = _connection(
-                    cur, code, "cs_sheet", f"Confirmación CS {code}", config["store_id"]
+                    cur, code, "cs_sheet", "Confirmación CS", None
                 )
 
         conn.commit()
@@ -258,16 +260,37 @@ def seed(conn: psycopg.Connection) -> None:
 
 
 def _connection(cur, country_code: str, platform: str, name: str, store_id) -> UUID:
+    """Create a connection, honouring the platform's scope.
+
+    Manual upload is global (migration 012): the file says which country it is
+    about, so pinning the connection to one would be asking for information the
+    system already has. The database refuses the wrong shape either way.
+    """
+    cur.execute("SELECT scope FROM core.platform WHERE code = %s", (platform,))
+    row = cur.fetchone()
+    scope = row["scope"] if row else "country"
+    connection_country = None if scope == "global" else country_code
+
+    if connection_country is None:
+        # Global connections are unique on (tenant, platform, name), so the demo
+        # reuses one across every country instead of creating three.
+        cur.execute(
+            "SELECT id FROM core.connection "
+            "WHERE tenant_id = %s AND platform_code = %s AND name = %s AND country_code IS NULL",
+            (DEMO_TENANT, platform, name),
+        )
+        existing = cur.fetchone()
+        if existing:
+            return existing["id"]
+
     cur.execute(
         """
         INSERT INTO core.connection
             (tenant_id, country_code, platform_code, store_id, name, status, last_sync_at)
         VALUES (%s, %s, %s, %s, %s, 'active', now() - interval '2 hours')
-        ON CONFLICT (tenant_id, country_code, platform_code, name)
-        DO UPDATE SET last_sync_at = EXCLUDED.last_sync_at
         RETURNING id
         """,
-        (DEMO_TENANT, country_code, platform, store_id, name),
+        (DEMO_TENANT, connection_country, platform, store_id, name),
     )
     return cur.fetchone()["id"]
 

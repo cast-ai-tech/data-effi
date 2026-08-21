@@ -37,8 +37,8 @@ class SourceProfile:
     # Fields the profile promises to deliver even though no single column holds
     # them (they come out of a transform).
     derived: tuple[str, ...] = field(default=())
-    # Columns that identify a person. Hashed before ANY storage, including the
-    # raw archive. Never mapped to a field that would keep them readable.
+    # Columns that identify a person. Hashed before storage in the raw archive,
+    # always, whatever else happens to them downstream.
     pii_columns: tuple[str, ...] = field(default=())
     # Column holding the country this report is about, so the upload does not
     # have to be told.
@@ -69,9 +69,19 @@ def _norm_keys(mapping: dict[str, str]) -> dict[str, str]:
 # back to the user as ignored, which is how they find out Data Effi skipped
 # something they cared about.
 #
-# NOT MAPPED ON PURPOSE - customer PII:
-#   Destinatario, ID. destinatario, Dirección destinatario
-# The phone is mapped only so it can be hashed; it is never stored as given.
+# THE FOUR CONTACT COLUMNS are mapped, and what happens to them afterwards
+# depends on where the value is going:
+#
+#   raw.source_row   hashed, always. `redact_row` reads `pii_columns`, not this
+#                    map, so mapping a column here cannot make the archive keep
+#                    it in the clear. The archive is for auditing a file, and
+#                    auditing never needs to know whose file it was.
+#   core.shipment    encrypted (pipeline/crypto.py), because the orders table
+#                    has to render a name and a phone for the operator who is
+#                    about to call that customer back.
+#
+# The phone is mapped as `customer_identifier` because it is also what
+# `customer_hash` is derived from: one column, two jobs - identity and display.
 # =============================================================================
 
 EFFI_GUIDES_COLUMNS = _norm_keys(
@@ -84,7 +94,10 @@ EFFI_GUIDES_COLUMNS = _norm_keys(
         "Fecha de envío": "created_date",
         "Fecha de entrega esperada": "expected_delivery_date",
         "Fecha de estado final": "final_status_date",
-        "Fecha de creación": "dispatched_at",
+        # NOT dispatched_at. This is when the ERP created the guide; the goods
+        # leave on "Fecha relación de despacho", typically days later. See
+        # migration 019 - mapping it here understated preparation twelvefold.
+        "Fecha de creación": "created_at_source",
         "Fecha de anulación": "cancelled_at",
         "Fecha liquidación con recaudo": "settled_at",
         # --- status ---
@@ -96,8 +109,14 @@ EFFI_GUIDES_COLUMNS = _norm_keys(
         "Departamento destinatario": "geo_level1",
         "Ciudad destinatario": "city_name",
         "País destinatario": "country_name",
-        "Teléfonos destinatario": "customer_identifier",
         "Sucursal": "store_name",
+        # --- the customer, for the orders table ---
+        # Encrypted into core.shipment, hashed into raw.source_row. See the
+        # block comment above for why the same column goes two ways.
+        "Destinatario": "customer_name",
+        "Teléfonos destinatario": "customer_identifier",
+        "ID. destinatario": "customer_document",
+        "Dirección destinatario": "customer_address",
         "Nombre Proveedor": "supplier_name",
         "Servicio": "service_level",
         # --- product ---
@@ -138,10 +157,14 @@ EFFI_GUIDES_COLUMNS = _norm_keys(
     }
 )
 
-# Columns that identify a human being. Stored ONLY as a SHA-256, in the raw
-# archive as well as in core. Ecuador's LOPDP and Colombia's Ley 1581 both make
-# keeping these in the clear a liability, and no metric needs them: a hash still
+# Columns that identify a human being. In the raw archive they are stored ONLY
+# as a SHA-256. Ecuador's LOPDP and Colombia's Ley 1581 both make keeping these
+# in the clear a liability, and no metric needs them readable: a hash still
 # answers "same person?" and "same address?".
+#
+# The four recipient columns additionally reach core.shipment as Fernet
+# ciphertext. Encrypted is not "in the clear": the key is an environment
+# variable, so a stolen dump still reveals nothing.
 EFFI_GUIDES_PII = (
     "Destinatario",
     "ID. destinatario",
@@ -183,8 +206,18 @@ EFFI_MOVEMENTS_COLUMNS = _norm_keys(
     {
         "ID movimiento": "external_ref",
         "Tipo de movimiento": "movement_type_raw",
-        "Fecha origen": "movement_date",
-        "Fecha creación": "created_at_raw",
+        # These two are the other way round from what the names suggest, and it
+        # matters: `Fecha origen` is the date of the GUIDE the movement belongs
+        # to (identical to the guide's creation date in 707 of 707 collections),
+        # while `Fecha creación` is when the money actually moved - it matches
+        # the guide's settlement date in 698 of 707.
+        #
+        # Mapped the intuitive way, every cash event landed on the day the guide
+        # was created: the order card showed the cash-on-delivery collection
+        # FOUR DAYS BEFORE the delivery it was collected at, and the whole money
+        # series sat 4.8 days early.
+        "Fecha creación": "movement_date",
+        "Fecha origen": "shipment_created_ref",
         "Valor movimiento": "amount",
         "Detalle": "description",
         "Guía inicial": "tracking_number_raw",

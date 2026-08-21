@@ -24,3 +24,4 @@ httpx==0.28.1
 # --- AI layer ---
 google-genai==2.8.0        # newest release compatible with the pinned pydantic 2.10.6
 sqlglot==30.17.0
+cryptography==50.0.0        # PII field encryption (pipeline/crypto.py)

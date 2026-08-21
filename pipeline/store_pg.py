@@ -49,12 +49,24 @@ STATIC_COLUMNS: tuple[str, ...] = (
     "external_order_id",
     "carrier_tracking_number",
     "customer_hash",
+    # Fernet ciphertext, written as bytea. STATIC rather than PROGRESS because
+    # encryption is randomised: refreshing these on every load would produce
+    # different bytes for an unchanged phone number, so the generated
+    # `IS DISTINCT FROM` guard would report a change on every single row and
+    # SKIPPED would never happen again. COALESCE fills the gap once and leaves
+    # it alone - which is also why re-uploading a file is free.
+    "customer_name_enc",
+    "customer_phone_enc",
+    "customer_document_enc",
+    "customer_address_enc",
+    "customer_city_name",
     "carrier_id",
     "geo_id",
     "product_id",
     "store_id",
     "quantity",
     "created_date",
+    "created_at_source",
     "currency_code",
     "dispatched_at",
     "delivered_at",
@@ -248,23 +260,39 @@ class PostgresStore:
         source_name: str,
         kind: BatchKind,
         content_hash: str,
+        reprocess: bool = False,
     ) -> BatchContext:
         """Claim this file. The UNIQUE constraint is what resolves a race.
 
         Two uploads of identical bytes both reach this point; exactly one INSERT
         succeeds and the loser gets BatchAlreadyExists, which the engine turns
         into an honest "already loaded" report rather than an error.
+
+        With `reprocess` the existing batch is reopened instead - same row, same
+        id, so the archived source rows stay attached to it rather than
+        accumulating a second copy per re-run. The conflict clause still refuses
+        a plain duplicate: `WHERE false` makes DO UPDATE match nothing, which is
+        exactly the old behaviour.
         """
         with self._conn.cursor(row_factory=dict_row) as cur:
             cur.execute(
                 """
                 INSERT INTO raw.load_batch
-                    (tenant_id, connection_id, source_name, kind, content_hash, status)
-                VALUES (%s, %s, %s, %s, %s, 'running')
-                ON CONFLICT (tenant_id, connection_id, content_hash) DO NOTHING
+                    (tenant_id, connection_id, country_code, source_name, kind,
+                     content_hash, status)
+                VALUES (%s, %s, %s, %s, %s, %s, 'running')
+                ON CONFLICT (tenant_id, connection_id, content_hash) DO UPDATE
+                    SET status = 'running',
+                        started_at = now(),
+                        finished_at = NULL,
+                        error = NULL
+                    WHERE %s::boolean
                 RETURNING id
                 """,
-                (tenant_id, connection_id, source_name, kind.value, content_hash),
+                (
+                    tenant_id, connection_id, country_code, source_name, kind.value,
+                    content_hash, reprocess,
+                ),
             )
             row = cur.fetchone()
 
@@ -279,6 +307,27 @@ class PostgresStore:
             platform_code=platform_code,
             kind=kind,
         )
+
+    def clear_batch_rows(self, ctx: BatchContext) -> int:
+        """Remove what a previous run of this batch wrote.
+
+        Only rows carrying this batch_id are touched. Shipments are NOT deleted:
+        a guide is shared across batches - the guides file creates it, the money
+        file adds to it - so deleting them would throw away data this file never
+        owned. Shipments are upserted by tracking number anyway, which makes
+        re-running them harmless.
+        """
+        removed = 0
+        with self._conn.cursor(row_factory=tuple_row) as cur:
+            for table in ("core.movement", "raw.load_discrepancy", "raw.source_row"):
+                # Table names come from the literal tuple above, never from a
+                # caller; the batch id is bound as a parameter.
+                cur.execute(
+                    f"DELETE FROM {table} WHERE batch_id = %s",  # noqa: S608
+                    (ctx.batch_id,),
+                )
+                removed += cur.rowcount
+        return removed
 
     def finish_batch(self, ctx: BatchContext, report: IngestReport) -> None:
         status = "ok" if report.rows_failed == 0 else "failed"
@@ -404,6 +453,11 @@ class PostgresStore:
             "external_order_id": shipment.external_order_id,
             "carrier_tracking_number": shipment.carrier_tracking_number,
             "customer_hash": shipment.customer_hash,
+            "customer_name_enc": shipment.customer_name_enc,
+            "customer_phone_enc": shipment.customer_phone_enc,
+            "customer_document_enc": shipment.customer_document_enc,
+            "customer_address_enc": shipment.customer_address_enc,
+            "customer_city_name": shipment.customer_city_name,
             "carrier_id": carrier_id,
             "geo_id": geo_id,
             "product_id": product_id,
@@ -411,6 +465,7 @@ class PostgresStore:
             "quantity": shipment.quantity,
             "created_date": shipment.created_date,
             "currency_code": shipment.currency_code,
+            "created_at_source": shipment.created_at_source,
             "dispatched_at": shipment.dispatched_at,
             "delivered_at": shipment.delivered_at,
             "returned_at": shipment.returned_at,

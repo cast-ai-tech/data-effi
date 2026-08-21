@@ -46,7 +46,11 @@ STATUS_CANON: dict[str, CanonStatus] = {
         CanonStatus("in_office", "En oficina", 52, False, False, False, "pipeline"),
         CanonStatus("delivery_issue", "Novedad", 55, False, False, False, "pipeline"),
         CanonStatus("delivered", "Entregada", 60, True, True, False, "delivered"),
-        CanonStatus("returning", "En devolución", 70, False, False, False, "returned"),
+        # Terminal and counted as returned since migration 024: the carrier has
+        # already charged the return freight and closed the settlement, so the
+        # sale is lost, not pending. Leaving is_returned false made the delivery
+        # rate 100% by construction - the divisor could never grow.
+        CanonStatus("returning", "En devolución", 70, True, False, True, "returned"),
         CanonStatus("returned", "Devuelta", 80, True, False, True, "returned"),
         CanonStatus("cancelled", "Cancelada", 90, True, False, False, "dead"),
         CanonStatus("lost", "Extraviada", 95, True, False, False, "dead"),
@@ -123,6 +127,26 @@ def resolve_status(raw_value: object) -> tuple[str, bool]:
         if key.startswith(alias + " ") or key.startswith(alias + "-") or key.startswith(alias + "("):
             return mapped, True
     return DEFAULT_STATUS, False
+
+
+# Expected direction of each movement type, mirroring core.movement_type.sign.
+# A row whose amount contradicts its type is a reversal, a correction, or a
+# misclassification - and `abs()` in the ingestion loop would hide all three by
+# turning a refunded collection into revenue. A test compares this to the table.
+MOVEMENT_TYPE_SIGNS: dict[str, int] = {
+    "adjustment_in": 1,
+    "adjustment_out": -1,
+    "cod_collected": 1,
+    "collection_fee": -1,
+    "freight_out": -1,
+    "freight_return": -1,
+    "insurance": -1,
+    "platform_fee": -1,
+    "product_cost": -1,
+    "tax_withholding": 1,
+    "withdrawal": -1,
+    "withdrawal_fee": -1,
+}
 
 
 # Mirror of core.movement_type (migration 002).

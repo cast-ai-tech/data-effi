@@ -3,7 +3,7 @@
 READ THIS BEFORE CALLING IT "LEARNING".
 
 The model is not fine-tuned. No weights are updated by anything in this file, or
-anywhere else in Norte. Gemini is exactly as capable after a thousand
+anywhere else in Data Effi. Gemini is exactly as capable after a thousand
 conversations as it was after zero.
 
 What DOES improve is the context it answers from, and that is not a figure of
@@ -335,6 +335,47 @@ def infer_thresholds(
             _store(*result)
 
     return derived
+
+
+def ensure_thresholds(
+    conn: psycopg.Connection, tenant_id: UUID, country_code: str
+) -> None:
+    """Derive the operation's normals, but only when they are missing or stale.
+
+    `infer_thresholds` runs four aggregate queries and writes four rows. Doing
+    that on every single question would put a write on the read path for numbers
+    that move over weeks, not seconds - so it runs when there is nothing stored,
+    or when what is stored has expired. Ingestion re-derives them anyway, which
+    is where a real change actually arrives from.
+
+    Never raises: a missing threshold makes the answer less specific, not absent.
+    """
+    try:
+        row = fetch_one(
+            conn,
+            """
+            SELECT count(*) AS fresh
+            FROM raw.ai_memory
+            WHERE tenant_id = %s AND country_code = %s
+              AND kind = 'threshold' AND source = 'inferred'
+              AND (expires_at IS NULL OR expires_at > now())
+            """,
+            (tenant_id, country_code.upper()),
+        )
+        if row and int(row["fresh"]) > 0:
+            return
+        infer_thresholds(conn, tenant_id, country_code)
+    except Exception:
+        logger.warning("threshold refresh failed for %s", country_code, exc_info=True)
+
+
+def build_prompt_memory(
+    conn: psycopg.Connection, tenant_id: UUID, country_code: str | None
+) -> str:
+    """The block that goes into a system prompt: inferred normals + stored facts."""
+    if country_code:
+        ensure_thresholds(conn, tenant_id, country_code)
+    return recall_block(conn, tenant_id, country_code)
 
 
 def _confidence_for(volume: int, *, full_at: int) -> float:

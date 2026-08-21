@@ -119,6 +119,13 @@ def record_usage(
         )
 
 
+# Headroom for reasoning tokens, on top of whatever the caller asked for.
+# Sized from observation, not from the documented budget: see the note in
+# call_llm. Generous on purpose - the cost of over-reserving is nothing, the
+# cost of under-reserving is a truncated sentence shown to the operator.
+THINKING_RESERVE = 1024
+
+
 def call_llm(
     settings: Settings,
     *,
@@ -161,16 +168,36 @@ def call_llm(
             config=types.GenerateContentConfig(
                 # Gemini takes the system prompt here, not as a message role.
                 system_instruction=system,
-                max_output_tokens=max_tokens,
+                # Thinking is billed against this ceiling, so the reserve is
+                # added on top of what the caller asked for.
+                #
+                # The reserve is NOT ai_thinking_budget. Measured against
+                # gemini-3.6-flash, that budget is a hint the model ignores: ask
+                # for 128 and it spends 391-509 on a three-sentence answer. With
+                # a ceiling of max_tokens + 128 the reply got roughly 128 tokens
+                # of the 628 and stopped mid-word - the copilot was cutting every
+                # answer at about a hundred characters while reporting a clean
+                # finish.
+                max_output_tokens=max_tokens + THINKING_RESERVE,
                 temperature=temperature,
-                # Thinking tokens are charged against max_output_tokens. Left on,
-                # a 600-token brief spends its whole budget reasoning and comes
-                # back empty, so the callers' token ceilings mean what they say.
-                thinking_config=types.ThinkingConfig(thinking_budget=0),
+                # Thinking tokens are charged against max_output_tokens. Left
+                # unbounded, a 600-token brief spends its whole budget reasoning
+                # and comes back empty, so the callers' ceilings mean what they
+                # say. It is capped rather than switched off: Gemini 3.x rejects
+                # thinking_budget=0 outright with a 400, so the old "disable it"
+                # setting made every call fail the moment the model moved on
+                # from 2.5.
+                thinking_config=types.ThinkingConfig(
+                    thinking_budget=settings.ai_thinking_budget
+                ),
             ),
         )
     except Exception as exc:
-        logger.warning("LLM call failed: %s", type(exc).__name__)
+        # The class name alone is useless for diagnosis: every upstream refusal
+        # arrives as ClientError, and the reason - wrong model, unsupported
+        # argument, exhausted quota - lives only in the message.
+        logger.warning("LLM call failed (model=%s): %s: %s",
+                       settings.ai_model, type(exc).__name__, exc)
         raise AiUnavailable(
             "El copiloto no respondió a tiempo. Vuelve a intentarlo en un momento.",
             reason="upstream_error",

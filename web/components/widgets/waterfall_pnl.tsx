@@ -26,8 +26,8 @@ import {
 
 import { Card, EmptyState, ErrorState, SkeletonRows } from "@/components/ui";
 import type { WidgetProps } from "@/components/widgets/types";
+import { useRangedApi } from "@/lib/date-range";
 import { formatMoney } from "@/lib/format";
-import { useApi } from "@/lib/hooks";
 import type { DailyContribution } from "@/lib/types";
 
 /** Rounding noise below this is not worth a footnote. */
@@ -49,18 +49,9 @@ function sumBy(
   return rows.reduce((total, row) => total + (pick(row) ?? 0), 0);
 }
 
-export default function WaterfallPnl({
-  countryCode,
-  country,
-  dateFrom,
-  dateTo,
-}: WidgetProps) {
-  const params = new URLSearchParams({ country: countryCode });
-  if (dateFrom) params.set("date_from", dateFrom);
-  if (dateTo) params.set("date_to", dateTo);
-
-  const { data, error, loading, reload } = useApi<DailyContribution[]>(
-    `/kpis/daily-contribution?${params.toString()}`,
+export default function WaterfallPnl({ countryCode, country }: WidgetProps) {
+  const { data, error, loading, reload } = useRangedApi<DailyContribution[]>(
+    `/kpis/daily-contribution?country=${countryCode}`,
   );
 
   const model = useMemo(() => {

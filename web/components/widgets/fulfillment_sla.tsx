@@ -26,9 +26,9 @@ import {
 
 import { Card, EmptyState, ErrorState, MicroBar, SkeletonRows } from "@/components/ui";
 import type { WidgetProps } from "@/components/widgets/types";
+import { useRangedApi } from "@/lib/date-range";
 import type { FormatCountry } from "@/lib/format";
 import { formatNumber, formatPercent } from "@/lib/format";
-import { useApi } from "@/lib/hooks";
 import type { FulfillmentSlaRow } from "@/lib/types";
 
 /** Yours. */
@@ -169,7 +169,7 @@ function ChartTooltip({
 // ---------------------------------------------------------------------------
 
 export default function FulfillmentSla({ countryCode, country }: WidgetProps) {
-  const { data, error, loading, reload } = useApi<FulfillmentSlaRow[]>(
+  const { data, error, loading, reload } = useRangedApi<FulfillmentSlaRow[]>(
     `/kpis/fulfillment?country=${countryCode}`,
   );
 

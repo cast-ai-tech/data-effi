@@ -13,7 +13,7 @@ from __future__ import annotations
 
 import pytest
 
-from ai.nl2sql import ALLOWED_VIEWS, MAX_ROWS, validate_sql
+from ai.nl2sql import ALLOWED_VIEWS, MAX_ROWS, NEVER_ALLOWED_VIEWS, validate_sql
 
 # =============================================================================
 # Must be rejected
@@ -89,6 +89,36 @@ UNKNOWN_VIEWS = [
     "SELECT * FROM mart.pg_stat_activity",
 ]
 
+# Views that EXIST in mart, that the application legitimately reads, and that a
+# generated query must never reach. These are the dangerous ones precisely
+# because they are real: a typo in ALLOWED_VIEWS makes them work.
+#
+#   v_source_row_archive - every original column of every loaded row. Customer
+#       name, national id, address and phone are SHA-256 in there, but a hash is
+#       still a row-level record of a real person, and the operator's ask for
+#       "any data in the platform" meant every business aggregate, not every
+#       customer.
+#   v_ai_memory - what the copilot remembers. Text the model already trusts,
+#       partly written by users. A generated query that can read it is a
+#       generated query that can be steered by it.
+PII_AND_MEMORY_VIEWS = [
+    "SELECT * FROM mart.v_source_row_archive",
+    "SELECT payload FROM mart.v_source_row_archive LIMIT 10",
+    "SELECT entity_key, redacted_fields FROM mart.v_source_row_archive",
+    "SELECT * FROM v_source_row_archive",
+    "WITH leak AS (SELECT payload FROM mart.v_source_row_archive) SELECT * FROM leak",
+    "SELECT * FROM mart.v_aging UNION ALL SELECT * FROM mart.v_source_row_archive",
+    "SELECT * FROM mart.v_aging a JOIN mart.v_source_row_archive s ON true",
+    "SELECT * FROM mart.v_ai_memory",
+    "SELECT key, value FROM mart.v_ai_memory WHERE kind = 'correction'",
+    "SELECT * FROM v_ai_memory",
+    "SELECT (SELECT value FROM mart.v_ai_memory LIMIT 1) AS x FROM mart.v_aging",
+    "SELECT * FROM raw.source_row",
+    "SELECT payload FROM raw.source_row LIMIT 1",
+    "SELECT * FROM raw.ai_memory",
+    "SELECT * FROM raw.ai_message",
+]
+
 ALL_ATTACKS = (
     WRITE_OPERATIONS
     + STACKED_STATEMENTS
@@ -97,6 +127,7 @@ ALL_ATTACKS = (
     + SYSTEM_FUNCTIONS
     + MALFORMED
     + UNKNOWN_VIEWS
+    + PII_AND_MEMORY_VIEWS
 )
 
 
@@ -121,7 +152,48 @@ def test_battery_covers_every_attack_class():
     assert len(FORBIDDEN_SCHEMAS) >= 8
     assert len(NESTED_ESCAPES) >= 6
     assert len(SYSTEM_FUNCTIONS) >= 10
+    assert len(PII_AND_MEMORY_VIEWS) >= 12
     assert len(ALL_ATTACKS) >= 45
+
+
+@pytest.mark.parametrize("payload", PII_AND_MEMORY_VIEWS)
+def test_row_level_and_memory_views_are_unreachable(payload):
+    """The explicit version of the rule, stated once so it cannot be lost.
+
+    `raw.source_row` and `mart.v_source_row_archive` hold row-level customer
+    data. They are not reachable by a generated query, and widening what the
+    copilot can answer must never widen this.
+    """
+    result = validate_sql(payload)
+    assert result.rejected, f"REACHED ROW-LEVEL DATA: {payload!r}"
+    assert result.sql is None
+
+
+def test_never_allowed_views_are_not_on_the_allow_list():
+    """One assertion that fails if someone pastes the wrong name into the set."""
+    assert NEVER_ALLOWED_VIEWS
+    assert not (NEVER_ALLOWED_VIEWS & ALLOWED_VIEWS)
+    assert "v_source_row_archive" in NEVER_ALLOWED_VIEWS
+    assert "v_ai_memory" in NEVER_ALLOWED_VIEWS
+
+
+def test_new_business_views_are_reachable():
+    """The widening asked for: every business aggregate, and nothing else."""
+    widened = {
+        "v_problem_rate",
+        "v_cash_cycle",
+        "v_dropshipping_margin",
+        "v_fulfillment_sla",
+        "v_office_rescue",
+        "v_freight_analysis",
+        "v_product_catalogue",
+    }
+    assert widened <= ALLOWED_VIEWS
+
+    for view in sorted(widened):
+        result = validate_sql(f"SELECT * FROM mart.{view}")  # noqa: S608 - view name from a literal set
+        assert result.ok, f"wrongly rejected mart.{view}: {result.reason}"
+        assert result.tables == [f"mart.{view}"]
 
 
 # =============================================================================
@@ -194,6 +266,9 @@ def test_referenced_tables_are_reported():
 def test_allowlist_holds_only_business_views():
     """No view outside mart, and nothing that could expose raw rows or PII."""
     assert all(name.startswith("v_") for name in ALLOWED_VIEWS)
-    forbidden_fragments = ("shipment_economics", "app_user", "source_row", "auth_event")
+    forbidden_fragments = (
+        "shipment_economics", "app_user", "source_row", "auth_event", "ai_memory",
+        "ai_message", "ai_conversation", "ai_feedback",
+    )
     for name in ALLOWED_VIEWS:
         assert not any(fragment in name for fragment in forbidden_fragments)

@@ -13,8 +13,10 @@
 import Link from "next/link";
 import { useMemo } from "react";
 
+import { BasisDisclosure, useBasisReport } from "@/components/DateBasisNote";
 import { WIDGET_REGISTRY } from "@/components/widgets/registry";
 import { Card, cx } from "@/components/ui";
+import { DateBasisScope } from "@/lib/date-range";
 import type { Country, LayoutWidget } from "@/lib/types";
 
 const DOMAIN_LABELS: Record<string, string> = {
@@ -29,18 +31,21 @@ export function describeDomains(domains: string[]): string {
   return domains.map((domain) => DOMAIN_LABELS[domain] ?? domain).join(", ");
 }
 
+/**
+ * The date range is NOT passed in. Every widget reads it from
+ * `useRangedApi`, which takes it from the URL - so a widget added later cannot
+ * forget to wire a prop and silently render unfiltered numbers next to
+ * filtered ones.
+ */
 export function WidgetRenderer({
   widget,
   country,
-  dateFrom,
-  dateTo,
 }: {
   widget: LayoutWidget;
   country: Country;
-  dateFrom?: string;
-  dateTo?: string;
 }) {
   const Component = useMemo(() => WIDGET_REGISTRY[widget.widget_code], [widget.widget_code]);
+  const { note, onBasis } = useBasisReport();
 
   if (widget.state === "blocked") {
     return <BlockedWidget widget={widget} />;
@@ -59,9 +64,13 @@ export function WidgetRenderer({
     );
   }
 
+  // A degraded widget can also be one that ignores the range, so two bands can
+  // stack; only the topmost one rounds off the corner.
+  const degraded = Boolean(widget.state === "degraded" && widget.state_message);
+
   return (
     <div className="relative">
-      {widget.state === "degraded" && widget.state_message && (
+      {degraded && (
         <div
           className="flex items-start gap-2 rounded-t-[12px] border border-b-0 border-warning/25 bg-warning/[0.08] px-4 py-2"
           role="status"
@@ -70,15 +79,17 @@ export function WidgetRenderer({
           <p className="text-[11.5px] leading-snug text-warning">{widget.state_message}</p>
         </div>
       )}
-      <div className={cx(widget.state === "degraded" && "[&>section]:rounded-t-none")}>
-        <Component
-          countryCode={country.code}
-          country={country}
-          dateFrom={dateFrom}
-          dateTo={dateTo}
-          state={widget.state}
-          message={widget.state_message}
-        />
+      <div className={cx(degraded && "[&>section]:rounded-t-none")}>
+        <BasisDisclosure note={note} rounded={!degraded}>
+          <DateBasisScope onBasis={onBasis}>
+            <Component
+              countryCode={country.code}
+              country={country}
+              state={widget.state}
+              message={widget.state_message}
+            />
+          </DateBasisScope>
+        </BasisDisclosure>
       </div>
     </div>
   );

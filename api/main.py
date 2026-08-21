@@ -17,7 +17,7 @@ from fastapi.responses import JSONResponse
 from api.db import close_pools, healthcheck, init_pools
 from api.errors import register_error_handlers
 from api.ingest_queue import get_queue, init_queue
-from api.routers import ai, auth, config, ingest, kpis, worker
+from api.routers import ai, auth, config, customers, ingest, kpis, orders, products, worker
 from api.settings import get_settings
 
 logger = logging.getLogger(__name__)
@@ -102,6 +102,9 @@ def create_app() -> FastAPI:
     app.include_router(config.router)
     app.include_router(ingest.router)
     app.include_router(kpis.router)
+    app.include_router(products.router)
+    app.include_router(orders.router)
+    app.include_router(customers.router)
     app.include_router(ai.router)
     app.include_router(worker.router)
 

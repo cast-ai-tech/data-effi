@@ -22,8 +22,8 @@ import { useMemo, useState } from "react";
 
 import type { WidgetProps } from "@/components/widgets/types";
 import { Card, EmptyState, ErrorState, MicroBar, SkeletonRows, cx } from "@/components/ui";
+import { useRangedApi } from "@/lib/date-range";
 import { formatMoney, formatNumber, formatPercent } from "@/lib/format";
-import { useApi } from "@/lib/hooks";
 import type { CarrierRow } from "@/lib/types";
 
 /** Columns whose figures must line up on the right edge. */
@@ -41,6 +41,38 @@ function deliveryTone(pct: number | null): "positive" | "warning" | "negative" {
   if (pct >= 75) return "positive";
   if (pct >= 60) return "warning";
   return "negative";
+}
+
+/**
+ * Fewer than ten terminal guides behind the percentages (migration 021).
+ *
+ * The same rule the city traffic light has had since migration 003, arriving
+ * here for the same reason: inside a narrow window a carrier can have two
+ * terminal guides and print "50,0% de entrega" next to carriers measured over
+ * hundreds. The reader compares them and moves volume away from a carrier that
+ * was never measured.
+ *
+ * The rate is still shown - a blank cell explains nothing - but it is marked as
+ * an estimate rather than presented as measured.
+ */
+function isShortSample(row: CarrierRow): boolean {
+  return row.sample_quality === "muestra_corta";
+}
+
+const SHORT_SAMPLE_HINT =
+  "Menos de 10 guías terminales en este rango: el porcentaje es un estimado, " +
+  "no una medición. Amplíe el rango para compararlo con las demás.";
+
+/** Deliberately quiet: a badge per row, not a banner. */
+function ShortSampleMark() {
+  return (
+    <abbr
+      title={SHORT_SAMPLE_HINT}
+      className="ml-1 cursor-help align-middle text-[10px] font-semibold text-ink-dim no-underline"
+    >
+      ~
+    </abbr>
+  );
 }
 
 /** Nulls sort to the bottom instead of pretending to be zero. */
@@ -111,7 +143,7 @@ function computeTotals(rows: CarrierRow[]): CarrierTotals {
 }
 
 export default function CarrierTable({ countryCode, country }: WidgetProps) {
-  const { data, error, loading, reload } = useApi<CarrierRow[]>(
+  const { data, error, loading, reload } = useRangedApi<CarrierRow[]>(
     `/kpis/carriers?country=${countryCode}`,
   );
 
@@ -121,6 +153,7 @@ export default function CarrierTable({ countryCode, country }: WidgetProps) {
 
   const rows = useMemo<CarrierRow[]>(() => data ?? [], [data]);
   const totals = useMemo(() => computeTotals(rows), [rows]);
+  const shortSamples = useMemo(() => rows.filter(isShortSample).length, [rows]);
 
   const columns = useMemo(() => {
     const column = createColumnHelper<CarrierRow>();
@@ -145,12 +178,17 @@ export default function CarrierTable({ countryCode, country }: WidgetProps) {
         cell: (info) => {
           const value = info.getValue();
           return (
-            <MicroBar
-              value={value}
-              max={100}
-              tone={deliveryTone(value)}
-              label={formatPercent(value)}
-            />
+            <div className="flex items-center gap-1">
+              <div className="min-w-0 flex-1">
+                <MicroBar
+                  value={value}
+                  max={100}
+                  tone={deliveryTone(value)}
+                  label={formatPercent(value)}
+                />
+              </div>
+              {isShortSample(info.row.original) && <ShortSampleMark />}
+            </div>
           );
         },
       }),
@@ -158,12 +196,17 @@ export default function CarrierTable({ countryCode, country }: WidgetProps) {
         header: "% devolución",
         sortingFn: numericSort,
         cell: (info) => (
-          <MicroBar
-            value={info.getValue()}
-            max={100}
-            tone="negative"
-            label={formatPercent(info.getValue())}
-          />
+          <div className="flex items-center gap-1">
+            <div className="min-w-0 flex-1">
+              <MicroBar
+                value={info.getValue()}
+                max={100}
+                tone="negative"
+                label={formatPercent(info.getValue())}
+              />
+            </div>
+            {isShortSample(info.row.original) && <ShortSampleMark />}
+          </div>
         ),
       }),
       column.accessor("avg_days_to_deliver", {
@@ -352,6 +395,17 @@ export default function CarrierTable({ countryCode, country }: WidgetProps) {
           </tfoot>
         </table>
       </div>
+
+      {/* A lone "~" beside a number is only discreet if something says what it
+          means. Shown only when a row actually carries one. */}
+      {shortSamples > 0 && (
+        <p className="border-t border-line-subtle px-3 py-2 text-[10.5px] leading-snug text-ink-dim">
+          <span className="font-semibold text-ink-2">~</span> {SHORT_SAMPLE_HINT}{" "}
+          {shortSamples === 1
+            ? "Afecta a 1 transportadora."
+            : `Afecta a ${shortSamples} transportadoras.`}
+        </p>
+      )}
     </Card>
   );
 }

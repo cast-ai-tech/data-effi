@@ -304,7 +304,7 @@ function AskBlock({ countryCode }: { countryCode: string | null }) {
                 <thead className="sticky top-0 bg-sunken">
                   <tr>
                     {result.columns.map((column) => (
-                      <th
+                      <th scope="col"
                         key={column}
                         className="whitespace-nowrap px-2 py-1.5 text-left font-semibold text-ink-dim"
                       >

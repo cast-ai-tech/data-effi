@@ -1,15 +1,21 @@
 "use client";
 
-/** Countries, connections, users and the maturation window. */
+/**
+ * Countries, people and the maturation window.
+ *
+ * Connections used to live here too. They earned their own screen once the
+ * catalogue grew past a dropdown - see app/connections/page.tsx.
+ */
 
+import Link from "next/link";
 import { useState } from "react";
 
 import { AppShell } from "@/components/AppShell";
-import { Button, Card, Chip, EmptyState, SkeletonRows, StatusDot } from "@/components/ui";
+import { Button, Card, Chip, SkeletonRows } from "@/components/ui";
 import { ApiError, api } from "@/lib/api";
-import { countryFlag, formatRelative } from "@/lib/format";
+import { countryFlag } from "@/lib/format";
 import { useApi } from "@/lib/hooks";
-import type { Connection, Country, Platform, User } from "@/lib/types";
+import type { Country, User } from "@/lib/types";
 
 export default function SettingsPage() {
   const [error, setError] = useState<string | null>(null);
@@ -19,7 +25,7 @@ export default function SettingsPage() {
       <header className="mb-5">
         <h1 className="text-[22px] font-bold tracking-tight">Configuración</h1>
         <p className="mt-1 text-[12px] text-ink-dim">
-          Países, conexiones, personas y cómo se mide la maduración.
+          Países, personas y cómo se mide la maduración.
         </p>
       </header>
 
@@ -31,7 +37,7 @@ export default function SettingsPage() {
 
       <div className="space-y-4">
         <CountriesSection onError={setError} />
-        <ConnectionsSection onError={setError} />
+        <ConnectionsLink />
         <UsersSection />
         <Tier3Notice />
       </div>
@@ -119,211 +125,27 @@ function CountriesSection({ onError }: { onError: (message: string) => void }) {
   );
 }
 
-function ConnectionsSection({ onError }: { onError: (message: string) => void }) {
-  const { data: connections, loading, reload } = useApi<Connection[]>("/config/connections");
-  const { data: countries } = useApi<Country[]>("/config/countries");
-  const [adding, setAdding] = useState(false);
-
-  const active = (countries ?? []).filter((country) => country.is_active);
-
-  async function remove(connection: Connection) {
-    try {
-      await api.delete(`/config/connections/${connection.connection_id}`);
-      reload();
-    } catch (err) {
-      onError(err instanceof ApiError ? err.message : "No se pudo eliminar");
-    }
-  }
-
-  const tone = (health: Connection["health"]) =>
-    health === "ok"
-      ? "positive"
-      : health === "error"
-        ? "negative"
-        : health === "disabled"
-          ? "neutral"
-          : "warning";
-
+/**
+ * Connections moved out. A link is left behind because this is where anyone who
+ * used the old screen will look first.
+ */
+function ConnectionsLink() {
   return (
-    <Card
-      title="Conexiones"
-      subtitle="Las credenciales viven en el servidor, nunca en esta pantalla"
-      actions={
-        <Button size="sm" variant="ghost" onClick={() => setAdding(!adding)}>
-          {adding ? "Cancelar" : "Nueva conexión"}
-        </Button>
-      }
-    >
-      {adding && (
-        <NewConnectionForm
-          countries={active}
-          onCreated={() => {
-            setAdding(false);
-            reload();
-          }}
-          onError={onError}
-        />
-      )}
-
-      {loading && <SkeletonRows rows={3} />}
-
-      {!loading && (connections ?? []).length === 0 && !adding && (
-        <EmptyState
-          title="Sin conexiones"
-          instruction="Crea una conexión de carga manual para poder subir tus reportes."
-        />
-      )}
-
-      {(connections ?? []).map((connection) => (
-        <div
-          key={connection.connection_id}
-          className="flex flex-wrap items-center justify-between gap-3 border-t border-line-row py-3"
+    <Card title="Conexiones" subtitle="Ahora viven en su propia pantalla">
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <p className="max-w-lg text-[12px] leading-relaxed text-ink-2">
+          El catálogo completo —pauta, tiendas, CRM, fulfillment, automatización y
+          archivos— y el estado de cada fuente están en Conexiones. Las credenciales
+          siguen viviendo en el servidor, nunca en una pantalla.
+        </p>
+        <Link
+          href="/connections"
+          className="inline-flex shrink-0 items-center rounded-[8px] border border-line-input px-3 py-1.5 text-[12px] font-semibold text-ink-2 no-underline transition-colors hover:border-accent hover:text-accent"
         >
-          <div className="min-w-0">
-            <p className="flex items-center gap-2 text-[13px] font-medium text-ink">
-              {countryFlag(connection.country_code)} {connection.connection_name}
-              {connection.tier === 3 && <Chip tone="warning">Tier 3</Chip>}
-            </p>
-            <p className="mt-0.5 flex items-center gap-1.5 text-[11px] text-ink-dim">
-              <StatusDot tone={tone(connection.health)} />
-              {connection.platform_name} ·{" "}
-              {connection.last_sync_at
-                ? `sincronizó ${formatRelative(connection.last_sync_at)}`
-                : "nunca sincronizó"}
-            </p>
-            {connection.last_error && (
-              <p className="mt-1 text-[11px] text-negative">{connection.last_error}</p>
-            )}
-            {connection.consent_granted_at && (
-              <p className="mt-1 text-[11px] text-ink-faint">
-                Consentimiento otorgado {formatRelative(connection.consent_granted_at)}
-              </p>
-            )}
-          </div>
-
-          <Button size="sm" variant="danger" onClick={() => remove(connection)}>
-            Eliminar
-          </Button>
-        </div>
-      ))}
+          Ir a Conexiones
+        </Link>
+      </div>
     </Card>
-  );
-}
-
-function NewConnectionForm({
-  countries,
-  onCreated,
-  onError,
-}: {
-  countries: Country[];
-  onCreated: () => void;
-  onError: (message: string) => void;
-}) {
-  const [countryCode, setCountryCode] = useState(countries[0]?.code ?? "");
-  const [platformCode, setPlatformCode] = useState("");
-  const [name, setName] = useState("");
-  const [consent, setConsent] = useState(false);
-  const [pending, setPending] = useState(false);
-
-  const { data: platforms } = useApi<Platform[]>(
-    countryCode ? `/config/platforms?country=${countryCode}` : null,
-    [countryCode],
-  );
-
-  const selected = (platforms ?? []).find((p) => p.platform_code === platformCode);
-
-  async function submit(event: React.FormEvent) {
-    event.preventDefault();
-    setPending(true);
-    try {
-      await api.post("/config/connections", {
-        country_code: countryCode,
-        platform_code: platformCode,
-        name: name || selected?.platform_name || "Conexión",
-        consent_granted: consent,
-      });
-      onCreated();
-    } catch (err) {
-      onError(err instanceof ApiError ? err.message : "No se pudo crear la conexión");
-    } finally {
-      setPending(false);
-    }
-  }
-
-  return (
-    <form
-      onSubmit={submit}
-      className="mb-4 space-y-3 rounded-[10px] border border-line bg-sunken p-4"
-    >
-      <div className="grid gap-3 sm:grid-cols-3">
-        <label className="block">
-          <span className="mb-1 block text-[11.5px] text-ink-muted">País</span>
-          <select
-            value={countryCode}
-            onChange={(event) => {
-              setCountryCode(event.target.value);
-              setPlatformCode("");
-            }}
-            className="w-full rounded-[8px] border border-line-input bg-surface px-3 py-2 text-[13px]"
-          >
-            {countries.map((country) => (
-              <option key={country.code} value={country.code}>
-                {country.name}
-              </option>
-            ))}
-          </select>
-        </label>
-
-        <label className="block">
-          <span className="mb-1 block text-[11.5px] text-ink-muted">Plataforma</span>
-          <select
-            value={platformCode}
-            onChange={(event) => setPlatformCode(event.target.value)}
-            className="w-full rounded-[8px] border border-line-input bg-surface px-3 py-2 text-[13px]"
-            required
-          >
-            <option value="">Elige…</option>
-            {(platforms ?? []).map((platform) => (
-              <option key={platform.platform_code} value={platform.platform_code}>
-                {platform.platform_name} (Tier {platform.tier})
-              </option>
-            ))}
-          </select>
-        </label>
-
-        <label className="block">
-          <span className="mb-1 block text-[11.5px] text-ink-muted">Nombre</span>
-          <input
-            value={name}
-            onChange={(event) => setName(event.target.value)}
-            placeholder={selected?.platform_name ?? "Mi conexión"}
-            className="w-full rounded-[8px] border border-line-input bg-surface px-3 py-2 text-[13px]"
-          />
-        </label>
-      </div>
-
-      {selected?.requires_consent && (
-        <label className="flex items-start gap-2.5 rounded-[8px] border border-warning/30 bg-warning/[0.07] p-3">
-          <input
-            type="checkbox"
-            checked={consent}
-            onChange={(event) => setConsent(event.target.checked)}
-            className="mt-0.5"
-          />
-          <span className="text-[11.5px] leading-relaxed text-warning">
-            Entiendo que esta es una conexión <b>Tier 3</b>: Data Effi entrará con mi sesión de
-            usuario a {selected.platform_name}. Puede ir contra los términos de esa
-            plataforma y la responsabilidad es mía. Leí <code>docs/tier3-politica.md</code>.
-          </span>
-        </label>
-      )}
-
-      <div className="flex justify-end gap-2">
-        <Button type="submit" size="sm" disabled={pending || !platformCode}>
-          {pending ? "Creando…" : "Crear conexión"}
-        </Button>
-      </div>
-    </form>
   );
 }
 

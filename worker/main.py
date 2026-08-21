@@ -25,6 +25,7 @@ from worker.jobs import (
     job_calibrate_maturation,
     job_refresh_fx,
     job_relink_orphans,
+    job_sync_sheets,
     job_sync_tier3,
     run_job,
 )
@@ -62,6 +63,7 @@ def run_named_job(job_name: str) -> dict[str, Any]:
             pii_salt=settings.pii_hash_salt,
             enabled=settings.tier3_fetch_enabled,
         ),
+        "sync_sheets": lambda conn: job_sync_sheets(conn, pii_salt=settings.pii_hash_salt),
     }
 
     body = bodies.get(job_name)
@@ -80,6 +82,15 @@ def build_scheduler() -> BlockingScheduler:
         lambda: run_named_job("sync_tier3"),
         CronTrigger(hour="6,18", minute=15),
         id="sync_tier3",
+        max_instances=1,
+        coalesce=True,
+    )
+    # A published sheet is the operator's own working file: they edit it during
+    # the day and expect the dashboard to catch up without being asked.
+    scheduler.add_job(
+        lambda: run_named_job("sync_sheets"),
+        CronTrigger(minute="5,35"),
+        id="sync_sheets",
         max_instances=1,
         coalesce=True,
     )

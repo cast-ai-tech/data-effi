@@ -28,8 +28,8 @@ import { useMemo, useState } from "react";
 
 import { Card, Chip, EmptyState, ErrorState, SkeletonRows, cx } from "@/components/ui";
 import type { WidgetProps } from "@/components/widgets/types";
+import { useRangedApi } from "@/lib/date-range";
 import { formatMoney, formatNumber, formatPercent } from "@/lib/format";
-import { useApi } from "@/lib/hooks";
 import type { DropshippingMarginRow } from "@/lib/types";
 
 /** Figures that must line up on the right edge. */
@@ -70,7 +70,7 @@ function losesMoney(row: DropshippingMarginRow): boolean {
 }
 
 export default function DropshippingMargin({ countryCode, country }: WidgetProps) {
-  const { data, error, loading, reload } = useApi<DropshippingMarginRow[]>(
+  const { data, error, loading, reload } = useRangedApi<DropshippingMarginRow[]>(
     `/kpis/dropshipping-margin?country=${countryCode}`,
   );
 

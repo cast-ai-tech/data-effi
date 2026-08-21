@@ -8,9 +8,11 @@
  */
 
 import AgingBars from "@/components/widgets/aging_bars";
+import CapitalInStreet from "@/components/widgets/capital_in_street";
 import CarrierTable from "@/components/widgets/carrier_table";
 import CashCycle from "@/components/widgets/cash_cycle";
 import CohortCurve from "@/components/widgets/cohort_curve";
+import ContributionSplitWidget from "@/components/widgets/contribution_split";
 import CpaRoas from "@/components/widgets/cpa_roas";
 import CsConfirmation from "@/components/widgets/cs_confirmation";
 import DropshippingMargin from "@/components/widgets/dropshipping_margin";
@@ -44,6 +46,10 @@ export const WIDGET_REGISTRY: Record<string, WidgetComponent> = {
   office_rescue: OfficeRescue,
   freight_analysis: FreightAnalysis,
   cash_cycle: CashCycle,
+
+  // Orders, customers and the honest contribution split (migration 015).
+  contribution_split: ContributionSplitWidget,
+  capital_in_street: CapitalInStreet,
 };
 
 /** Tabs of the country dashboard, in display order. */

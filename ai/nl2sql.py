@@ -34,7 +34,7 @@ STATEMENT_TIMEOUT_MS = 5_000
 # from core, nothing from raw, nothing from stg, no catalogs.
 #
 # THE OPERATOR ASKED FOR "ANY DATA IN THE PLATFORM". This list is the answer to
-# that: every business aggregate Norte computes is reachable. What is NOT on it,
+# that: every business aggregate Data Effi computes is reachable. What is NOT on it,
 # and never will be:
 #
 #   * mart.v_source_row_archive - the original file rows. Customer name, id,

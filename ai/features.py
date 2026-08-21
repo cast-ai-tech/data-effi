@@ -1,4 +1,4 @@
-"""The three AI features: daily brief, alerts, and ask-your-data.
+"""The AI features: daily brief, alerts, and ask-your-data with memory.
 
 What the model is allowed to do here is deliberately small:
 
@@ -9,6 +9,18 @@ What the model is allowed to do here is deliberately small:
   problems.
 * ASK - it writes SQL, which is then parsed, vetted, and executed as a read-only
   role. Then it writes prose from the result.
+
+WHAT MEMORY ADDS, AND WHAT IT DOES NOT.
+
+Both the brief and the ask flow now carry a block of stored facts about this
+operation (see `ai/memory.py`) and the last few turns of the conversation. That
+is retrieval, not training: the model's weights are untouched and always will
+be. What changes is that it knows 62% is this operation's own median before it
+calls 38% "bad", and that "¿y en Guayas?" refers to whatever was just asked.
+
+Conversation turns are persisted whatever the outcome - including rejections and
+degraded answers - because a question that produced a bad answer is exactly the
+one worth having on record.
 """
 
 from __future__ import annotations
@@ -30,6 +42,7 @@ from ai.client import (
     record_usage,
     write_cache,
 )
+from ai.memory import build_prompt_memory
 from ai.nl2sql import (
     MAX_ROWS,
     REJECTION_SUGGESTIONS,
@@ -46,6 +59,11 @@ BRIEF_TTL_HOURS = 24
 ALERTS_TTL_HOURS = 2
 ASK_TTL_HOURS = 1
 
+# How many past turns are replayed as context. Six is three exchanges: enough
+# for "¿y en Guayas?" to resolve, short enough that the conversation does not
+# quietly consume the token budget that the actual numbers need.
+CONTEXT_MESSAGES = 6
+
 ANALYST_SYSTEM_PROMPT = """Eres un analista de operaciones de ecommerce contraentrega (COD)
 en Latinoamérica. Escribes para el dueño de la operación, que no es técnico y tiene 30 segundos.
 
@@ -61,6 +79,18 @@ VOCABULARIO OBLIGATORIO:
 - Nunca digas "ventas". En contraentrega una venta no es dinero hasta que se entrega.
   Di "despachos", "entregas", "recaudo" o "contribución".
 - "Devolución" es una pérdida real: se pagó flete de ida y de vuelta sin recaudar nada.
+
+CONTRIBUCIÓN NETA: NUNCA LA LLAMES PÉRDIDA.
+En contraentrega, una guía cobra flete y producto el día que se despacha y no recauda
+nada hasta que se entrega. Mientras haya guías abiertas, la contribución neta suma el
+costo de guías jóvenes contra el recaudo de guías viejas y sale negativa aunque la
+operación sea rentable. Decir "estás perdiendo dinero" en ese caso es falso y lleva al
+dueño a recortar justo cuando debería reponer inventario.
+- Si tienes `mart.v_contribution_split`, úsala: informa `realised_contribution` (lo que
+  ya cerró) y `capital_in_street` (costo ya pagado de guías que aún no entregan) por
+  separado, y menciona `maturity_pct`.
+- Si solo tienes la contribución neta y hay guías abiertas, di que es una cifra a mitad
+  de camino y explica por qué, en vez de declarar una pérdida.
 
 QUÉ NO HACER:
 - No inventes cifras que no estén en los datos que te doy.
@@ -79,6 +109,230 @@ def _decimal_to_float(value: Any) -> Any:
     if isinstance(value, datetime):
         return value.isoformat()
     return value
+
+
+# =============================================================================
+# Conversations
+#
+# A thread is what makes a follow-up a follow-up. Without one, "¿y en Guayas?"
+# is an unanswerable fragment; with one, it is the previous question restricted
+# to a province.
+# =============================================================================
+
+
+def ensure_conversation(
+    conn: psycopg.Connection,
+    tenant_id: UUID,
+    *,
+    conversation_id: UUID | None,
+    user_id: UUID | None,
+    country: str | None,
+    title_hint: str,
+) -> UUID:
+    """Return an existing thread of THIS tenant, or open a new one.
+
+    A conversation_id that belongs to somebody else - or to nobody - silently
+    starts a fresh thread instead of erroring. There is nothing useful to tell
+    the user, and confirming that an id exists is a small oracle nobody needs.
+    """
+    if conversation_id is not None:
+        row = fetch_one(
+            conn,
+            "SELECT id FROM raw.ai_conversation WHERE id = %s AND tenant_id = %s",
+            (conversation_id, tenant_id),
+        )
+        if row:
+            return row["id"]
+        logger.info("conversation %s not found for this tenant; starting a new one",
+                    conversation_id)
+
+    title = title_hint.strip()[:80] or "Consulta"
+    row = fetch_one(
+        conn,
+        """
+        INSERT INTO raw.ai_conversation (tenant_id, user_id, country_code, title)
+        VALUES (%s, %s, %s, %s)
+        RETURNING id
+        """,
+        (tenant_id, user_id, country, title),
+    )
+    return row["id"]
+
+
+def append_message(
+    conn: psycopg.Connection,
+    tenant_id: UUID,
+    conversation_id: UUID,
+    role: str,
+    content: str,
+    *,
+    sql_executed: str | None = None,
+    row_count: int | None = None,
+    tokens: int = 0,
+) -> UUID | None:
+    """Persist one turn. Never the reason an answer fails to reach the user."""
+    try:
+        row = fetch_one(
+            conn,
+            """
+            INSERT INTO raw.ai_message
+                (conversation_id, tenant_id, role, content, sql_executed, row_count, tokens)
+            VALUES (%s, %s, %s, %s, %s, %s, %s)
+            RETURNING id
+            """,
+            (conversation_id, tenant_id, role, content, sql_executed, row_count, tokens),
+        )
+        with conn.cursor() as cur:
+            cur.execute(
+                "UPDATE raw.ai_conversation SET last_message_at = now() WHERE id = %s",
+                (conversation_id,),
+            )
+        return row["id"] if row else None
+    except Exception:
+        logger.warning("could not persist a %s message", role, exc_info=True)
+        return None
+
+
+def conversation_history(
+    conn: psycopg.Connection, tenant_id: UUID, conversation_id: UUID, limit: int = CONTEXT_MESSAGES
+) -> list[dict[str, Any]]:
+    """The last N turns, oldest first, so the model reads them in order."""
+    rows = fetch_all(
+        conn,
+        """
+        SELECT role, content, created_at FROM (
+            SELECT role, content, created_at
+            FROM raw.ai_message
+            WHERE conversation_id = %s AND tenant_id = %s
+            ORDER BY created_at DESC
+            LIMIT %s
+        ) recent
+        ORDER BY created_at
+        """,
+        (conversation_id, tenant_id, limit),
+    )
+    return rows
+
+
+def format_history(messages: list[dict[str, Any]]) -> str:
+    """Render past turns compactly. Answers are truncated: the question is the
+    part that carries the thread, the answer is only there for reference."""
+    if not messages:
+        return ""
+    lines = ["CONVERSACIÓN HASTA AHORA (la pregunta nueva puede referirse a esto):"]
+    for message in messages:
+        speaker = "Operador" if message["role"] == "user" else "Tú"
+        content = message["content"].strip().replace("\n", " ")
+        lines.append(f"- {speaker}: {content[:300]}")
+    return "\n".join(lines)
+
+
+def list_conversations(
+    conn: psycopg.Connection, tenant_id: UUID, *, limit: int = 30
+) -> list[dict[str, Any]]:
+    return fetch_all(
+        conn,
+        """
+        SELECT c.id, c.country_code, c.title, c.created_at, c.last_message_at,
+               count(m.id) AS message_count
+        FROM raw.ai_conversation c
+        LEFT JOIN raw.ai_message m ON m.conversation_id = c.id
+        WHERE c.tenant_id = %s
+        GROUP BY c.id
+        ORDER BY c.last_message_at DESC
+        LIMIT %s
+        """,
+        (tenant_id, limit),
+    )
+
+
+def get_conversation(
+    conn: psycopg.Connection, tenant_id: UUID, conversation_id: UUID
+) -> dict[str, Any] | None:
+    header = fetch_one(
+        conn,
+        """
+        SELECT id, country_code, title, created_at, last_message_at
+        FROM raw.ai_conversation WHERE id = %s AND tenant_id = %s
+        """,
+        (conversation_id, tenant_id),
+    )
+    if header is None:
+        return None
+
+    messages = fetch_all(
+        conn,
+        """
+        SELECT m.id, m.role, m.content, m.sql_executed, m.row_count, m.tokens,
+               m.created_at, f.helpful, f.comment AS feedback_comment
+        FROM raw.ai_message m
+        LEFT JOIN raw.ai_feedback f ON f.message_id = m.id
+        WHERE m.conversation_id = %s AND m.tenant_id = %s
+        ORDER BY m.created_at
+        """,
+        (conversation_id, tenant_id),
+    )
+    return {**header, "messages": messages}
+
+
+def record_feedback(
+    conn: psycopg.Connection,
+    tenant_id: UUID,
+    message_id: UUID,
+    *,
+    helpful: bool,
+    comment: str | None,
+    user_id: UUID | None = None,
+) -> dict[str, Any]:
+    """Store a verdict, and turn an explained rejection into a durable fact.
+
+    This is the closest thing to "the AI learns from what is done" that exists
+    here, and it is worth being precise about: nothing is trained. An unhelpful
+    verdict WITH a reason becomes one row in `raw.ai_memory`, which is then read
+    back into every later prompt for that country. A thumbs-down with no comment
+    is recorded and nothing more - there is nothing to learn from a verdict that
+    does not say what was wrong.
+    """
+    from ai.memory import learn_from_correction
+
+    owned = fetch_one(
+        conn,
+        "SELECT id FROM raw.ai_message WHERE id = %s AND tenant_id = %s AND role = 'assistant'",
+        (message_id, tenant_id),
+    )
+    if owned is None:
+        return {"stored": False, "learned": False,
+                "message": "Esa respuesta no existe en esta cuenta."}
+
+    with conn.cursor() as cur:
+        cur.execute(
+            """
+            INSERT INTO raw.ai_feedback (message_id, tenant_id, helpful, comment)
+            VALUES (%s, %s, %s, %s)
+            ON CONFLICT (message_id) DO UPDATE SET
+                helpful = EXCLUDED.helpful,
+                comment = EXCLUDED.comment,
+                created_at = now()
+            """,
+            (message_id, tenant_id, helpful, (comment or "").strip()[:2000] or None),
+        )
+
+    learned = False
+    if not helpful and (comment or "").strip():
+        learned = learn_from_correction(
+            conn, tenant_id, message_id, comment or "", created_by=user_id
+        ) is not None
+
+    return {
+        "stored": True,
+        "learned": learned,
+        "message": (
+            "Anotado. La próxima vez que preguntes algo parecido, el copiloto va a "
+            "tener en cuenta tu corrección."
+            if learned
+            else "Gracias, quedó registrado."
+        ),
+    }
 
 
 # =============================================================================
@@ -174,7 +428,12 @@ def generate_brief(
             "degraded_reason": "sin_datos",
         }
 
-    cache_key = context_hash("brief", tenant_id, country, context)
+    # What the copilot already knows about this operation goes into the cache key
+    # as well as into the prompt: a corrected fact has to produce a new brief,
+    # not serve yesterday's from cache.
+    memory = build_prompt_memory(conn, tenant_id, country)
+
+    cache_key = context_hash("brief", tenant_id, country, {**context, "_memory": memory})
     cached = read_cache(conn, cache_key)
     if cached:
         return {**cached, "cached": True}
@@ -183,7 +442,7 @@ def generate_brief(
 
     response = call_llm(
         settings,
-        system=ANALYST_SYSTEM_PROMPT,
+        system=f"{ANALYST_SYSTEM_PROMPT}\n\n{memory}" if memory else ANALYST_SYSTEM_PROMPT,
         user_message=(
             f"Estos son los datos de {context['country'].get('name', country)} "
             f"de los últimos 30 días. Escribe el resumen del día.\n\n"
@@ -315,74 +574,155 @@ def ask_data(
     tenant_id: UUID,
     question: str,
     country: str | None = None,
+    *,
+    conversation_id: UUID | None = None,
+    user_id: UUID | None = None,
 ) -> dict[str, Any]:
-    """question -> SQL -> validator -> read-only execution -> prose."""
-    check_budget(conn, tenant_id, settings)
+    """question -> SQL -> validator -> read-only execution -> prose, with context.
 
-    hint = f"\n\nEl usuario está mirando el país '{country}'." if country else ""
-    sql_response = call_llm(
-        settings,
-        system=SYSTEM_PROMPT,
-        user_message=f"Pregunta: {question}{hint}",
-        max_tokens=700,
-        temperature=0.0,
+    Two blocks are prepended to the prompts: what the copilot remembers about
+    this operation, and the last few turns of this thread. Neither widens what
+    the generated SQL is allowed to touch - the validator does not know or care
+    that memory exists.
+    """
+    conversation = ensure_conversation(
+        conn, tenant_id,
+        conversation_id=conversation_id, user_id=user_id,
+        country=country, title_hint=question,
     )
-    record_usage(conn, tenant_id, "ask", sql_response)
+    append_message(conn, tenant_id, conversation, "user", question)
+
+    memory = build_prompt_memory(conn, tenant_id, country)
+    history = format_history(
+        # Drop the turn just written: the model gets it as the question.
+        conversation_history(conn, tenant_id, conversation, CONTEXT_MESSAGES + 1)[:-1]
+    )
+
+    def _finish(payload: dict[str, Any], *, tokens: int = 0) -> dict[str, Any]:
+        """Persist the assistant turn and hand back the response body."""
+        message_id = append_message(
+            conn, tenant_id, conversation, "assistant", payload["answer"],
+            sql_executed=payload.get("sql"),
+            row_count=payload.get("row_count"),
+            tokens=tokens,
+        )
+        return {**payload, "conversation_id": conversation, "message_id": message_id}
+
+    try:
+        check_budget(conn, tenant_id, settings)
+
+        hint = f"\n\nEl usuario está mirando el país '{country}'." if country else ""
+        context_blocks = "\n\n".join(block for block in (memory, history) if block)
+        sql_response = call_llm(
+            settings,
+            system=f"{SYSTEM_PROMPT}\n\n{context_blocks}" if context_blocks else SYSTEM_PROMPT,
+            user_message=f"Pregunta: {question}{hint}",
+            max_tokens=700,
+            temperature=0.0,
+        )
+        record_usage(conn, tenant_id, "ask", sql_response)
+    except AiUnavailable as exc:
+        # The question is already on record; the failure should be too. Then it
+        # is re-raised so the router degrades exactly as it always has.
+        _finish(
+            {
+                "answer": exc.message, "sql": None, "columns": [], "rows": [],
+                "row_count": 0, "rejected": True, "rejection_reason": exc.reason,
+                "suggestions": REJECTION_SUGGESTIONS,
+            }
+        )
+        raise
 
     validation = validate_sql(sql_response.text)
     if validation.rejected:
         logger.info("nl2sql rejection for question %r: %s", question[:120], validation.reason)
-        return {
-            "answer": (
-                "No puedo consultar eso. "
-                f"{validation.reason}. "
-                "Puedo responder sobre contribución, transportadoras, productos, geografía, "
-                "cohortes, antigüedad de guías, servicio al cliente y pauta."
-            ),
-            "sql": None,
-            "columns": [],
-            "rows": [],
-            "row_count": 0,
-            "rejected": True,
-            "rejection_reason": validation.reason,
-            "suggestions": REJECTION_SUGGESTIONS,
-        }
+        return _finish(
+            {
+                "answer": (
+                    "No puedo consultar eso. "
+                    f"{validation.reason}. "
+                    "Puedo responder sobre contribución, transportadoras, productos, "
+                    "geografía, cohortes, antigüedad de guías, servicio al cliente, pauta, "
+                    "márgenes de dropshipping, alistamiento, guías en oficina, flete y "
+                    "ciclo de caja."
+                ),
+                "sql": None,
+                "columns": [],
+                "rows": [],
+                "row_count": 0,
+                "rejected": True,
+                "rejection_reason": validation.reason,
+                "suggestions": REJECTION_SUGGESTIONS,
+            },
+            tokens=sql_response.input_tokens + sql_response.output_tokens,
+        )
 
-    rows, columns = _execute_readonly(validation.sql, tenant_id)
+    try:
+        rows, columns = _execute_readonly(validation.sql, tenant_id)
+    except AiUnavailable as exc:
+        _finish(
+            {
+                "answer": exc.message, "sql": validation.sql, "columns": [], "rows": [],
+                "row_count": 0, "rejected": True, "rejection_reason": exc.reason,
+                "suggestions": REJECTION_SUGGESTIONS,
+            }
+        )
+        raise
 
     if not rows:
-        return {
-            "answer": "La consulta corrió bien pero no devolvió filas para ese filtro.",
-            "sql": validation.sql,
-            "columns": columns,
-            "rows": [],
-            "row_count": 0,
-            "rejected": False,
-            "suggestions": [],
-        }
+        return _finish(
+            {
+                "answer": "La consulta corrió bien pero no devolvió filas para ese filtro.",
+                "sql": validation.sql,
+                "columns": columns,
+                "rows": [],
+                "row_count": 0,
+                "rejected": False,
+                "suggestions": [],
+            },
+            tokens=sql_response.input_tokens + sql_response.output_tokens,
+        )
 
-    prose = call_llm(
-        settings,
-        system=ANALYST_SYSTEM_PROMPT,
-        user_message=(
-            f"Pregunta original: {question}\n\n"
-            f"Resultado de la consulta ({len(rows)} filas):\n{_as_readable(rows[:40])}\n\n"
-            f"Responde la pregunta en 2 a 4 frases usando estas cifras. No inventes nada "
-            f"que no esté aquí."
-        ),
-        max_tokens=500,
-    )
+    try:
+        prose = call_llm(
+            settings,
+            system="\n\n".join(
+                block for block in (ANALYST_SYSTEM_PROMPT, memory, history) if block
+            ),
+            user_message=(
+                f"Pregunta original: {question}\n\n"
+                f"Resultado de la consulta ({len(rows)} filas):\n{_as_readable(rows[:40])}\n\n"
+                f"Responde la pregunta en 2 a 4 frases usando estas cifras. No inventes nada "
+                f"que no esté aquí."
+            ),
+            max_tokens=500,
+        )
+    except AiUnavailable as exc:
+        _finish(
+            {
+                "answer": exc.message, "sql": validation.sql, "columns": columns,
+                "rows": [], "row_count": len(rows), "rejected": True,
+                "rejection_reason": exc.reason, "suggestions": [],
+            }
+        )
+        raise
     record_usage(conn, tenant_id, "ask", prose)
 
-    return {
-        "answer": prose.text,
-        "sql": validation.sql,
-        "columns": columns,
-        "rows": _decimal_to_float(rows),
-        "row_count": len(rows),
-        "rejected": False,
-        "suggestions": [],
-    }
+    return _finish(
+        {
+            "answer": prose.text,
+            "sql": validation.sql,
+            "columns": columns,
+            "rows": _decimal_to_float(rows),
+            "row_count": len(rows),
+            "rejected": False,
+            "suggestions": [],
+        },
+        tokens=(
+            sql_response.input_tokens + sql_response.output_tokens
+            + prose.input_tokens + prose.output_tokens
+        ),
+    )
 
 
 def _execute_readonly(sql: str, tenant_id: UUID) -> tuple[list[dict[str, Any]], list[str]]:

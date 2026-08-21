@@ -208,6 +208,16 @@ export const COUNTRY_FLAGS: Record<string, string> = {
   GT: "🇬🇹",
 };
 
-export function countryFlag(code: string): string {
-  return COUNTRY_FLAGS[code?.toUpperCase()] ?? "🏳️";
+/**
+ * A flag for a country code, a globe for a connection that has none.
+ *
+ * `country_code` is nullable since migration 012: a global connection is not
+ * pinned to any country because the file it loads declares its own.
+ */
+export function countryFlag(code: string | null | undefined): string {
+  // NULL is not "unknown country", it is "every country": only a global
+  // connection has no code at all. An empty or unrecognised string still gets
+  // the neutral white flag.
+  if (code === null || code === undefined) return "🌐";
+  return COUNTRY_FLAGS[code.toUpperCase()] ?? "🏳️";
 }

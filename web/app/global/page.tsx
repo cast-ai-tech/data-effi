@@ -6,14 +6,24 @@ import Link from "next/link";
 import { useMemo } from "react";
 
 import { AppShell } from "@/components/AppShell";
+import {
+  BasisBand,
+  BasisCaption,
+  DateBasisFrame,
+  useDateBasisNote,
+} from "@/components/DateBasisNote";
 import GlobalSummary from "@/components/widgets/global_summary";
 import { Card, Chip, EmptyState, SkeletonRows, StatusDot } from "@/components/ui";
+import { useRangedApi } from "@/lib/date-range";
 import { FALLBACK_COUNTRY, countryFlag, formatNumber, formatPercent, formatRelative } from "@/lib/format";
 import { useApi } from "@/lib/hooks";
 import type { Brief, Connection, Country, GlobalRow } from "@/lib/types";
 
 export default function GlobalPage() {
-  const { data: rows, loading } = useApi<GlobalRow[]>("/kpis/global");
+  // These four tiles are numbers on a filtered screen like any other, so they
+  // go through the range too, and carry the same disclosure as a dashboard card.
+  const { data: rows, loading, dateBasis } = useRangedApi<GlobalRow[]>("/kpis/global");
+  const totalsNote = useDateBasisNote(dateBasis);
   const { data: countries } = useApi<Country[]>("/config/countries");
   const { data: connections } = useApi<Connection[]>("/config/connections");
 
@@ -67,7 +77,14 @@ export default function GlobalPage() {
 
       {!loading && active.length > 0 && (
         <>
-          <div className="mb-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+          {totalsNote?.kind === "band" && (
+            <div className="mb-3">
+              <BasisBand note={totalsNote} standalone />
+            </div>
+          )}
+
+          <div className="mb-4">
+          <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
             <StatTile
               label="Contribución (USD)"
               value={
@@ -99,14 +116,21 @@ export default function GlobalPage() {
             />
           </div>
 
+            {totalsNote?.kind === "caption" && <BasisCaption note={totalsNote} />}
+          </div>
+
           {country && (
             <div className="mb-4">
-              <GlobalSummary
-                countryCode={country.code}
-                country={country}
-                state="available"
-                message={null}
-              />
+              {/* Rendered outside WidgetRenderer, so it needs its own frame to
+                  carry the same disclosure the dashboard cards get. */}
+              <DateBasisFrame>
+                <GlobalSummary
+                  countryCode={country.code}
+                  country={country}
+                  state="available"
+                  message={null}
+                />
+              </DateBasisFrame>
             </div>
           )}
 

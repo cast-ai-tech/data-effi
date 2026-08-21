@@ -488,6 +488,14 @@ Obligatorias para arrancar: `POSTGRES_PASSWORD`, `POSTGRES_APP_PASSWORD`,
 explícito si falta alguna, y la API se niega a arrancar con un secreto corto o con el
 valor de relleno todavía puesto.
 
+`PUBLIC_API_URL` pasa a ser obligatoria en cuanto publiques Data Effi detrás de un
+dominio o un proxy (Nginx, Traefik, Cloudflare). Es la dirección con la que te ven
+**desde afuera**, por ejemplo `https://api.tu-dominio.com`. Data Effi la usa para armar
+la URL del webhook que le pegas a n8n, Make o Zapier. Si la dejas vacía, esa URL se
+arma con la dirección interna del contenedor (`http://api:8000`), que tu automatización
+no puede alcanzar — y el token del webhook se muestra **una sola vez**, así que no hay
+oportunidad de corregirla después. En local, con `docker compose up`, déjala vacía.
+
 `POSTGRES_READONLY_PASSWORD` pasa a ser obligatoria en cuanto habilites la capa de IA
 (`AI_ENABLED=true` más `GEMINI_API_KEY`): el NL→SQL se niega a correr sin un rol de
 solo lectura.

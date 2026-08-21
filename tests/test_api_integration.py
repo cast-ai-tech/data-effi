@@ -179,7 +179,7 @@ def test_a_viewer_cannot_create_connections(client, owner_token):
 
     response = client.post(
         "/config/connections",
-        json={"country_code": "CO", "platform_code": "manual_xlsx", "name": "intento"},
+        json={"platform_code": "manual_xlsx", "name": "intento"},
         headers=auth(viewer_token),
     )
     assert response.status_code == 403
@@ -251,19 +251,22 @@ def connection_id(client, owner_token) -> str:
     response = client.post(
         "/config/connections",
         json={
-            "country_code": "CO",
+            # Manual upload is a GLOBAL platform since migration 012: no country
+            # here, because the file itself says which country it is about.
             "platform_code": "manual_xlsx",
-            "name": "Carga manual Colombia",
-            "store_name": "Tienda Principal",
+            "name": "Carga manual",
         },
         headers=auth(owner_token),
     )
     assert response.status_code == 201, response.text
+    assert response.json()["country_code"] is None
     return response.json()["connection_id"]
 
 
 def test_connection_starts_never_synced(client, owner_token, connection_id):
-    response = client.get("/config/connections?country=CO", headers=auth(owner_token))
+    # A global connection belongs to the workspace, not to one country, so it is
+    # `scope`, not `country`, that finds it.
+    response = client.get("/config/connections?scope=global", headers=auth(owner_token))
     assert response.status_code == 200
     connection = next(c for c in response.json() if c["connection_id"] == connection_id)
     assert connection["status"] == "active"
@@ -361,7 +364,12 @@ def test_batch_history_lists_the_load(client, owner_token):
 def test_daily_contribution_matches_the_fixture(client, owner_token):
     response = client.get("/kpis/daily-contribution?country=CO", headers=auth(owner_token))
     assert response.status_code == 200
-    rows = response.json()
+    body = response.json()
+    # No range asked for, so the whole history - but the response still names the
+    # date it WOULD have filtered on, which is what the UI puts on the widget.
+    assert body["date_basis"] == "creacion"
+    assert body["date_from"] is None and body["date_to"] is None
+    rows = body["rows"]
     assert rows
 
     totals = {
@@ -377,7 +385,7 @@ def test_daily_contribution_matches_the_fixture(client, owner_token):
 def test_carriers_endpoint(client, owner_token):
     response = client.get("/kpis/carriers?country=CO", headers=auth(owner_token))
     assert response.status_code == 200
-    carriers = {c["carrier_name"]: c for c in response.json()}
+    carriers = {c["carrier_name"]: c for c in response.json()["rows"]}
     assert carriers["Interrapidisimo"]["shipments"] == 4
     assert Decimal(carriers["Interrapidisimo"]["delivery_rate_pct"]) == Decimal("75.00")
 
@@ -385,7 +393,7 @@ def test_carriers_endpoint(client, owner_token):
 def test_geo_endpoint_collapses_city_spellings(client, owner_token):
     response = client.get("/kpis/geo?country=CO", headers=auth(owner_token))
     assert response.status_code == 200
-    cities = [g["city_name"] for g in response.json()]
+    cities = [g["city_name"] for g in response.json()["rows"]]
     bogota_rows = [c for c in cities if c.lower().startswith("bogot")]
     assert len(bogota_rows) == 1, f"Bogotá must be one row, got {bogota_rows}"
 
@@ -393,20 +401,25 @@ def test_geo_endpoint_collapses_city_spellings(client, owner_token):
 def test_products_endpoint(client, owner_token):
     response = client.get("/kpis/products?country=CO", headers=auth(owner_token))
     assert response.status_code == 200
-    names = {p["product_name"] for p in response.json()}
+    names = {p["product_name"] for p in response.json()["rows"]}
     assert names == {"Faja Reductora", "Reloj Inteligente"}
 
 
 def test_aging_endpoint(client, owner_token):
     response = client.get("/kpis/aging?country=CO", headers=auth(owner_token))
     assert response.status_code == 200
-    assert all(r["aging_bucket"] in ("0-3", "4-7", "8-12", "13-20", "21+") for r in response.json())
+    buckets = response.json()["rows"]
+    assert all(r["aging_bucket"] in ("0-3", "4-7", "8-12", "13-20", "21+") for r in buckets)
 
 
 def test_cpa_is_empty_without_an_ads_connection(client, owner_token):
     response = client.get("/kpis/cpa?country=CO", headers=auth(owner_token))
     assert response.status_code == 200
-    assert response.json() == []
+    body = response.json()
+    assert body["rows"] == []
+    # Empty, and still able to say what it would have filtered on. That is the
+    # whole reason date_basis lives on the response and not on each row.
+    assert body["date_basis"] == "pauta"
 
 
 def test_layout_blocks_cpa_and_cs(client, owner_token):
@@ -428,7 +441,7 @@ def test_layout_blocks_cpa_and_cs(client, owner_token):
 def test_global_endpoint(client, owner_token):
     response = client.get("/kpis/global", headers=auth(owner_token))
     assert response.status_code == 200
-    rows = response.json()
+    rows = response.json()["rows"]
     assert len(rows) == 1
     assert rows[0]["country_code"] == "CO"
     assert rows[0]["shipments"] == 10
