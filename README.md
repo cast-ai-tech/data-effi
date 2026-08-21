@@ -1,5 +1,7 @@
 # Data Effi
 
+> Esta guía te lo pone a andar **en tu computador**. Para dejarlo en internet, con la base de datos en Supabase y el tablero en Vercel, sigue [DEPLOY.md](DEPLOY.md).
+
 ## 1. Qué es Data Effi
 
 Data Effi es un tablero que responde una sola pregunta: **de cada guía que despachas,
@@ -405,6 +407,8 @@ guardados y vuelven cuando lo enciendas otra vez.
 ---
 
 ## 7. Para quien sepa de código
+
+Para desplegar en producción — Supabase para la base, Vercel para el frontend, y un servidor aparte para la API y el worker — está todo en [DEPLOY.md](DEPLOY.md).
 
 ### Arquitectura
 

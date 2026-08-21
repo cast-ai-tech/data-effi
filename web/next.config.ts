@@ -1,8 +1,12 @@
 import type { NextConfig } from "next";
 
+// Docker copies a self-contained server bundle; Vercel builds its own output and
+// warns about this one. web/Dockerfile sets BUILD_TARGET=docker, so the same
+// repository deploys to both without a branch or a second config file.
+const isDockerBuild = process.env.BUILD_TARGET === "docker";
+
 const nextConfig: NextConfig = {
-  // Emits a self-contained server bundle, which is what web/Dockerfile copies.
-  output: "standalone",
+  ...(isDockerBuild ? { output: "standalone" as const } : {}),
   reactStrictMode: true,
   poweredByHeader: false,
 

@@ -15,6 +15,8 @@ COPY . .
 ARG NEXT_PUBLIC_API_URL=http://localhost:8000
 ENV NEXT_PUBLIC_API_URL=$NEXT_PUBLIC_API_URL
 ENV NEXT_TELEMETRY_DISABLED=1
+# Tells next.config.ts to emit the standalone bundle the runner stage copies.
+ENV BUILD_TARGET=docker
 
 RUN npm run build
 
