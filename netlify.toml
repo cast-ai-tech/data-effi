@@ -1,0 +1,21 @@
+# Data Effi web -> Netlify (plan Starter, gratis).
+#
+# El frontend vive en web/, no en la raiz: por eso 'base'. Netlify detecta
+# Next.js y aplica su runtime, que soporta App Router, SSR y middleware.ts
+# sin tocar el codigo.
+#
+# NO se define BUILD_TARGET aqui: esa variable existe solo para el build de
+# Docker y fuerza output:"standalone", que Netlify no usa.
+#
+# NEXT_PUBLIC_API_URL se carga en el dashboard de Netlify, no aqui: Next la
+# incrusta en el bundle del navegador en tiempo de build, asi que tiene que
+# estar presente ANTES de compilar, y apunta a la API en Render.
+
+[build]
+  base    = "web"
+  command = "npm run build"
+  publish = ".next"
+
+[build.environment]
+  NODE_VERSION         = "22"
+  NEXT_TELEMETRY_DISABLED = "1"
