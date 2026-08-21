@@ -1,0 +1,64 @@
+# Render Blueprint — Data Effi API (plan gratuito).
+#
+# El worker NO va como servicio: el plan free de Render no incluye Background
+# Workers. En su lugar WORKER_ENABLED=false y un cron externo (cron-job.org)
+# llama POST /worker/trigger/{job} con la cabecera X-Worker-Secret. Eso corre
+# los jobs y de paso mantiene despierto el servicio, que si no duerme a los
+# 15 minutos sin trafico.
+#
+# Sin disco persistente: el free no lo permite. Los archivos subidos viven solo
+# mientras se procesan; lo ya ingerido esta en Postgres y no se ve afectado.
+# Por eso MAX_UPLOAD_MB baja de 25 a 10, que es lo que aguantan 512 MB de RAM.
+
+services:
+  - type: web
+    name: data-effi-api
+    runtime: docker
+    dockerfilePath: ./Dockerfile.api
+    dockerContext: .
+    plan: free
+    region: virginia          # misma costa que Supabase us-east-1
+    healthCheckPath: /health
+    autoDeploy: false
+    envVars:
+      # --- se cargan a mano en el dashboard, nunca en el repo ---
+      - key: DATABASE_URL
+        sync: false
+      - key: DATABASE_URL_READONLY
+        sync: false
+      - key: JWT_SECRET
+        sync: false
+      - key: PII_HASH_SALT
+        sync: false
+      - key: PII_ENCRYPTION_KEY
+        sync: false
+      - key: WORKER_TRIGGER_SECRET
+        sync: false
+      - key: PUBLIC_API_URL
+        sync: false
+      - key: CORS_ORIGINS
+        sync: false
+
+      # --- valores fijos del despliegue gratuito ---
+      - key: ENVIRONMENT
+        value: production
+      - key: API_HOST
+        value: 0.0.0.0
+      - key: API_PORT
+        value: "8000"
+      - key: LOG_LEVEL
+        value: INFO
+      - key: WORKER_ENABLED
+        value: "false"
+      - key: MAX_UPLOAD_MB
+        value: "10"
+      - key: INGEST_MAX_CONCURRENCY
+        value: "2"
+      - key: UPLOAD_DIR
+        value: /tmp/uploads
+      - key: AI_ENABLED
+        value: "false"
+      - key: TIER3_FETCH_ENABLED
+        value: "false"
+      - key: FX_PROVIDER_URL
+        value: https://open.er-api.com/v6/latest

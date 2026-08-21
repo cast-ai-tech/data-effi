@@ -1,0 +1,28 @@
+# Data Effi web -> Netlify (plan Starter, gratis).
+#
+# El frontend vive en web/, no en la raiz: por eso 'base'. 'publish' es
+# relativo a base, asi que .next resuelve a web/.next.
+#
+# El plugin va declarado EXPLICITO. Netlify detecta framework="next" solo,
+# pero esa deteccion no alcanzo para aplicar el runtime: el primer deploy
+# subio los internos de .next como HTML estatico, plugin_state quedo en
+# "none" y todas las rutas devolvieron 404. Con el bloque [[plugins]] el
+# runtime corre y App Router, SSR y middleware.ts funcionan.
+#
+# NO se define BUILD_TARGET: esa variable existe solo para el build de
+# Docker y fuerza output:"standalone", que Netlify no usa.
+#
+# NEXT_PUBLIC_API_URL se carga en el dashboard, no aqui: Next la incrusta
+# en el bundle del navegador en tiempo de build, y apunta a la API en Render.
+
+[build]
+  base    = "web"
+  command = "npm run build"
+  publish = ".next"
+
+[build.environment]
+  NODE_VERSION            = "22"
+  NEXT_TELEMETRY_DISABLED = "1"
+
+[[plugins]]
+  package = "@netlify/plugin-nextjs"
