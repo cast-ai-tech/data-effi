@@ -29,6 +29,7 @@ import type { FxRate, User } from "@/lib/types";
 
 const SOURCE_LABEL: Record<string, string> = {
   api: "Automática",
+  trm_oficial: "TRM oficial",
   manual: "Puesta a mano",
   carried_forward: "Arrastrada del día anterior",
 };
@@ -89,10 +90,12 @@ export function FxRatesSection({ onError }: { onError: (message: string) => void
       )}
 
       <p className="mt-3 text-[11px] text-ink-dim">
-        Las tasas se actualizan solas cada día a las 10:05 UTC. Una que no se pueda
-        traer se arrastra del día anterior y queda marcada — nunca se inventa un
-        valor, porque una tasa inventada deforma en silencio todos los totales que
-        la usan.
+        El peso colombiano sale de la <strong>TRM oficial</strong> que publica la
+        Superintendencia Financiera, no de un proveedor internacional: es la tasa
+        contra la que se mide la contabilidad. Las demás monedas se actualizan
+        solas cada día a las 10:05 UTC. Una que no se pueda traer se arrastra del
+        día anterior y queda marcada — nunca se inventa un valor, porque una tasa
+        inventada deforma en silencio todos los totales que la usan.
       </p>
     </Card>
   );

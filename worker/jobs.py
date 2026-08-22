@@ -33,6 +33,10 @@ logger = logging.getLogger(__name__)
 # hash makes a repeated report a no-op.
 TIER3_LOOKBACK_DAYS = 14
 
+# Colombia's TRM, published by the Superintendencia Financiera. Free, no key,
+# and the only number the DIAN recognises - see _fetch_trm_oficial.
+TRM_DATASET_URL = "https://www.datos.gov.co/resource/32sa-8pi3.json"
+
 # Fallback only. The real list comes from core.country - see _fx_currencies -
 # because "el país es dato, no código": adding a country must not require a
 # release to make its money convertible. This tuple is what the job uses if that
@@ -156,36 +160,126 @@ def _fx_currencies(conn: psycopg.Connection) -> tuple[str, ...]:
     return tuple(sorted(found | {"USD"})) or FX_BASE_CURRENCIES
 
 
+def _provider_endpoint(provider_url: str) -> str:
+    """Where to ask this provider for "one dollar in every currency".
+
+    Two conventions, and neither is guessable from the base URL alone:
+
+        .../v6/latest        + /USD        er-api, exchangerate-api
+        .../v1/currencies    + /usd.json   @fawazahmed0/currency-api
+
+    Hardcoding either one is what tied this job to a single provider. Swapping
+    providers now means changing FX_PROVIDER_URL and nothing else, which matters
+    because the one that shipped originally turned out to quote the peso 20% off
+    the TRM.
+    """
+    base = provider_url.rstrip("/")
+    if base.endswith(".json") or base.endswith("/USD") or base.endswith("/usd"):
+        return base  # ya apunta al recurso exacto
+    if "currency-api" in base or base.endswith("/currencies"):
+        return f"{base}/usd.json"
+    return f"{base}/USD"
+
+
+def _parse_rate_payload(payload: dict[str, Any]) -> dict[str, float]:
+    """USD -> currency, out of whichever envelope the provider happens to use.
+
+    Three shapes in the wild, and the difference is not cosmetic: picking the
+    wrong key silently yields an empty dict, which the job then reports as "the
+    provider was unreachable" while the request actually succeeded.
+
+        {"rates": {...}}                 open.er-api, exchangerate-api
+        {"conversion_rates": {...}}      exchangerate-api v6 (paid)
+        {"date": ..., "usd": {...}}      @fawazahmed0/currency-api
+    """
+    rates = payload.get("rates") or payload.get("conversion_rates")
+    if rates:
+        return {str(k).upper(): float(v) for k, v in rates.items() if v}
+
+    # currency-api nests under the lowercased base currency and quotes its keys
+    # in lowercase too.
+    nested = payload.get("usd")
+    if isinstance(nested, dict):
+        return {str(k).upper(): float(v) for k, v in nested.items() if v}
+
+    return {}
+
+
+def _fetch_trm_oficial(client: Any) -> tuple[float | None, date | None]:
+    """Colombia's TRM, from the Superintendencia Financiera's own dataset.
+
+    WHY THIS EXISTS AT ALL, GIVEN THERE IS ALREADY AN FX PROVIDER
+    The TRM is not "the dollar rate in Colombia", it is a specific number the
+    regulator publishes and the one the DIAN expects to see in the books. A
+    general provider quotes the market, which is close but never identical - and
+    the free one this project shipped with was quoting 3.663 the day the TRM was
+    3.048, a 20% gap that would have distorted every consolidated total.
+
+    Returns (None, None) on any failure, and the caller falls back to the general
+    provider. A missing TRM is not worth failing the whole job over.
+    """
+    try:
+        response = client.get(
+            TRM_DATASET_URL,
+            params={"$order": "vigenciadesde DESC", "$limit": 1},
+        )
+        response.raise_for_status()
+        rows = response.json()
+        if not rows:
+            return None, None
+
+        value = float(rows[0]["valor"])
+        # "2026-08-22T00:00:00.000" -> date(2026, 8, 22)
+        stamped = datetime.fromisoformat(rows[0]["vigenciadesde"]).date()
+        if value <= 0:
+            return None, None
+        return value, stamped
+    except Exception:
+        logger.warning("no pude leer la TRM oficial; uso el proveedor general",
+                       exc_info=True)
+        return None, None
+
+
 def job_refresh_fx(conn: psycopg.Connection, *, provider_url: str, api_key: str | None = None
                    ) -> dict[str, Any]:
     """Fetch today's rates to USD; fall back to the last known rate on failure.
 
     A missing rate is never invented. The global view marks `fx_missing` and shows
     local currency instead - a made-up conversion is worse than no conversion.
+
+    THE PESO IS A SPECIAL CASE ON PURPOSE. Colombia's TRM is fetched from the
+    regulator and OVERWRITES whatever the general provider said, because it is
+    the rate this operation's accounting is measured against. Every other
+    currency comes from the provider. See _fetch_trm_oficial.
     """
     import httpx
 
     today = date.today()
     fetched: dict[str, float] = {}
     error: str | None = None
+    trm_used = False
     currencies = _fx_currencies(conn)
 
     try:
-        url = f"{provider_url.rstrip('/')}/USD"
+        url = _provider_endpoint(provider_url)
         params = {"apikey": api_key} if api_key else None
-        with httpx.Client(timeout=20.0) as client:
+        with httpx.Client(timeout=20.0, follow_redirects=True) as client:
             response = client.get(url, params=params)
             response.raise_for_status()
-            payload = response.json()
+            rates = _parse_rate_payload(response.json())
 
-        # Providers disagree on the envelope; accept the two common shapes.
-        rates = payload.get("rates") or payload.get("conversion_rates") or {}
-        for currency in currencies:
-            # The API gives USD -> X. We store X -> USD, which is what the global
-            # view multiplies by.
-            usd_to_currency = rates.get(currency)
-            if usd_to_currency:
-                fetched[currency] = 1.0 / float(usd_to_currency)
+            for currency in currencies:
+                # The API gives USD -> X. We store X -> USD, which is what the
+                # global view multiplies by.
+                usd_to_currency = rates.get(currency)
+                if usd_to_currency:
+                    fetched[currency] = 1.0 / float(usd_to_currency)
+
+            if "COP" in currencies:
+                trm, _ = _fetch_trm_oficial(client)
+                if trm:
+                    fetched["COP"] = 1.0 / trm
+                    trm_used = True
     except Exception as exc:
         error = f"{type(exc).__name__}: {exc}"
         logger.warning("FX provider unreachable (%s); falling back to last known rates", error)
@@ -193,14 +287,15 @@ def job_refresh_fx(conn: psycopg.Connection, *, provider_url: str, api_key: str 
     written = 0
     with conn.cursor() as cur:
         for currency, rate in fetched.items():
+            source = "trm_oficial" if (currency == "COP" and trm_used) else "api"
             cur.execute(
                 """
                 INSERT INTO core.fx_rate (rate_date, base_currency, quote_currency, rate, source)
                 VALUES (%s, %s, 'USD', %s, %s)
                 ON CONFLICT (rate_date, base_currency, quote_currency)
-                DO UPDATE SET rate = EXCLUDED.rate, fetched_at = now()
+                DO UPDATE SET rate = EXCLUDED.rate, source = EXCLUDED.source, fetched_at = now()
                 """,
-                (today, currency, rate, "api"),
+                (today, currency, rate, source),
             )
             written += 1
 

@@ -172,3 +172,37 @@ def test_a_rate_of_zero_or_less_is_refused(client, owner):
             json={"currency_code": "COP", "per_usd": value},
         )
         assert response.status_code == 422, response.text
+
+
+# =============================================================================
+# El proveedor: dos convenciones de URL y tres formas de respuesta
+# =============================================================================
+
+
+def test_the_endpoint_is_built_for_each_provider_convention():
+    from worker.jobs import _provider_endpoint
+
+    assert (
+        _provider_endpoint("https://open.er-api.com/v6/latest")
+        == "https://open.er-api.com/v6/latest/USD"
+    )
+    assert (
+        _provider_endpoint("https://cdn.jsdelivr.net/npm/@fawazahmed0/currency-api@latest/v1/currencies")
+        == "https://cdn.jsdelivr.net/npm/@fawazahmed0/currency-api@latest/v1/currencies/usd.json"
+    )
+    # Una URL que ya apunta al recurso exacto se respeta tal cual.
+    assert _provider_endpoint("https://ejemplo.test/usd.json") == "https://ejemplo.test/usd.json"
+
+
+def test_every_envelope_shape_is_understood():
+    """Elegir la llave equivocada devuelve {} y el job lo reporta como "proveedor
+    caído" cuando en realidad la petición funcionó."""
+    from worker.jobs import _parse_rate_payload
+
+    assert _parse_rate_payload({"rates": {"COP": 3048.12}}) == {"COP": 3048.12}
+    assert _parse_rate_payload({"conversion_rates": {"COP": 3048.12}}) == {"COP": 3048.12}
+    # currency-api anida bajo la moneda base y en minúsculas.
+    assert _parse_rate_payload({"date": "2026-08-22", "usd": {"cop": 3048.12}}) == {
+        "COP": 3048.12
+    }
+    assert _parse_rate_payload({"algo": "inesperado"}) == {}
