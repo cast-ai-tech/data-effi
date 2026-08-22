@@ -88,11 +88,17 @@ OrgAdmin = Annotated[CurrentUser, Depends(require_org_admin)]
 def _visible_tenants(conn, user: CurrentUser) -> list[dict]:
     """Which companies this caller may consolidate.
 
-    An org admin gets the whole holding. Everyone else gets exactly the companies
-    they hold a membership in - which is what makes "the global is mine" true
-    without giving a partner a window into the other partnerships.
+    Anyone with a role over the holding - admin, analyst or viewer - gets every
+    company in it. Everyone else gets exactly the companies they hold a membership
+    in, which is what makes "the global is mine" true without giving a partner a
+    window into the other partnerships.
+
+    Note what this widens and what it does not: the roll-up asks each of these
+    companies IN ITS OWN SCOPED TRANSACTION, so an org viewer reads totals through
+    the same row-level security as everybody else. It buys them no way whatsoever
+    to stand inside a company they do not belong to - `/auth/switch` still refuses.
     """
-    if user.is_org_admin:
+    if user.reads_org():
         return fetch_all(
             conn,
             "SELECT tenant_id, tenant_slug, tenant_name FROM core.org_tenants(%s)",
