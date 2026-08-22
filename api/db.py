@@ -44,11 +44,26 @@ def init_pools(settings: Settings) -> None:
 
     close_pools()
 
+    # prepare_threshold=None disables psycopg's automatic prepared statements.
+    #
+    # psycopg promotes a query to a named prepared statement once it has been
+    # executed five times. Against a plain PostgreSQL that is free speed. Behind
+    # a transaction-mode pooler - Supabase's Supavisor on port 6543, and PgBouncer
+    # generally - it is a crash: the pooler hands each transaction whichever
+    # backend is free, so the sixth execution meets a backend that already has
+    # `_pg3_0` from a different client and raises
+    #
+    #     DuplicatePreparedStatement: prepared statement "_pg3_0" already exists
+    #
+    # Verified against this project's own Supabase pool: twelve executions of one
+    # query fail on the sixth. The failure is a slow one - the API starts, serves
+    # the first few requests, and only then begins throwing - which is why it has
+    # to be off by construction rather than discovered in production.
     _pool = ConnectionPool(
         settings.database_url,
         min_size=settings.db_pool_min,
         max_size=settings.db_pool_max,
-        kwargs={"autocommit": False},
+        kwargs={"autocommit": False, "prepare_threshold": None},
         open=True,
     )
     logger.info("database pool ready (min=%s max=%s)", settings.db_pool_min, settings.db_pool_max)
@@ -58,7 +73,7 @@ def init_pools(settings: Settings) -> None:
             settings.database_url_readonly,
             min_size=0,
             max_size=4,
-            kwargs={"autocommit": True},
+            kwargs={"autocommit": True, "prepare_threshold": None},
             open=True,
         )
         logger.info("read-only pool ready (NL->SQL)")
