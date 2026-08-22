@@ -202,12 +202,6 @@ def list_connections(
     return [ConnectionResponse(**row) for row in rows]
 
 
-@router.post(
-    "/connections",
-    response_model=ConnectionResponse,
-    status_code=status.HTTP_201_CREATED,
-    summary="Crear una conexión",
-)
 def _assert_connection_in_scope(conn, caller: CurrentUser, connection_id: UUID) -> dict:
     """La conexión existe, es de tu sociedad Y es de un país que puedes ver.
 
@@ -236,9 +230,15 @@ def _assert_connection_in_scope(conn, caller: CurrentUser, connection_id: UUID) 
     return row
 
 
+@router.post(
+    "/connections",
+    response_model=ConnectionResponse,
+    status_code=status.HTTP_201_CREATED,
+    summary="Crear una conexión",
+    dependencies=[Depends(require_role("owner"))],
+)
 def create_connection(
-    payload: ConnectionCreateRequest, conn: DbDep, user: OwnerDep,
-    caller: CurrentUserDep,
+    payload: ConnectionCreateRequest, conn: DbDep, user: CurrentUserDep
 ) -> ConnectionResponse:
     platform = fetch_one(
         conn,
@@ -263,20 +263,20 @@ def create_connection(
 
     country_code = _country_for_scope(payload, platform)
 
-    if caller.countries is not None:
+    if user.countries is not None:
         destino = (country_code or "").upper()
         if not destino:
             raise ApiError(
                 "forbidden",
                 "Una conexión global recibe datos de varios países, y tu usuario "
-                f"está limitado a: {', '.join(caller.countries)}.",
+                f"está limitado a: {', '.join(user.countries)}.",
                 status_code=status.HTTP_403_FORBIDDEN,
             )
-        if destino not in caller.countries:
+        if destino not in user.countries:
             raise ApiError(
                 "forbidden",
                 f"No puedes crear conexiones en {destino}. Tu usuario tiene acceso "
-                f"a: {', '.join(caller.countries)}.",
+                f"a: {', '.join(user.countries)}.",
                 status_code=status.HTTP_403_FORBIDDEN,
             )
 
@@ -456,12 +456,12 @@ def _translate_connection_error(exc: Exception) -> Exception:
     "/connections/{connection_id}",
     response_model=ConnectionResponse,
     summary="Editar una conexión",
+    dependencies=[Depends(require_role("owner"))],
 )
 def update_connection(
-    connection_id: UUID, payload: ConnectionUpdateRequest, conn: DbDep, user: OwnerDep,
-    caller: CurrentUserDep,
+    connection_id: UUID, payload: ConnectionUpdateRequest, conn: DbDep, user: CurrentUserDep
 ) -> ConnectionResponse:
-    _assert_connection_in_scope(conn, caller, connection_id)
+    _assert_connection_in_scope(conn, user, connection_id)
     existing = fetch_one(
         conn,
         "SELECT id FROM core.connection WHERE id = %s AND tenant_id = %s",
@@ -519,20 +519,20 @@ def update_connection(
     response_model=WebhookTokenResponse,
     status_code=status.HTTP_201_CREATED,
     summary="Generar (o regenerar) el token del webhook de una conexión",
+    dependencies=[Depends(require_role("owner"))],
 )
 def create_webhook(
     connection_id: UUID,
     request: Request,
     conn: DbDep,
-    user: OwnerDep,
-    caller: CurrentUserDep,
+    user: CurrentUserDep,
     settings: SettingsDep,
     default_kind: Annotated[
         Literal["shipments", "movements", "ads", "cs"] | None, Query()
     ] = None,
 ) -> WebhookTokenResponse:
     """Hand back the token once. Regenerating invalidates the previous one."""
-    _assert_connection_in_scope(conn, caller, connection_id)
+    _assert_connection_in_scope(conn, user, connection_id)
     existing = fetch_one(
         conn,
         """
@@ -603,12 +603,12 @@ def create_webhook(
     response_class=Response,
     response_model=None,
     summary="Revocar el webhook de una conexión",
+    dependencies=[Depends(require_role("owner"))],
 )
 def revoke_webhook(
-    connection_id: UUID, conn: DbDep, user: OwnerDep,
-    caller: CurrentUserDep,
+    connection_id: UUID, conn: DbDep, user: CurrentUserDep
 ) -> None:
-    _assert_connection_in_scope(conn, caller, connection_id)
+    _assert_connection_in_scope(conn, user, connection_id)
     row = fetch_one(
         conn,
         """
@@ -630,12 +630,12 @@ def revoke_webhook(
     response_class=Response,
     response_model=None,
     summary="Eliminar una conexión y sus datos",
+    dependencies=[Depends(require_role("owner"))],
 )
 def delete_connection(
-    connection_id: UUID, conn: DbDep, user: OwnerDep,
-    caller: CurrentUserDep,
+    connection_id: UUID, conn: DbDep, user: CurrentUserDep
 ) -> None:
-    _assert_connection_in_scope(conn, caller, connection_id)
+    _assert_connection_in_scope(conn, user, connection_id)
     row = fetch_one(
         conn,
         "DELETE FROM core.connection WHERE id = %s AND tenant_id = %s RETURNING id",
