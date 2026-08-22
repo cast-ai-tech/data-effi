@@ -113,7 +113,7 @@ def conexiones(client, owner) -> dict[str, str]:
             },
         )
         assert response.status_code == 201, response.text
-        creadas[code] = response.json()["id"]
+        creadas[code] = response.json()["connection_id"]
     return creadas
 
 
@@ -197,7 +197,7 @@ def test_a_connection_from_another_country_cannot_be_deleted(
 
     # Y sigue viva para quien sí puede verla: el 404 protegió, no borró.
     from_owner = client.get("/config/connections", headers=auth(owner["access_token"]))
-    assert conexiones["CO"] in [row["id"] for row in from_owner.json()]
+    assert conexiones["CO"] in [row["connection_id"] for row in from_owner.json()]
 
 
 def test_a_webhook_cannot_be_minted_for_another_country(client, partner_token, conexiones):
