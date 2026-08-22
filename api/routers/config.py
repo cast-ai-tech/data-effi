@@ -22,6 +22,7 @@ from api.deps import (
     DbDep,
     SettingsDep,
     UnscopedDbDep,
+    country_scope_sql,
     require_cap,
     require_role,
 )
@@ -163,6 +164,7 @@ def list_platforms(
 )
 def list_connections(
     conn: DbDep,
+    user: CurrentUserDep,
     country: Annotated[str | None, Query(min_length=2, max_length=2)] = None,
     scope: Annotated[Literal["country", "global"] | None, Query()] = None,
 ) -> list[ConnectionResponse]:
@@ -182,6 +184,14 @@ def list_connections(
         clauses.append("scope = %s")
         params.append(scope)
 
+    # El alcance por país recorta ANTES de devolver. Sin esto, un socio limitado
+    # a Guatemala que no pase `country` recibía las conexiones de toda la
+    # sociedad: `_guard_country` solo sabe rechazar un país pedido a propósito.
+    scope_sql, scope_params = country_scope_sql(user)
+    if scope_sql:
+        clauses.append(scope_sql.replace(" AND ", "", 1))
+        params.extend(scope_params)
+
     where = f"WHERE {' AND '.join(clauses)}" if clauses else ""
     rows = fetch_all(
         conn,
@@ -198,8 +208,37 @@ def list_connections(
     status_code=status.HTTP_201_CREATED,
     summary="Crear una conexión",
 )
+def _assert_connection_in_scope(conn, caller: CurrentUser, connection_id: UUID) -> dict:
+    """La conexión existe, es de tu sociedad Y es de un país que puedes ver.
+
+    Leer la lista ya está recortada por alcance, pero un id se puede escribir a
+    mano. Sin esto, un socio limitado a Guatemala podía editar, regenerar el
+    webhook o BORRAR la conexión de Colombia con sus datos - conociendo solo el
+    id, que aparece en cualquier captura de pantalla.
+
+    Devuelve 404 y no 403 a propósito: que exista una conexión en un país que no
+    puedes ver no es algo que el código de error deba confirmarte.
+    """
+    row = fetch_one(
+        conn,
+        "SELECT id, country_code FROM core.connection WHERE id = %s AND tenant_id = %s",
+        (connection_id, caller.tenant_id),
+    )
+    if row is None:
+        raise NotFound("Esa conexión no existe en tu workspace")
+
+    if caller.countries is not None:
+        pais = (row["country_code"] or "").upper()
+        # Sin país = conexión global, que mezcla varios: fuera del alcance de
+        # quien no los puede ver todos.
+        if not pais or pais not in caller.countries:
+            raise NotFound("Esa conexión no existe en tu workspace")
+    return row
+
+
 def create_connection(
-    payload: ConnectionCreateRequest, conn: DbDep, user: OwnerDep
+    payload: ConnectionCreateRequest, conn: DbDep, user: OwnerDep,
+    caller: CurrentUserDep,
 ) -> ConnectionResponse:
     platform = fetch_one(
         conn,
@@ -223,6 +262,23 @@ def create_connection(
         )
 
     country_code = _country_for_scope(payload, platform)
+
+    if caller.countries is not None:
+        destino = (country_code or "").upper()
+        if not destino:
+            raise ApiError(
+                "forbidden",
+                "Una conexión global recibe datos de varios países, y tu usuario "
+                f"está limitado a: {', '.join(caller.countries)}.",
+                status_code=status.HTTP_403_FORBIDDEN,
+            )
+        if destino not in caller.countries:
+            raise ApiError(
+                "forbidden",
+                f"No puedes crear conexiones en {destino}. Tu usuario tiene acceso "
+                f"a: {', '.join(caller.countries)}.",
+                status_code=status.HTTP_403_FORBIDDEN,
+            )
 
     if country_code is not None:
         available = fetch_one(
@@ -402,8 +458,10 @@ def _translate_connection_error(exc: Exception) -> Exception:
     summary="Editar una conexión",
 )
 def update_connection(
-    connection_id: UUID, payload: ConnectionUpdateRequest, conn: DbDep, user: OwnerDep
+    connection_id: UUID, payload: ConnectionUpdateRequest, conn: DbDep, user: OwnerDep,
+    caller: CurrentUserDep,
 ) -> ConnectionResponse:
+    _assert_connection_in_scope(conn, caller, connection_id)
     existing = fetch_one(
         conn,
         "SELECT id FROM core.connection WHERE id = %s AND tenant_id = %s",
@@ -467,12 +525,14 @@ def create_webhook(
     request: Request,
     conn: DbDep,
     user: OwnerDep,
+    caller: CurrentUserDep,
     settings: SettingsDep,
     default_kind: Annotated[
         Literal["shipments", "movements", "ads", "cs"] | None, Query()
     ] = None,
 ) -> WebhookTokenResponse:
     """Hand back the token once. Regenerating invalidates the previous one."""
+    _assert_connection_in_scope(conn, caller, connection_id)
     existing = fetch_one(
         conn,
         """
@@ -544,7 +604,11 @@ def create_webhook(
     response_model=None,
     summary="Revocar el webhook de una conexión",
 )
-def revoke_webhook(connection_id: UUID, conn: DbDep, user: OwnerDep) -> None:
+def revoke_webhook(
+    connection_id: UUID, conn: DbDep, user: OwnerDep,
+    caller: CurrentUserDep,
+) -> None:
+    _assert_connection_in_scope(conn, caller, connection_id)
     row = fetch_one(
         conn,
         """
@@ -567,7 +631,11 @@ def revoke_webhook(connection_id: UUID, conn: DbDep, user: OwnerDep) -> None:
     response_model=None,
     summary="Eliminar una conexión y sus datos",
 )
-def delete_connection(connection_id: UUID, conn: DbDep, user: OwnerDep) -> None:
+def delete_connection(
+    connection_id: UUID, conn: DbDep, user: OwnerDep,
+    caller: CurrentUserDep,
+) -> None:
+    _assert_connection_in_scope(conn, caller, connection_id)
     row = fetch_one(
         conn,
         "DELETE FROM core.connection WHERE id = %s AND tenant_id = %s RETURNING id",

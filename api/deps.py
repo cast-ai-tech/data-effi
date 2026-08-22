@@ -213,16 +213,34 @@ def db_unscoped() -> Iterator[psycopg.Connection]:
 UnscopedDbDep = Annotated[psycopg.Connection, Depends(db_unscoped)]
 
 
-def filter_by_scope(user: CurrentUser, rows: list[dict], key: str = "country_code") -> list[dict]:
-    """Drop rows for countries this membership may not read.
+def country_scope_sql(
+    user: CurrentUser, column: str = "country_code", *, include_global: bool = False
+) -> tuple[str, list]:
+    """Un fragmento de SQL que recorta la consulta al alcance de esta persona.
 
-    For the multi-country endpoints, where there is no `country` parameter to
-    guard: `/kpis/global` IS the comparison between countries, so a partner
-    limited to Guatemala must see one row, not four.
+    POR QUÉ EN SQL Y NO FILTRANDO LA LISTA DESPUÉS
+    Porque hay paginación. Traer veinte filas y descartar doce deja páginas
+    cortas y un `total` que miente: el socio de Guatemala vería "48 cargas" y
+    ocho filas. El recorte tiene que ocurrir antes de contar.
+
+    POR QUÉ LAS CONEXIONES GLOBALES DESAPARECEN PARA QUIEN TIENE ALCANCE LIMITADO
+    Una conexión global no pertenece a ningún país: el archivo que carga declara
+    el suyo, y mezcla varios. Enseñársela a alguien que solo puede leer Guatemala
+    sería enseñarle la puerta por la que entran los datos de Colombia. Quien
+    necesite verla necesita acceso a toda la sociedad, que es lo que significa
+    `country_scope = NULL`. `include_global` existe para el caso contrario: una
+    consulta donde la fila global es inofensiva porque el país va en otra parte.
+
+    Devuelve ("", []) cuando la membresía no está limitada, así que el llamador
+    concatena sin preguntar.
     """
     if user.countries is None:
-        return rows
-    return [row for row in rows if str(row.get(key) or "").upper() in user.countries]
+        return "", []
+
+    scope = list(user.countries)
+    if include_global:
+        return f" AND ({column} IS NULL OR upper({column}) = ANY(%s))", [scope]
+    return f" AND upper({column}) = ANY(%s)", [scope]
 
 
 def client_ip(request: Request) -> str:
