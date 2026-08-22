@@ -104,9 +104,12 @@ def conexiones(client, owner) -> dict[str, str]:
             "/config/connections",
             headers=auth(owner["access_token"]),
             json={
-                "platform_code": "manual",
+                # `ads_manual` es tier 2 y de alcance por país, que es
+                # justamente lo que estos tests necesitan: una conexión que
+                # PERTENECE a un país concreto.
+                "platform_code": "ads_manual",
                 "country_code": code,
-                "name": f"Carga manual {code}",
+                "name": f"Pauta manual {code}",
             },
         )
         assert response.status_code == 201, response.text
