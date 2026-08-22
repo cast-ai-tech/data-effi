@@ -119,11 +119,17 @@ def conexiones(client, owner) -> dict[str, str]:
 
 @pytest.fixture(scope="module")
 def partner_token(client, owner) -> str:
-    """Un socio que solo puede ver Guatemala."""
+    """El dueño de la operación de Guatemala: `owner`, pero solo en GT.
+
+    Es owner a propósito, y no analyst: el rol ya le permite editar y borrar
+    conexiones, así que lo ÚNICO que puede detenerlo frente a las de Colombia es
+    el alcance por país. Con un analyst estos tests pasarían por el motivo
+    equivocado - un 403 de rol - y no probarían nada de lo que quieren probar.
+    """
     invite = client.post(
         "/auth/invite",
         headers=auth(owner["access_token"]),
-        json={"email": PARTNER_EMAIL, "role": "analyst", "country_scope": ["GT"]},
+        json={"email": PARTNER_EMAIL, "role": "owner", "country_scope": ["GT"]},
     )
     assert invite.status_code == 201, invite.text
     accepted = client.post(
