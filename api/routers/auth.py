@@ -147,6 +147,16 @@ def _pick_workspace(
     return workspaces[0] if workspaces else None
 
 
+def _org_role(conn, user_id: UUID) -> str | None:
+    """What this person may do ACROSS the companies of their org, if anything.
+
+    Read at every mint, exactly like the memberships beside it: a role revoked
+    an hour ago must not survive in the next token just because the session did.
+    """
+    row = fetch_one(conn, "SELECT role FROM core.user_org_role(%s)", (user_id,))
+    return row["role"] if row else None
+
+
 def _issue_tokens(conn, settings, user: dict, *, tenant_id: UUID | None = None) -> TokenResponse:
     """Mint a session standing in exactly one company.
 
@@ -156,6 +166,7 @@ def _issue_tokens(conn, settings, user: dict, *, tenant_id: UUID | None = None) 
     """
     workspaces = _workspaces(conn, user["id"])
     active = _pick_workspace(workspaces, tenant_id, user.get("tenant_id"))
+    org_role = _org_role(conn, user["id"])
 
     if active is not None:
         active_tenant = active["tenant_id"]
@@ -175,6 +186,7 @@ def _issue_tokens(conn, settings, user: dict, *, tenant_id: UUID | None = None) 
         role=role,
         org_id=user.get("org_id"),
         is_org_admin=bool(user.get("is_org_admin")),
+        org_role=org_role,
         countries=countries,
     )
     refresh_token, token_hash = create_refresh_token()
@@ -191,7 +203,8 @@ def _issue_tokens(conn, settings, user: dict, *, tenant_id: UUID | None = None) 
         tenant_id=active_tenant,
         tenant_name=active["tenant_name"] if active else None,
         role=role,
-        is_org_admin=bool(user.get("is_org_admin")),
+        is_org_admin=bool(user.get("is_org_admin")) or org_role == "admin",
+        org_role=org_role,
         countries=countries,
         workspaces=[
             WorkspaceSummary(
@@ -394,8 +407,11 @@ def me(user: CurrentUserDep, conn: UnscopedDbDep) -> UserResponse:
         raise NotFound("El usuario del token ya no existe")
 
     workspaces = _workspaces(conn, user.id)
+    org_role = _org_role(conn, user.id)
+    row["is_org_admin"] = bool(row.get("is_org_admin")) or org_role == "admin"
     return UserResponse(
         **row,
+        org_role=org_role,
         # The role that applies WHERE THE CALLER IS STANDING, not a global one.
         role=user.role,
         countries=list(user.countries) if user.countries else None,

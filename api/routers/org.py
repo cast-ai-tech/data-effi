@@ -38,9 +38,14 @@ from api.schemas import (
     MemberRow,
     MemberUpdateRequest,
     OrgCountryRow,
+    OrgMemberGrantRequest,
+    OrgMemberRow,
+    OrgMemberUpdateRequest,
+    OrgRow,
     OrgSummaryResponse,
     OrgTenantRow,
     OrgTotals,
+    OrgUpdateRequest,
     TenantCreateRequest,
     TenantRow,
 )
@@ -65,9 +70,14 @@ def require_org(user: CurrentUserDep) -> CurrentUser:
 
 
 def require_org_admin(user: CurrentUserDep) -> CurrentUser:
-    """Creating companies and moving people between them is the operator's call."""
-    if user.org_id is None or not user.is_org_admin:
-        raise Forbidden("Solo el usuario maestro de la organización puede hacer esto")
+    """Creating companies and moving people between them is the operator's call.
+
+    Reads `core.org_membership` through the token claim since migration 036.
+    `is_org_admin` is still honoured because a token minted before that
+    migration - or by the API version still deployed - carries only the boolean.
+    """
+    if user.org_id is None or not user.manages_org():
+        raise Forbidden("Solo un administrador de la organización puede hacer esto")
     return user
 
 
@@ -358,6 +368,211 @@ def summary(
 # -----------------------------------------------------------------------------
 # Companies
 # -----------------------------------------------------------------------------
+
+
+# =============================================================================
+# People at the organisation level.
+#
+# WHAT THIS GRANTS, AND WHAT IT DOES NOT
+# `admin` runs the holding: creates companies, and hands out these very roles.
+# `analyst` and `viewer` see the consolidated roll-up of every company in the
+# org - the totals, and nothing underneath them. None of the three opens a
+# single order, customer or upload: `core.membership` decides that, per company
+# and per country, and it is not touched here.
+#
+# So "let my partner see the whole group" is one row in core.org_membership, and
+# it stays true when a company is added next month - which is the thing that was
+# impossible when the answer was a boolean called is_org_admin.
+# =============================================================================
+
+
+def _org_member_row(conn, org_id: UUID, user_id: UUID) -> OrgMemberRow:
+    row = fetch_one(
+        conn,
+        """
+        SELECT u.id AS user_id, u.email, u.full_name, m.role, m.is_active,
+               u.last_login_at
+        FROM core.org_membership m
+        JOIN core.app_user u ON u.id = m.user_id
+        WHERE m.org_id = %s AND m.user_id = %s
+        """,
+        (org_id, user_id),
+    )
+    if row is None:
+        raise NotFound("Esa persona no tiene un rol en tu organización")
+    return OrgMemberRow(**row)
+
+
+def _assert_not_last_org_admin(conn, org_id: UUID, user_id: UUID) -> None:
+    """An org with no administrator can never grant anything again.
+
+    Every other role can be revoked freely; this one would lock the holding out
+    of its own settings, and no endpoint could undo it.
+    """
+    remaining = fetch_one(
+        conn,
+        """
+        SELECT count(*) AS n
+        FROM core.org_membership
+        WHERE org_id = %s AND role = 'admin' AND is_active AND user_id <> %s
+        """,
+        (org_id, user_id),
+    )
+    if not remaining or remaining["n"] == 0:
+        raise Conflict(
+            "Es el único administrador de la organización. "
+            "Nombra a otro antes de quitarle el rol."
+        )
+
+
+@router.get(
+    "/members",
+    response_model=list[OrgMemberRow],
+    summary="Personas con rol en la organización",
+)
+def list_org_members(conn: UnscopedDbDep, user: OrgUser) -> list[OrgMemberRow]:
+    rows = fetch_all(
+        conn,
+        """
+        SELECT u.id AS user_id, u.email, u.full_name, m.role, m.is_active,
+               u.last_login_at
+        FROM core.org_membership m
+        JOIN core.app_user u ON u.id = m.user_id
+        WHERE m.org_id = %s
+        ORDER BY u.full_name NULLS LAST, u.email
+        """,
+        (user.org_id,),
+    )
+    return [OrgMemberRow(**row) for row in rows]
+
+
+@router.post(
+    "/members",
+    response_model=OrgMemberRow,
+    status_code=status.HTTP_201_CREATED,
+    summary="Dar acceso de organización a alguien",
+)
+def grant_org_role(
+    payload: OrgMemberGrantRequest, conn: UnscopedDbDep, user: OrgAdmin
+) -> OrgMemberRow:
+    """The person must already exist. This is a promotion, not an invitation.
+
+    Creating an account is `/auth/invite`, and it belongs to a company: someone
+    invited straight into the holding would have a login and no reason to use it.
+    """
+    target = fetch_one(
+        conn,
+        "SELECT id, org_id FROM core.app_user WHERE lower(email) = lower(%s)",
+        (payload.email,),
+    )
+    if target is None:
+        raise NotFound(
+            f"No existe una cuenta con el correo {payload.email}. "
+            "Invítala primero a una sociedad."
+        )
+    if target["org_id"] != user.org_id:
+        # Deliberately the same answer as "does not exist": whether an email
+        # belongs to another holding is not this caller's business.
+        raise NotFound(
+            f"No existe una cuenta con el correo {payload.email}. "
+            "Invítala primero a una sociedad."
+        )
+
+    execute(
+        conn,
+        """
+        INSERT INTO core.org_membership (user_id, org_id, role)
+        VALUES (%s, %s, %s)
+        ON CONFLICT (user_id, org_id) DO UPDATE
+            SET role = EXCLUDED.role, is_active = true
+        """,
+        (target["id"], user.org_id, payload.role),
+    )
+    return _org_member_row(conn, user.org_id, target["id"])
+
+
+@router.patch(
+    "/members/{user_id}",
+    response_model=OrgMemberRow,
+    summary="Cambiar el rol de organización de alguien",
+)
+def update_org_member(
+    user_id: UUID, payload: OrgMemberUpdateRequest, conn: UnscopedDbDep, user: OrgAdmin
+) -> OrgMemberRow:
+    current = _org_member_row(conn, user.org_id, user_id)
+
+    fields = payload.model_dump(exclude_unset=True)
+    if not fields:
+        return current
+
+    losing_admin = (
+        fields.get("role", current.role) != "admin" or fields.get("is_active", True) is False
+    )
+    if current.role == "admin" and losing_admin:
+        _assert_not_last_org_admin(conn, user.org_id, user_id)
+
+    if "role" in fields:
+        execute(
+            conn,
+            "UPDATE core.org_membership SET role = %s WHERE org_id = %s AND user_id = %s",
+            (fields["role"], user.org_id, user_id),
+        )
+    if "is_active" in fields:
+        execute(
+            conn,
+            "UPDATE core.org_membership SET is_active = %s WHERE org_id = %s AND user_id = %s",
+            (fields["is_active"], user.org_id, user_id),
+        )
+    return _org_member_row(conn, user.org_id, user_id)
+
+
+@router.delete(
+    "/members/{user_id}",
+    status_code=status.HTTP_204_NO_CONTENT,
+    summary="Quitar el acceso de organización",
+)
+def revoke_org_role(user_id: UUID, conn: UnscopedDbDep, user: OrgAdmin) -> None:
+    """Removes the holding-wide role only. Their companies are untouched.
+
+    Someone who is owner of two companies and analyst of the org keeps both
+    companies after this - they simply stop seeing the consolidated picture.
+    """
+    member = _org_member_row(conn, user.org_id, user_id)
+    if member.role == "admin":
+        _assert_not_last_org_admin(conn, user.org_id, user_id)
+
+    execute(
+        conn,
+        "DELETE FROM core.org_membership WHERE org_id = %s AND user_id = %s",
+        (user.org_id, user_id),
+    )
+
+
+@router.patch("/", response_model=OrgRow, summary="Editar la organización")
+def update_org(payload: OrgUpdateRequest, conn: UnscopedDbDep, user: OrgAdmin) -> OrgRow:
+    fields = payload.model_dump(exclude_unset=True)
+
+    if "name" in fields:
+        execute(
+            conn, "UPDATE core.org SET name = %s WHERE id = %s", (fields["name"], user.org_id)
+        )
+    if "base_currency" in fields:
+        # The currency the roll-up converts INTO. Changing it does not touch a
+        # single company's own numbers, which stay in the currency they billed.
+        execute(
+            conn,
+            "UPDATE core.org SET base_currency = %s WHERE id = %s",
+            (fields["base_currency"].upper(), user.org_id),
+        )
+
+    row = fetch_one(
+        conn,
+        "SELECT id, slug, name, base_currency, is_active FROM core.org WHERE id = %s",
+        (user.org_id,),
+    )
+    if row is None:
+        raise NotFound("Tu organización ya no existe")
+    return OrgRow(**row)
 
 
 @router.get("/tenants", response_model=list[TenantRow], summary="Sociedades de la organización")

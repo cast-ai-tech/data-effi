@@ -23,6 +23,10 @@ from pydantic import BaseModel, EmailStr, Field, StringConstraints
 # single number. See api/deps.CAPABILITIES for what each one actually unlocks.
 Role = Literal["owner", "analyst", "viewer", "uploader"]
 Capability = Literal["read", "ingest", "config", "manage"]
+
+# Roles ACROSS the companies of one org. None of them opens a company's own
+# data - core.membership decides that. See migration 036.
+OrgRole = Literal["admin", "analyst", "viewer"]
 CountryCode = Annotated[str, StringConstraints(min_length=2, max_length=2, to_upper=True)]
 WidgetState = Literal["available", "degraded", "blocked"]
 CatalogueStatus = Literal["sin_costo", "sin_revisar", "costo_desactualizado", "ok"]
@@ -99,6 +103,7 @@ class TokenResponse(BaseModel):
     tenant_name: str | None = None
     role: Role | None = None
     is_org_admin: bool = False
+    org_role: OrgRole | None = None
     countries: list[str] | None = None
     workspaces: list[WorkspaceSummary] = Field(default_factory=list)
 
@@ -118,9 +123,49 @@ class UserResponse(BaseModel):
     org_id: UUID | None = None
     org_name: str | None = None
     is_org_admin: bool = False
+    # admin | analyst | viewer over the holding, or None. Distinct from `role`,
+    # which is what this person may do INSIDE the company they are standing in.
+    org_role: OrgRole | None = None
     countries: list[str] | None = None
     capabilities: list[Capability] = Field(default_factory=list)
     workspaces: list[WorkspaceSummary] = Field(default_factory=list)
+
+
+class OrgRow(BaseModel):
+    id: UUID
+    slug: str
+    name: str
+    base_currency: str
+    is_active: bool = True
+
+
+class OrgUpdateRequest(BaseModel):
+    name: str | None = Field(default=None, min_length=1, max_length=120)
+    # The currency the roll-up converts INTO. Never changes what a company billed.
+    base_currency: Annotated[
+        str, StringConstraints(min_length=3, max_length=3, to_upper=True)
+    ] | None = None
+
+
+class OrgMemberRow(BaseModel):
+    user_id: UUID
+    email: str
+    full_name: str | None
+    role: OrgRole
+    is_active: bool = True
+    last_login_at: datetime | None = None
+
+
+class OrgMemberGrantRequest(BaseModel):
+    """Promotes an existing account. Creating one is an invitation to a company."""
+
+    email: EmailStr
+    role: OrgRole = "viewer"
+
+
+class OrgMemberUpdateRequest(BaseModel):
+    role: OrgRole | None = None
+    is_active: bool | None = None
 
 
 class ProfileUpdateRequest(BaseModel):
