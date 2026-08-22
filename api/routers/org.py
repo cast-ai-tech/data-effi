@@ -231,9 +231,11 @@ def summary(
         tenant_id = tenant["tenant_id"]
         grant = grants.get(tenant_id)
 
-        # An org admin reads every company, including ones they hold no
-        # membership in - that is what being the operator means.
-        if grant is None and not user.is_org_admin:
+        # A role over the holding reads every company, including ones the person
+        # holds no membership in - that is the whole point of `analyst` and
+        # `viewer` at the org level, and of being the operator for `admin`.
+        # Anyone else only ever adds up the companies they actually belong to.
+        if grant is None and not user.reads_org():
             continue
 
         scope = (
@@ -753,9 +755,11 @@ def _assert_not_last_owner(conn, tenant_id: UUID, current_role: str) -> None:
 def list_members(tenant_id: UUID, conn: UnscopedDbDep, user: OrgUser) -> list[MemberRow]:
     _assert_tenant_in_org(conn, user, tenant_id)
 
-    # An owner of that company may see its people; anyone else needs to be the
-    # org admin. A viewer has no business enumerating their colleagues.
-    if not user.is_org_admin:
+    # An owner of that company may see its people; anyone else needs to manage
+    # the org. Note this is `manages_org`, not `reads_org`: an org analyst reads
+    # the consolidated numbers and still has no business enumerating who works
+    # at a company they do not belong to.
+    if not user.manages_org():
         mine = fetch_one(
             conn,
             "SELECT role FROM core.membership "
