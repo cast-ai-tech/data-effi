@@ -8,17 +8,17 @@
 
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { useMemo, useState } from "react";
+import { useCallback, useMemo, useState } from "react";
 
 import { CopilotPanel } from "@/components/CopilotPanel";
 import { DateFieldPicker, ExcludedByFieldBand } from "@/components/DateFieldPicker";
 import { DateRangePicker } from "@/components/DateRangePicker";
 import { Chip, StatusDot, cx } from "@/components/ui";
-import { api, clearTokens } from "@/lib/api";
+import { api, clearTokens, storeTokens } from "@/lib/api";
 import { DEFAULT_FIELD, useDateRange } from "@/lib/date-range";
 import { countryFlag, formatRelative } from "@/lib/format";
 import { useApi, usePersistentState } from "@/lib/hooks";
-import type { Connection, Country, User } from "@/lib/types";
+import type { Capability, Connection, Country, Tokens, User } from "@/lib/types";
 
 /**
  * The range selector lives HERE, not on the dashboard page, because it applies
@@ -36,10 +36,25 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   const { data: user } = useApi<User>("/auth/me");
   const { data: connections } = useApi<Connection[]>("/config/connections");
 
-  const activeCountries = useMemo(
-    () => (countries ?? []).filter((country) => country.is_active),
-    [countries],
+  const can = useCallback(
+    (capability: Capability) => (user?.capabilities ?? []).includes(capability),
+    [user],
   );
+
+  /**
+   * The countries this person may actually open.
+   *
+   * A partner limited to Guatemala inside a company that also runs Ecuador must
+   * not see an Ecuador entry: the API refuses it with a 403, and a menu item
+   * that always errors is worse than no menu item. `user.countries` null means
+   * the whole company, which is the common case.
+   */
+  const activeCountries = useMemo(() => {
+    const active = (countries ?? []).filter((country) => country.is_active);
+    const scope = user?.countries;
+    if (!scope) return active;
+    return active.filter((country) => scope.includes(country.code));
+  }, [countries, user]);
 
   const health = useMemo(() => summariseHealth(connections ?? []), [connections]);
 
@@ -118,14 +133,37 @@ export function AppShell({ children }: { children: React.ReactNode }) {
           )}
         </div>
 
+        {/* Which company you are standing in. Above everything else in the menu
+            because every number below it means something different depending on
+            the answer. Hidden for someone who only belongs to one. */}
+        {(user?.workspaces?.length ?? 0) > 1 && (
+          <WorkspacePicker user={user!} collapsed={collapsed} />
+        )}
+
         <nav className="flex flex-1 flex-col gap-0.5 overflow-y-auto p-2.5">
-          <NavItem
-            href={`/global${rangeSuffix}`}
-            active={pathname === "/global"}
-            collapsed={collapsed}
-            icon={<GridIcon />}
-            label="Global"
-          />
+          {/* The holding's consolidated view. Only for someone who actually has
+              more than one company to consolidate. */}
+          {(user?.workspaces?.length ?? 0) > 1 && can("read") && (
+            <NavItem
+              href="/organizacion"
+              active={pathname.startsWith("/organizacion")}
+              collapsed={collapsed}
+              icon={<StackIcon />}
+              label="Organización"
+            />
+          )}
+
+          {can("read") && (
+            <NavItem
+              href={`/global${rangeSuffix}`}
+              active={pathname === "/global"}
+              collapsed={collapsed}
+              icon={<GridIcon />}
+              label={
+                (user?.workspaces?.length ?? 0) > 1 ? "Esta sociedad" : "Global"
+              }
+            />
+          )}
 
           {!collapsed && activeCountries.length > 0 && (
             <p className="px-2.5 pb-1.5 pt-3.5 text-[10.5px] font-bold uppercase tracking-[0.08em] text-ink-faint">
@@ -145,27 +183,42 @@ export function AppShell({ children }: { children: React.ReactNode }) {
 
           <div className="mt-3.5 border-t border-line-subtle pt-2.5" />
 
-          <NavItem
-            href="/ingest"
-            active={pathname.startsWith("/ingest")}
-            collapsed={collapsed}
-            icon={<UploadIcon />}
-            label="Cargar datos"
-          />
-          <NavItem
-            href="/connections"
-            active={pathname.startsWith("/connections")}
-            collapsed={collapsed}
-            icon={<PlugIcon />}
-            label="Conexiones"
-          />
-          <NavItem
-            href="/settings"
-            active={pathname.startsWith("/settings")}
-            collapsed={collapsed}
-            icon={<GearIcon />}
-            label="Configuración"
-          />
+          {can("ingest") && (
+            <NavItem
+              href="/ingest"
+              active={pathname.startsWith("/ingest")}
+              collapsed={collapsed}
+              icon={<UploadIcon />}
+              label="Cargar datos"
+            />
+          )}
+          {can("read") && (
+            <NavItem
+              href="/connections"
+              active={pathname.startsWith("/connections")}
+              collapsed={collapsed}
+              icon={<PlugIcon />}
+              label="Conexiones"
+            />
+          )}
+          {can("read") && (
+            <NavItem
+              href="/settings"
+              active={pathname.startsWith("/settings")}
+              collapsed={collapsed}
+              icon={<GearIcon />}
+              label="Configuración"
+            />
+          )}
+          {can("manage") && (
+            <NavItem
+              href="/usuarios"
+              active={pathname.startsWith("/usuarios")}
+              collapsed={collapsed}
+              icon={<PeopleIcon />}
+              label="Usuarios"
+            />
+          )}
         </nav>
 
         <div className="border-t border-line-subtle p-2.5">
@@ -231,23 +284,140 @@ export function AppShell({ children }: { children: React.ReactNode }) {
         <main className="flex-1 overflow-y-auto px-5 py-5">{children}</main>
       </div>
 
-      <button
-        type="button"
-        onClick={() => setCopilotOpen(true)}
-        className="fixed bottom-6 right-6 z-40 flex size-12 items-center justify-center rounded-full bg-accent text-on-accent shadow-lg transition-transform hover:scale-105"
-        aria-label="Abrir copiloto"
-      >
-        <SparkIcon />
-      </button>
+      {/* The copilot answers questions about the numbers, so it belongs to
+          whoever may see them. For an `uploader` the button would open a panel
+          where every question comes back 403. */}
+      {can("read") && (
+        <>
+          <button
+            type="button"
+            onClick={() => setCopilotOpen(true)}
+            className="fixed bottom-6 right-6 z-40 flex size-12 items-center justify-center rounded-full bg-accent text-on-accent shadow-lg transition-transform hover:scale-105"
+            aria-label="Abrir copiloto"
+          >
+            <SparkIcon />
+          </button>
 
-      <CopilotPanel
-        open={copilotOpen}
-        onClose={() => setCopilotOpen(false)}
-        countryCode={currentCountry}
-      />
+          <CopilotPanel
+            open={copilotOpen}
+            onClose={() => setCopilotOpen(false)}
+            countryCode={currentCountry}
+          />
+        </>
+      )}
     </div>
   );
 }
+
+/**
+ * The company switcher.
+ *
+ * Switching mints a NEW token for the other company - the role, the country
+ * scope and every number change with it - so this cannot be a client-side
+ * filter. After the swap the page is reloaded rather than re-fetched piecemeal:
+ * half the screen holding Colombia's data while the other half shows Guatemala
+ * is the one state that must never be visible.
+ */
+function WorkspacePicker({ user, collapsed }: { user: User; collapsed: boolean }) {
+  const [open, setOpen] = useState(false);
+  const [switching, setSwitching] = useState<string | null>(null);
+
+  const current = user.workspaces.find((ws) => ws.tenant_id === user.tenant_id);
+
+  async function switchTo(tenantId: string) {
+    if (tenantId === user.tenant_id) {
+      setOpen(false);
+      return;
+    }
+    setSwitching(tenantId);
+    try {
+      const tokens = await api.post<Tokens>("/auth/switch", { tenant_id: tenantId });
+      storeTokens(tokens);
+      // Back to the neutral screen: the country you were reading may not even
+      // exist in the company you just moved to.
+      window.location.assign("/global");
+    } catch {
+      setSwitching(null);
+      setOpen(false);
+    }
+  }
+
+  if (collapsed) {
+    return (
+      <div className="border-b border-line-subtle px-2.5 py-2.5">
+        <button
+          type="button"
+          onClick={() => setOpen(!open)}
+          title={current?.name ?? "Cambiar de sociedad"}
+          className="flex size-9 items-center justify-center rounded-[8px] border border-line-strong bg-surface text-[12px] font-bold text-ink-2"
+        >
+          {(current?.name ?? "?").slice(0, 2).toUpperCase()}
+        </button>
+      </div>
+    );
+  }
+
+  return (
+    <div className="relative border-b border-line-subtle px-2.5 py-2.5">
+      <button
+        type="button"
+        onClick={() => setOpen(!open)}
+        aria-expanded={open}
+        className="flex w-full items-center justify-between gap-2 rounded-[8px] border border-line-strong bg-surface px-2.5 py-2 text-left hover:bg-white/[0.04]"
+      >
+        <span className="min-w-0">
+          <span className="block text-[10.5px] font-bold uppercase tracking-[0.08em] text-ink-faint">
+            Sociedad
+          </span>
+          <span className="block truncate text-[12.5px] font-semibold text-ink-2">
+            {current?.name ?? "Sin sociedad"}
+          </span>
+        </span>
+        <span aria-hidden className="text-[10px] text-ink-dim">
+          ▾
+        </span>
+      </button>
+
+      {open && (
+        <div className="absolute left-2.5 right-2.5 z-50 mt-1 overflow-hidden rounded-[10px] border border-line-strong bg-surface shadow-xl">
+          {user.workspaces.map((ws) => (
+            <button
+              key={ws.tenant_id}
+              type="button"
+              onClick={() => switchTo(ws.tenant_id)}
+              disabled={switching !== null}
+              className={cx(
+                "flex w-full flex-col items-start gap-0.5 px-3 py-2 text-left hover:bg-white/[0.05] disabled:opacity-50",
+                ws.tenant_id === user.tenant_id && "bg-white/[0.06]",
+              )}
+            >
+              <span className="text-[12.5px] font-semibold text-ink-2">
+                {ws.name}
+                {switching === ws.tenant_id && " …"}
+              </span>
+              <span className="text-[10.5px] text-ink-dim">
+                {ROLE_LABEL[ws.role]}
+                {ws.country_scope
+                  ? ` · solo ${ws.country_scope.join(", ")}`
+                  : ws.countries.length
+                    ? ` · ${ws.countries.join(", ")}`
+                    : ""}
+                {ws.share_pct ? ` · ${ws.share_pct}%` : ""}
+              </span>
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+export const ROLE_LABEL: Record<string, string> = {
+  owner: "Propietario",
+  analyst: "Analista",
+  viewer: "Solo lectura",
+  uploader: "Solo carga",
+};
 
 /**
  * One country, and its sections when you are inside it.
@@ -416,6 +586,47 @@ function GridIcon() {
           strokeWidth="1.4"
         />
       ))}
+    </svg>
+  );
+}
+
+/** Stacked layers: several companies seen as one. */
+function StackIcon() {
+  return (
+    <svg viewBox="0 0 16 16" fill="none" className="size-4" aria-hidden>
+      <path
+        d="M8 2 2 5l6 3 6-3-6-3Z"
+        stroke="currentColor"
+        strokeWidth="1.4"
+        strokeLinejoin="round"
+      />
+      <path
+        d="M2 8.5 8 11.5l6-3M2 11.5 8 14.5l6-3"
+        stroke="currentColor"
+        strokeWidth="1.4"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </svg>
+  );
+}
+
+function PeopleIcon() {
+  return (
+    <svg viewBox="0 0 16 16" fill="none" className="size-4" aria-hidden>
+      <circle cx="6" cy="5.5" r="2.5" stroke="currentColor" strokeWidth="1.4" />
+      <path
+        d="M1.5 13.5c0-2.2 2-3.5 4.5-3.5s4.5 1.3 4.5 3.5"
+        stroke="currentColor"
+        strokeWidth="1.4"
+        strokeLinecap="round"
+      />
+      <path
+        d="M11 3.4a2.5 2.5 0 0 1 0 4.7M12.5 10.3c1.3.5 2 1.6 2 3.2"
+        stroke="currentColor"
+        strokeWidth="1.4"
+        strokeLinecap="round"
+      />
     </svg>
   );
 }

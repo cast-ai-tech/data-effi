@@ -16,7 +16,15 @@ from uuid import UUID
 from fastapi import APIRouter, Depends, Query, Request, Response, status
 
 from api.db import fetch_all, fetch_one
-from api.deps import CurrentUserDep, DbDep, SettingsDep, require_role
+from api.deps import (
+    CurrentUser,
+    CurrentUserDep,
+    DbDep,
+    SettingsDep,
+    UnscopedDbDep,
+    require_cap,
+    require_role,
+)
 from api.errors import ApiError, Conflict, NotFound
 from api.schemas import (
     ActivateCountryRequest,
@@ -24,8 +32,8 @@ from api.schemas import (
     ConnectionResponse,
     ConnectionUpdateRequest,
     CountryResponse,
+    MemberRow,
     PlatformResponse,
-    UserResponse,
     WebhookTokenResponse,
 )
 from api.security import create_webhook_token
@@ -565,21 +573,47 @@ def delete_connection(connection_id: UUID, conn: DbDep, user: OwnerDep) -> None:
     logger.info("connection deleted: %s", connection_id)
 
 
-@router.get("/users", response_model=list[UserResponse], summary="Usuarios del workspace")
-def list_users(conn: DbDep, user: CurrentUserDep) -> list[UserResponse]:
+@router.get("/users", response_model=list[MemberRow], summary="Usuarios de la sociedad")
+def list_users(
+    conn: UnscopedDbDep,
+    user: Annotated[CurrentUser, Depends(require_cap("manage"))],
+) -> list[MemberRow]:
+    """Who may enter THIS company, with the grant each one holds.
+
+    Reads memberships rather than `core.app_user.tenant_id`: since migration 032
+    a person can belong to several companies, and the old query would have shown
+    only those whose default company happens to be this one - which, for anyone
+    invited into a second partnership, is nobody.
+
+    Unscoped connection on purpose: core.membership and core.app_user sit outside
+    row-level security (login has to read them before a company is known), and
+    the WHERE below is what scopes this to the caller's company.
+    """
     rows = fetch_all(
         conn,
         """
-        SELECT u.id, u.email, u.full_name, u.role, u.tenant_id, u.created_at,
-               t.name AS tenant_name
-        FROM core.app_user u
-        JOIN core.tenant t ON t.id = u.tenant_id
-        WHERE u.tenant_id = %s AND u.is_active
-        ORDER BY u.created_at
+        SELECT u.id AS user_id, u.email, u.full_name, m.role, m.country_scope,
+               m.share_pct, m.is_active, u.last_login_at
+        FROM core.membership m
+        JOIN core.app_user u ON u.id = m.user_id
+        WHERE m.tenant_id = %s AND m.is_active
+        ORDER BY u.email
         """,
         (user.tenant_id,),
     )
-    return [UserResponse(**row) for row in rows]
+    return [
+        MemberRow(
+            user_id=row["user_id"],
+            email=row["email"],
+            full_name=row["full_name"],
+            role=row["role"],
+            country_scope=list(row["country_scope"]) if row["country_scope"] else None,
+            share_pct=float(row["share_pct"]) if row["share_pct"] is not None else None,
+            is_active=row["is_active"],
+            last_login_at=row["last_login_at"],
+        )
+        for row in rows
+    ]
 
 
 def _connection_health(conn, connection_id: UUID) -> ConnectionResponse:
