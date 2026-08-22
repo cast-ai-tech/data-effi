@@ -28,6 +28,7 @@ from api.deps import (
     DbDep,
     SettingsDep,
     client_ip,
+    country_scope_sql,
     rate_limit,
     require_cap,
     require_role,
@@ -150,11 +151,32 @@ async def upload(
 
     owner = fetch_one(
         conn,
-        "SELECT id FROM core.connection WHERE id = %s AND tenant_id = %s",
+        "SELECT id, country_code FROM core.connection WHERE id = %s AND tenant_id = %s",
         (connection_id, user.tenant_id),
     )
     if owner is None:
         raise NotFound("Esa conexión no existe en tu workspace")
+
+    # Subir por una conexión de otro país es escribir en un país que no puedes
+    # leer, y el archivo cargado ya no se puede "desver": queda en los totales
+    # de esa operación. Una conexión global se rechaza por lo mismo - mezcla
+    # países - y por eso el mensaje distingue los dos casos.
+    if user.countries is not None:
+        destino = (owner["country_code"] or "").upper()
+        if not destino:
+            raise ApiError(
+                "forbidden",
+                "Esa conexión recibe datos de varios países y tu usuario está "
+                f"limitado a: {', '.join(user.countries)}.",
+                status_code=status.HTTP_403_FORBIDDEN,
+            )
+        if destino not in user.countries:
+            raise ApiError(
+                "forbidden",
+                f"Esa conexión carga datos de {destino} y tu usuario solo tiene "
+                f"acceso a: {', '.join(user.countries)}.",
+                status_code=status.HTTP_403_FORBIDDEN,
+            )
 
     upload_dir = Path(settings.upload_dir) / str(user.tenant_id)
     upload_dir.mkdir(parents=True, exist_ok=True)
@@ -597,14 +619,20 @@ def list_jobs(
     user: CurrentUserDep,
     limit: Annotated[int, Query(ge=1, le=100)] = 20,
 ) -> list[UploadJobResponse]:
+    # El país de una carga vive en su conexión, no en la carga: duplicarlo sería
+    # una segunda fuente de verdad. Por eso el alcance se aplica con un JOIN.
+    scope_sql, scope_params = country_scope_sql(user, "c.country_code")
     rows = fetch_all(
         conn,
-        """
-        SELECT id, filename, kind, size_bytes, status, batch_id, error, queued_at, finished_at
-        FROM raw.upload_job WHERE tenant_id = %s
-        ORDER BY queued_at DESC LIMIT %s
+        f"""
+        SELECT j.id, j.filename, j.kind, j.size_bytes, j.status, j.batch_id, j.error,
+               j.queued_at, j.finished_at
+        FROM raw.upload_job j
+        JOIN core.connection c ON c.id = j.connection_id
+        WHERE j.tenant_id = %s{scope_sql}
+        ORDER BY j.queued_at DESC LIMIT %s
         """,
-        (user.tenant_id, limit),
+        (user.tenant_id, *scope_params, limit),
     )
     return [UploadJobResponse(**row) for row in rows]
 
@@ -616,15 +644,21 @@ def list_jobs(
     summary="Estado de una carga",
 )
 def get_job(job_id: UUID, conn: DbDep, user: CurrentUserDep) -> UploadJobResponse:
+    scope_sql, scope_params = country_scope_sql(user, "c.country_code")
     row = fetch_one(
         conn,
-        """
-        SELECT id, filename, kind, size_bytes, status, batch_id, error, queued_at, finished_at
-        FROM raw.upload_job WHERE id = %s AND tenant_id = %s
+        f"""
+        SELECT j.id, j.filename, j.kind, j.size_bytes, j.status, j.batch_id, j.error,
+               j.queued_at, j.finished_at
+        FROM raw.upload_job j
+        JOIN core.connection c ON c.id = j.connection_id
+        WHERE j.id = %s AND j.tenant_id = %s{scope_sql}
         """,
-        (job_id, user.tenant_id),
+        (job_id, user.tenant_id, *scope_params),
     )
     if row is None:
+        # Mismo 404 que para una carga inexistente: que exista en un país que no
+        # puedes ver no es algo que debas poder averiguar por el código de error.
         raise NotFound("Esa carga no existe")
     return UploadJobResponse(**row)
 
@@ -637,15 +671,25 @@ def get_job(job_id: UUID, conn: DbDep, user: CurrentUserDep) -> UploadJobRespons
 )
 def list_batches(
     conn: DbDep,
+    user: CurrentUserDep,
     page: Annotated[int, Query(ge=1)] = 1,
     page_size: Annotated[int, Query(ge=1, le=100)] = 20,
     country: Annotated[str | None, Query(min_length=2, max_length=2)] = None,
 ) -> PaginatedBatches:
-    where = ""
+    clauses: list[str] = []
     params: list = []
     if country:
-        where = "WHERE country_code = %s"
+        clauses.append("country_code = %s")
         params.append(country.upper())
+
+    # Recortado en SQL y no sobre las filas ya traídas: con paginación, filtrar
+    # después deja páginas cortas y un `total` que miente.
+    scope_sql, scope_params = country_scope_sql(user)
+    if scope_sql:
+        clauses.append(scope_sql.replace(" AND ", "", 1))
+        params.extend(scope_params)
+
+    where = f"WHERE {' AND '.join(clauses)}" if clauses else ""
 
     total_row = fetch_one(
         conn, f"SELECT count(*) AS n FROM mart.v_batch_history {where}", tuple(params)
@@ -673,7 +717,12 @@ def list_batches(
     summary="Detalle de una carga",
 )
 def get_batch(batch_id: UUID, conn: DbDep, user: CurrentUserDep) -> BatchDetail:
-    row = fetch_one(conn, "SELECT * FROM mart.v_batch_history WHERE batch_id = %s", (batch_id,))
+    scope_sql, scope_params = country_scope_sql(user)
+    row = fetch_one(
+        conn,
+        f"SELECT * FROM mart.v_batch_history WHERE batch_id = %s{scope_sql}",
+        (batch_id, *scope_params),
+    )
     if row is None:
         raise NotFound("Esa carga no existe en tu workspace")
 
