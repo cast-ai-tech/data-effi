@@ -28,6 +28,9 @@ from api.deps import (
 from api.errors import ApiError, Conflict, NotFound
 from api.schemas import (
     ActivateCountryRequest,
+    BranchCreateRequest,
+    BranchResponse,
+    BranchUpdateRequest,
     ConnectionCreateRequest,
     ConnectionResponse,
     ConnectionUpdateRequest,
@@ -571,6 +574,202 @@ def delete_connection(connection_id: UUID, conn: DbDep, user: OwnerDep) -> None:
     if row is None:
         raise NotFound("Esa conexión no existe en tu workspace")
     logger.info("connection deleted: %s", connection_id)
+
+
+# =============================================================================
+# Branches: the physical places a company operates from.
+#
+# A branch belongs to a company AND to one of the countries that company has
+# activated - the composite foreign key in migration 035 enforces the second
+# half, so a country deactivated here cannot leave branches stranded in it.
+#
+# COUNTRY SCOPE IS CHECKED HERE, NOT ONLY IN SQL. A partner limited to Guatemala
+# must not read - or create - the branches of Colombia. Row-level security scopes
+# by COMPANY, never by country, so this is the layer that knows.
+# =============================================================================
+
+
+def _assert_may_use_country(user: CurrentUser, country_code: str) -> None:
+    if not user.may_read_country(country_code):
+        raise ApiError(
+            "forbidden",
+            f"Tu usuario no tiene acceso a {country_code.upper()}.",
+            status_code=status.HTTP_403_FORBIDDEN,
+        )
+
+
+def _branch_row(conn, tenant_id, branch_id: UUID) -> dict:
+    row = fetch_one(
+        conn,
+        """
+        SELECT b.*, (SELECT count(*) FROM core.store s WHERE s.branch_id = b.id) AS store_count
+        FROM core.branch b
+        WHERE b.id = %s AND b.tenant_id = %s
+        """,
+        (branch_id, tenant_id),
+    )
+    if row is None:
+        raise NotFound("Esa sucursal no existe en tu sociedad")
+    return row
+
+
+@router.get("/branches", response_model=list[BranchResponse], summary="Sucursales")
+def list_branches(
+    conn: DbDep,
+    user: CurrentUserDep,
+    country: Annotated[str | None, Query(description="Filtrar por país")] = None,
+    include_inactive: Annotated[bool, Query()] = False,
+) -> list[BranchResponse]:
+    if country is not None:
+        _assert_may_use_country(user, country)
+
+    rows = fetch_all(
+        conn,
+        """
+        SELECT b.*, (SELECT count(*) FROM core.store s WHERE s.branch_id = b.id) AS store_count
+        FROM core.branch b
+        WHERE b.tenant_id = %(tenant)s
+          AND (%(country)s::char(2) IS NULL OR b.country_code = %(country)s)
+          AND (%(all)s OR b.is_active)
+        ORDER BY b.country_code, b.name
+        """,
+        {
+            "tenant": user.tenant_id,
+            "country": country.upper() if country else None,
+            "all": include_inactive,
+        },
+    )
+    # A limited membership never sees the other countries' branches, even when it
+    # did not name a country in the query.
+    return [
+        BranchResponse(**row) for row in rows if user.may_read_country(row["country_code"])
+    ]
+
+
+@router.post(
+    "/branches",
+    response_model=BranchResponse,
+    status_code=status.HTTP_201_CREATED,
+    dependencies=[Depends(require_cap("config"))],
+    summary="Crear una sucursal",
+)
+def create_branch(
+    payload: BranchCreateRequest, conn: DbDep, user: CurrentUserDep
+) -> BranchResponse:
+    _assert_may_use_country(user, payload.country_code)
+
+    active = fetch_one(
+        conn,
+        "SELECT country_code FROM core.workspace_country "
+        "WHERE tenant_id = %s AND country_code = %s AND is_active",
+        (user.tenant_id, payload.country_code),
+    )
+    if active is None:
+        raise ApiError(
+            "country_not_active",
+            f"Tu sociedad no opera en {payload.country_code}. "
+            "Actívalo primero en Configuración.",
+        )
+
+    existing = fetch_one(
+        conn,
+        "SELECT id FROM core.branch WHERE tenant_id = %s AND country_code = %s AND name = %s",
+        (user.tenant_id, payload.country_code, payload.name),
+    )
+    if existing is not None:
+        raise Conflict(
+            f"Ya existe una sucursal llamada '{payload.name}' en {payload.country_code}"
+        )
+
+    row = fetch_one(
+        conn,
+        """
+        INSERT INTO core.branch
+            (tenant_id, country_code, name, cost_center, address, city,
+             manager_name, phone, is_warehouse, notes)
+        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+        RETURNING id
+        """,
+        (
+            user.tenant_id,
+            payload.country_code,
+            payload.name,
+            payload.cost_center,
+            payload.address,
+            payload.city,
+            payload.manager_name,
+            payload.phone,
+            payload.is_warehouse,
+            payload.notes,
+        ),
+    )
+    return BranchResponse(**_branch_row(conn, user.tenant_id, row["id"]))
+
+
+@router.patch(
+    "/branches/{branch_id}",
+    response_model=BranchResponse,
+    dependencies=[Depends(require_cap("config"))],
+    summary="Editar una sucursal",
+)
+def update_branch(
+    branch_id: UUID, payload: BranchUpdateRequest, conn: DbDep, user: CurrentUserDep
+) -> BranchResponse:
+    current = _branch_row(conn, user.tenant_id, branch_id)
+    _assert_may_use_country(user, current["country_code"])
+
+    fields = payload.model_dump(exclude_unset=True)
+    if not fields:
+        return BranchResponse(**current)
+
+    new_name = fields.get("name")
+    if new_name is not None and new_name != current["name"]:
+        clash = fetch_one(
+            conn,
+            "SELECT id FROM core.branch "
+            "WHERE tenant_id = %s AND country_code = %s AND name = %s AND id <> %s",
+            (user.tenant_id, current["country_code"], new_name, branch_id),
+        )
+        if clash is not None:
+            country = current["country_code"]
+            raise Conflict(f"Ya existe una sucursal llamada '{new_name}' en {country}")
+
+    assignments = ", ".join(f"{column} = %s" for column in fields)
+    fetch_one(
+        conn,
+        f"UPDATE core.branch SET {assignments} WHERE id = %s AND tenant_id = %s RETURNING id",
+        (*fields.values(), branch_id, user.tenant_id),
+    )
+    return BranchResponse(**_branch_row(conn, user.tenant_id, branch_id))
+
+
+@router.delete(
+    "/branches/{branch_id}",
+    status_code=status.HTTP_204_NO_CONTENT,
+    dependencies=[Depends(require_cap("config"))],
+    summary="Eliminar una sucursal",
+)
+def delete_branch(branch_id: UUID, conn: DbDep, user: CurrentUserDep) -> None:
+    """Deletes only an empty branch; one with stores is deactivated instead.
+
+    Deleting it outright would silently unhook every store that ships from here -
+    the foreign key nulls the link - and a store with no branch looks exactly like
+    a store that never had one. Deactivating keeps the history readable.
+    """
+    current = _branch_row(conn, user.tenant_id, branch_id)
+    _assert_may_use_country(user, current["country_code"])
+
+    if current["store_count"]:
+        raise Conflict(
+            f"'{current['name']}' tiene {current['store_count']} tienda(s) asignada(s). "
+            "Desactívala o mueve las tiendas antes de eliminarla."
+        )
+
+    fetch_one(
+        conn,
+        "DELETE FROM core.branch WHERE id = %s AND tenant_id = %s RETURNING id",
+        (branch_id, user.tenant_id),
+    )
 
 
 @router.get("/users", response_model=list[MemberRow], summary="Usuarios de la sociedad")

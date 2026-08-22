@@ -123,6 +123,87 @@ class UserResponse(BaseModel):
     workspaces: list[WorkspaceSummary] = Field(default_factory=list)
 
 
+class ProfileUpdateRequest(BaseModel):
+    """The part of your own account you may change. Email is not in it.
+
+    Changing an email would move an identity that other companies already granted
+    access to, so it is an administrator's action, not a self-service one.
+    """
+
+    full_name: str | None = Field(default=None, min_length=1, max_length=120)
+
+
+class PasswordChangeRequest(BaseModel):
+    """The current password is required even though the caller is authenticated.
+
+    A token left open on a borrowed laptop is exactly the case this stops: it
+    proves the person at the keyboard is the owner of the account, not merely the
+    holder of a session.
+    """
+
+    current_password: str = Field(min_length=1)
+    new_password: str = Field(min_length=1)
+
+
+class SessionRow(BaseModel):
+    """One live refresh token: a device or browser that can still come back."""
+
+    id: UUID
+    tenant_id: UUID | None = None
+    tenant_name: str | None = None
+    created_at: datetime
+    expires_at: datetime
+    is_current: bool = False
+
+
+class BranchResponse(BaseModel):
+    id: UUID
+    country_code: str
+    name: str
+    cost_center: str | None = None
+    address: str | None = None
+    city: str | None = None
+    manager_name: str | None = None
+    phone: str | None = None
+    is_warehouse: bool = False
+    is_active: bool = True
+    notes: str | None = None
+    created_at: datetime
+    # How many stores ship from here. Shown so deactivating a branch that still
+    # has stores is a decision and not a surprise.
+    store_count: int = 0
+
+
+class BranchCreateRequest(BaseModel):
+    country_code: CountryCode
+    name: str = Field(min_length=1, max_length=120)
+    cost_center: str | None = Field(default=None, max_length=60)
+    address: str | None = Field(default=None, max_length=300)
+    city: str | None = Field(default=None, max_length=120)
+    manager_name: str | None = Field(default=None, max_length=120)
+    phone: str | None = Field(default=None, max_length=40)
+    is_warehouse: bool = False
+    notes: str | None = Field(default=None, max_length=1000)
+
+
+class BranchUpdateRequest(BaseModel):
+    """Every field optional: this is a patch, and omitted means unchanged.
+
+    `country_code` is absent on purpose. Moving a branch to another country would
+    silently move the stores hanging off it, so that is a new branch.
+    """
+
+    name: str | None = Field(default=None, min_length=1, max_length=120)
+    cost_center: str | None = Field(default=None, max_length=60)
+    address: str | None = Field(default=None, max_length=300)
+    city: str | None = Field(default=None, max_length=120)
+    manager_name: str | None = Field(default=None, max_length=120)
+    phone: str | None = Field(default=None, max_length=40)
+    is_warehouse: bool | None = None
+    is_active: bool | None = None
+    notes: str | None = Field(default=None, max_length=1000)
+
+
 class InviteRequest(BaseModel):
     email: EmailStr
     role: Role = "viewer"

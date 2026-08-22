@@ -31,8 +31,11 @@ from api.schemas import (
     InviteRequest,
     InviteResponse,
     LoginRequest,
+    PasswordChangeRequest,
+    ProfileUpdateRequest,
     RefreshRequest,
     RegisterRequest,
+    SessionRow,
     SwitchWorkspaceRequest,
     TokenResponse,
     UserResponse,
@@ -410,6 +413,137 @@ def me(user: CurrentUserDep, conn: UnscopedDbDep) -> UserResponse:
             for ws in workspaces
         ],
     )
+
+
+# =============================================================================
+# The account panel: the part of Data Effi a person administers about themselves.
+#
+# Everything here is keyed by `user.id` from the token and NEVER by a parameter,
+# so there is no id to tamper with: you can only ever read and change your own
+# account. That is why these live outside core.membership's reach - they are not
+# about a company at all.
+# =============================================================================
+
+
+@router.patch("/me", response_model=UserResponse, summary="Editar mi perfil")
+def update_me(
+    payload: ProfileUpdateRequest, user: CurrentUserDep, conn: UnscopedDbDep
+) -> UserResponse:
+    fields = payload.model_dump(exclude_unset=True)
+    # Spelled out instead of assembled from the payload keys: this router is not
+    # in the S608 allow-list of ruff.toml, and with a single editable column a
+    # dynamic SET clause buys nothing. Adding a field here means adding a line.
+    if "full_name" in fields:
+        execute(
+            conn,
+            "UPDATE core.app_user SET full_name = %s WHERE id = %s",
+            (fields["full_name"], user.id),
+        )
+    return me(user=user, conn=conn)
+
+
+@router.post(
+    "/me/password",
+    status_code=status.HTTP_204_NO_CONTENT,
+    response_class=Response,
+    response_model=None,
+    dependencies=[Depends(rate_limit("auth", "rate_limit_auth_per_minute"))],
+    summary="Cambiar mi contraseña",
+)
+def change_password(
+    payload: PasswordChangeRequest,
+    request: Request,
+    user: CurrentUserDep,
+    conn: UnscopedDbDep,
+) -> None:
+    """Changing the password ends every OTHER session, which is the point.
+
+    The reason people change a password is that they think someone else has it.
+    Leaving the other sessions alive would hand the intruder a working refresh
+    token for as long as it lasts, so they are revoked here - including this
+    caller's own, because the API cannot tell which refresh token belongs to the
+    access token in front of it. The frontend logs in again.
+    """
+    row = fetch_one(
+        conn, "SELECT password_hash FROM core.app_user WHERE id = %s", (user.id,)
+    )
+    if row is None:
+        raise NotFound("El usuario del token ya no existe")
+
+    if not verify_password(row["password_hash"], payload.current_password):
+        _record_auth_event(
+            conn, email=user.email, event="password_change_refused",
+            request=request, user_id=user.id, tenant_id=user.tenant_id,
+        )
+        raise Unauthorized("La contraseña actual no es correcta")
+
+    if payload.new_password == payload.current_password:
+        raise ApiError("same_password", "La contraseña nueva es igual a la actual")
+
+    try:
+        new_hash = hash_password(payload.new_password)
+    except ValueError as exc:
+        raise ApiError("weak_password", str(exc)) from exc
+
+    execute(
+        conn, "UPDATE core.app_user SET password_hash = %s WHERE id = %s",
+        (new_hash, user.id),
+    )
+    execute(
+        conn,
+        "UPDATE core.refresh_token SET revoked_at = now() "
+        "WHERE user_id = %s AND revoked_at IS NULL",
+        (user.id,),
+    )
+    _record_auth_event(
+        conn, email=user.email, event="password_changed",
+        request=request, user_id=user.id, tenant_id=user.tenant_id,
+    )
+
+
+@router.get(
+    "/me/sessions", response_model=list[SessionRow], summary="Mis sesiones abiertas"
+)
+def list_sessions(user: CurrentUserDep, conn: UnscopedDbDep) -> list[SessionRow]:
+    """Every refresh token still able to come back, and which company it stands in.
+
+    `is_current` is not reported: an access token carries no reference to the
+    refresh token it was minted from, so claiming to know which row is "this
+    device" would be a guess. The frontend marks it, since it holds the token.
+    """
+    rows = fetch_all(
+        conn,
+        """
+        SELECT r.id, r.tenant_id, t.name AS tenant_name, r.created_at, r.expires_at
+        FROM core.refresh_token r
+        LEFT JOIN core.tenant t ON t.id = r.tenant_id
+        WHERE r.user_id = %s AND r.revoked_at IS NULL AND r.expires_at > now()
+        ORDER BY r.created_at DESC
+        """,
+        (user.id,),
+    )
+    return [SessionRow(**row) for row in rows]
+
+
+@router.delete(
+    "/me/sessions/{session_id}",
+    status_code=status.HTTP_204_NO_CONTENT,
+    response_class=Response,
+    response_model=None,
+    summary="Cerrar una sesión",
+)
+def revoke_session(session_id: UUID, user: CurrentUserDep, conn: UnscopedDbDep) -> None:
+    revoked = fetch_one(
+        conn,
+        "UPDATE core.refresh_token SET revoked_at = now() "
+        "WHERE id = %s AND user_id = %s AND revoked_at IS NULL "
+        "RETURNING id",
+        (session_id, user.id),
+    )
+    if revoked is None:
+        # Also the answer when the row belongs to somebody else: a 404 tells the
+        # caller nothing about whose session that id is.
+        raise NotFound("Esa sesión no existe o ya estaba cerrada")
 
 
 @router.post(
