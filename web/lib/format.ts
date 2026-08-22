@@ -198,6 +198,11 @@ export function pluralize(count: number, singular: string, plural: string): stri
   return `${count} ${count === 1 ? singular : plural}`;
 }
 
+/**
+ * Banderas escritas a mano. Ya NO es la fuente de verdad - `countryFlag` deriva
+ * el emoji del código ISO - pero se conserva porque hay un test que la usa y
+ * porque documenta de un vistazo qué países existían al escribir esto.
+ */
 export const COUNTRY_FLAGS: Record<string, string> = {
   CO: "🇨🇴",
   MX: "🇲🇽",
@@ -206,7 +211,54 @@ export const COUNTRY_FLAGS: Record<string, string> = {
   CL: "🇨🇱",
   PA: "🇵🇦",
   GT: "🇬🇹",
+  HN: "🇭🇳",
+  CR: "🇨🇷",
+  DO: "🇩🇴",
+  VE: "🇻🇪",
 };
+
+const RESERVED_REGIONS = /^(ZZ|AA|Q[M-Z]|X[A-Z])$/;
+
+let regionNames: Intl.DisplayNames | null | undefined;
+
+/**
+ * ¿Existe ese país, o son dos letras cualquiera?
+ *
+ * Se le pregunta a `Intl` en vez de mantener una lista: así un país agregado por
+ * migración se valida solo, y "ZZ" sigue dando la bandera neutra en vez de un
+ * glifo que ningún sistema sabe pintar. `of()` devuelve el código tal cual
+ * cuando no lo reconoce, que es la forma de distinguirlos.
+ */
+function isRealRegion(iso: string): boolean {
+  // `fallback: "none"` hace que `of()` devuelva undefined ante un código que no
+  // reconoce, en vez de devolver el código mismo. Sin eso no hay forma de
+  // distinguir "QQ" de un país real.
+  if (regionNames === undefined) {
+    try {
+      regionNames = new Intl.DisplayNames(["es"], { type: "region", fallback: "none" });
+    } catch {
+      regionNames = null;
+    }
+  }
+  // Sin Intl no hay forma de saberlo: se asume que sí, porque el caso normal es
+  // un país de verdad y una bandera de más es mejor que once de menos.
+  if (!regionNames) return true;
+
+  // ZZ y AA, y los rangos QM-QZ y XA-XZ, son códigos que ISO reserva sin asignar.
+  // CLDR igual les da nombre - ZZ es literalmente "Región desconocida" - así que
+  // pasarían el filtro de abajo y producirían una bandera que nadie sabe pintar.
+  if (RESERVED_REGIONS.test(iso)) return false;
+
+  try {
+    return regionNames.of(iso) !== undefined;
+  } catch {
+    return false;
+  }
+}
+
+/** Punto de código del primer indicador regional: 'A' -> 🇦. */
+const REGIONAL_INDICATOR_A = 0x1f1e6;
+const LETTER_A = "A".charCodeAt(0);
 
 /**
  * A flag for a country code, a globe for a connection that has none.
@@ -219,5 +271,17 @@ export function countryFlag(code: string | null | undefined): string {
   // connection has no code at all. An empty or unrecognised string still gets
   // the neutral white flag.
   if (code === null || code === undefined) return "🌐";
-  return COUNTRY_FLAGS[code.toUpperCase()] ?? "🏳️";
+
+  // Derivada, no buscada en una tabla: un emoji de bandera son las dos letras
+  // del código ISO escritas con indicadores regionales. Así un país agregado
+  // por migración - Honduras, Costa Rica, Venezuela - trae su bandera sin que
+  // nadie tenga que acordarse de editar este archivo, que es la misma regla
+  // que el resto del proyecto sigue con los países.
+  const iso = code.trim().toUpperCase();
+  if (!/^[A-Z]{2}$/.test(iso)) return "🏳️";
+  if (!isRealRegion(iso)) return "🏳️";
+
+  return String.fromCodePoint(
+    ...[...iso].map((letter) => REGIONAL_INDICATOR_A + letter.charCodeAt(0) - LETTER_A),
+  );
 }

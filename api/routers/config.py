@@ -15,7 +15,7 @@ from uuid import UUID
 
 from fastapi import APIRouter, Depends, Query, Request, Response, status
 
-from api.db import fetch_all, fetch_one
+from api.db import execute, fetch_all, fetch_one
 from api.deps import (
     CurrentUser,
     CurrentUserDep,
@@ -35,6 +35,8 @@ from api.schemas import (
     ConnectionResponse,
     ConnectionUpdateRequest,
     CountryResponse,
+    FxRateRow,
+    FxRateUpsertRequest,
     MemberRow,
     PlatformResponse,
     WebhookTokenResponse,
@@ -574,6 +576,80 @@ def delete_connection(connection_id: UUID, conn: DbDep, user: OwnerDep) -> None:
     if row is None:
         raise NotFound("Esa conexión no existe en tu workspace")
     logger.info("connection deleted: %s", connection_id)
+
+
+# =============================================================================
+# Currency conversion.
+#
+# WHY THE RATES ARE NOT PER COMPANY
+# `core.fx_rate` has no tenant_id and sits outside row-level security on purpose:
+# what a quetzal is worth today is not one operator's private fact. Every company
+# reads the same table, and the consolidated roll-up converts with it.
+#
+# WHAT "TRM" MEANS HERE
+# Colombia's official TRM is a specific number published by the Superintendencia
+# Financiera. This endpoint reports whatever the configured provider returned,
+# stamped with its date and its source, and lets an operator overwrite it by
+# hand. It does not claim to be the TRM: it says where each number came from
+# (`api`, `manual` or `carried_forward`) and how old it is.
+# =============================================================================
+
+
+@router.get(
+    "/fx",
+    response_model=list[FxRateRow],
+    summary="Tasas de cambio contra el dólar y el peso colombiano",
+)
+def list_fx_rates(conn: DbDep, user: CurrentUserDep) -> list[FxRateRow]:
+    rows = fetch_all(conn, "SELECT * FROM mart.v_fx_rates")
+    return [FxRateRow(**row) for row in rows]
+
+
+@router.put(
+    "/fx",
+    response_model=FxRateRow,
+    dependencies=[Depends(require_cap("config"))],
+    summary="Fijar una tasa a mano",
+)
+def upsert_fx_rate(
+    payload: FxRateUpsertRequest, conn: DbDep, user: CurrentUserDep
+) -> FxRateRow:
+    """Writes the rate a person dictates, marked `manual` so it is never mistaken
+    for the provider's.
+
+    The request speaks in the direction people quote - how many bolívares to the
+    dollar - and this converts to the direction the database stores, which is the
+    inverse. Asking an operator to type 0.00127 is asking for a typo nobody would
+    catch.
+    """
+    known = fetch_one(
+        conn,
+        "SELECT 1 AS ok FROM core.country WHERE currency_code = %s AND is_supported LIMIT 1",
+        (payload.currency_code,),
+    )
+    if known is None:
+        raise NotFound(
+            f"Ningún país soportado usa la moneda {payload.currency_code}. "
+            "Agrega primero el país."
+        )
+
+    execute(
+        conn,
+        """
+        INSERT INTO core.fx_rate (rate_date, base_currency, quote_currency, rate, source)
+        VALUES (COALESCE(%s, CURRENT_DATE), %s, 'USD', %s, 'manual')
+        ON CONFLICT (rate_date, base_currency, quote_currency)
+        DO UPDATE SET rate = EXCLUDED.rate, source = 'manual', fetched_at = now()
+        """,
+        (payload.rate_date, payload.currency_code, 1.0 / payload.per_usd),
+    )
+
+    row = fetch_one(
+        conn, "SELECT * FROM mart.v_fx_rates WHERE currency_code = %s", (payload.currency_code,)
+    )
+    if row is None:
+        raise NotFound(f"No pude releer la tasa de {payload.currency_code}")
+    return FxRateRow(**row)
 
 
 # =============================================================================

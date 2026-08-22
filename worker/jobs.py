@@ -33,7 +33,11 @@ logger = logging.getLogger(__name__)
 # hash makes a repeated report a no-op.
 TIER3_LOOKBACK_DAYS = 14
 
-# Currencies Data Effi converts to USD for the global view.
+# Fallback only. The real list comes from core.country - see _fx_currencies -
+# because "el país es dato, no código": adding a country must not require a
+# release to make its money convertible. This tuple is what the job uses if that
+# query fails, and it is deliberately the set that existed before countries were
+# added by migration.
 FX_BASE_CURRENCIES = ("COP", "MXN", "PEN", "CLP", "GTQ", "USD")
 
 
@@ -131,6 +135,27 @@ def job_relink_orphans(conn: psycopg.Connection) -> dict[str, Any]:
 # =============================================================================
 
 
+def _fx_currencies(conn: psycopg.Connection) -> tuple[str, ...]:
+    """Every currency the supported countries actually bill in, plus USD.
+
+    Read from the database rather than hardcoded so that adding a country is one
+    row in core.country and nothing else - the rule this project states in
+    docs/arquitectura-multipais-conectores.md. USD is always included because it
+    is the currency everything converts INTO.
+    """
+    try:
+        with conn.cursor() as cur:
+            cur.execute(
+                "SELECT DISTINCT currency_code FROM core.country WHERE is_supported"
+            )
+            found = {row[0].strip().upper() for row in cur.fetchall()}
+    except Exception:
+        logger.warning("no pude leer las monedas de core.country; uso la lista fija",
+                       exc_info=True)
+        return FX_BASE_CURRENCIES
+    return tuple(sorted(found | {"USD"})) or FX_BASE_CURRENCIES
+
+
 def job_refresh_fx(conn: psycopg.Connection, *, provider_url: str, api_key: str | None = None
                    ) -> dict[str, Any]:
     """Fetch today's rates to USD; fall back to the last known rate on failure.
@@ -143,6 +168,7 @@ def job_refresh_fx(conn: psycopg.Connection, *, provider_url: str, api_key: str 
     today = date.today()
     fetched: dict[str, float] = {}
     error: str | None = None
+    currencies = _fx_currencies(conn)
 
     try:
         url = f"{provider_url.rstrip('/')}/USD"
@@ -154,7 +180,7 @@ def job_refresh_fx(conn: psycopg.Connection, *, provider_url: str, api_key: str 
 
         # Providers disagree on the envelope; accept the two common shapes.
         rates = payload.get("rates") or payload.get("conversion_rates") or {}
-        for currency in FX_BASE_CURRENCIES:
+        for currency in currencies:
             # The API gives USD -> X. We store X -> USD, which is what the global
             # view multiplies by.
             usd_to_currency = rates.get(currency)

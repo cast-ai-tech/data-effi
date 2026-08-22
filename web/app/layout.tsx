@@ -1,5 +1,7 @@
 import type { Metadata, Viewport } from "next";
 import { Inter } from "next/font/google";
+
+import { FlagFont } from "@/components/FlagFont";
 import { Suspense } from "react";
 
 import { DateRangeProvider } from "@/lib/date-range";
@@ -29,6 +31,13 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
   return (
     <html lang="es" className={inter.variable}>
       <body className="min-h-screen bg-page text-ink antialiased">
+        {/*
+          Windows no trae los glifos de las banderas, así que Chrome pinta las
+          dos letras del código ("CO" en vez de 🇨🇴). Esto carga una fuente que
+          SOLO cubre ese rango de caracteres, y solo cuando el navegador
+          demuestra que le hace falta. Ver components/FlagFont.tsx.
+        */}
+        <FlagFont />
         {/*
           The range lives in the query string, so the provider reads
           `useSearchParams` and therefore needs a Suspense boundary here. It
