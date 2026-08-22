@@ -43,6 +43,43 @@ export interface Tokens {
   workspaces: Workspace[];
 }
 
+export type OrgRole = "admin" | "analyst" | "viewer";
+
+/** Un refresh token vivo: un navegador o dispositivo que todavía puede volver. */
+export interface Session {
+  id: string;
+  tenant_id: string | null;
+  tenant_name: string | null;
+  created_at: string;
+  expires_at: string;
+}
+
+/** Un lugar físico desde donde opera una sociedad, dentro de un país. */
+export interface Branch {
+  id: string;
+  country_code: string;
+  name: string;
+  cost_center: string | null;
+  address: string | null;
+  city: string | null;
+  manager_name: string | null;
+  phone: string | null;
+  is_warehouse: boolean;
+  is_active: boolean;
+  notes: string | null;
+  created_at: string;
+  store_count: number;
+}
+
+export interface OrgMember {
+  user_id: string;
+  email: string;
+  full_name: string | null;
+  role: OrgRole;
+  is_active: boolean;
+  last_login_at: string | null;
+}
+
 export interface User {
   id: string;
   email: string;
@@ -54,6 +91,9 @@ export interface User {
   org_id: string | null;
   org_name: string | null;
   is_org_admin: boolean;
+  /** admin | analyst | viewer sobre el holding. Distinto de `role`, que aplica
+   *  dentro de la sociedad donde estás parado. */
+  org_role: OrgRole | null;
   countries: string[] | null;
   capabilities: Capability[];
   workspaces: Workspace[];

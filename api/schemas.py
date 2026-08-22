@@ -23,6 +23,10 @@ from pydantic import BaseModel, EmailStr, Field, StringConstraints
 # single number. See api/deps.CAPABILITIES for what each one actually unlocks.
 Role = Literal["owner", "analyst", "viewer", "uploader"]
 Capability = Literal["read", "ingest", "config", "manage"]
+
+# Roles ACROSS the companies of one org. None of them opens a company's own
+# data - core.membership decides that. See migration 036.
+OrgRole = Literal["admin", "analyst", "viewer"]
 CountryCode = Annotated[str, StringConstraints(min_length=2, max_length=2, to_upper=True)]
 WidgetState = Literal["available", "degraded", "blocked"]
 CatalogueStatus = Literal["sin_costo", "sin_revisar", "costo_desactualizado", "ok"]
@@ -99,6 +103,7 @@ class TokenResponse(BaseModel):
     tenant_name: str | None = None
     role: Role | None = None
     is_org_admin: bool = False
+    org_role: OrgRole | None = None
     countries: list[str] | None = None
     workspaces: list[WorkspaceSummary] = Field(default_factory=list)
 
@@ -118,9 +123,130 @@ class UserResponse(BaseModel):
     org_id: UUID | None = None
     org_name: str | None = None
     is_org_admin: bool = False
+    # admin | analyst | viewer over the holding, or None. Distinct from `role`,
+    # which is what this person may do INSIDE the company they are standing in.
+    org_role: OrgRole | None = None
     countries: list[str] | None = None
     capabilities: list[Capability] = Field(default_factory=list)
     workspaces: list[WorkspaceSummary] = Field(default_factory=list)
+
+
+class OrgRow(BaseModel):
+    id: UUID
+    slug: str
+    name: str
+    base_currency: str
+    is_active: bool = True
+
+
+class OrgUpdateRequest(BaseModel):
+    name: str | None = Field(default=None, min_length=1, max_length=120)
+    # The currency the roll-up converts INTO. Never changes what a company billed.
+    base_currency: Annotated[
+        str, StringConstraints(min_length=3, max_length=3, to_upper=True)
+    ] | None = None
+
+
+class OrgMemberRow(BaseModel):
+    user_id: UUID
+    email: str
+    full_name: str | None
+    role: OrgRole
+    is_active: bool = True
+    last_login_at: datetime | None = None
+
+
+class OrgMemberGrantRequest(BaseModel):
+    """Promotes an existing account. Creating one is an invitation to a company."""
+
+    email: EmailStr
+    role: OrgRole = "viewer"
+
+
+class OrgMemberUpdateRequest(BaseModel):
+    role: OrgRole | None = None
+    is_active: bool | None = None
+
+
+class ProfileUpdateRequest(BaseModel):
+    """The part of your own account you may change. Email is not in it.
+
+    Changing an email would move an identity that other companies already granted
+    access to, so it is an administrator's action, not a self-service one.
+    """
+
+    full_name: str | None = Field(default=None, min_length=1, max_length=120)
+
+
+class PasswordChangeRequest(BaseModel):
+    """The current password is required even though the caller is authenticated.
+
+    A token left open on a borrowed laptop is exactly the case this stops: it
+    proves the person at the keyboard is the owner of the account, not merely the
+    holder of a session.
+    """
+
+    current_password: str = Field(min_length=1)
+    new_password: str = Field(min_length=1)
+
+
+class SessionRow(BaseModel):
+    """One live refresh token: a device or browser that can still come back."""
+
+    id: UUID
+    tenant_id: UUID | None = None
+    tenant_name: str | None = None
+    created_at: datetime
+    expires_at: datetime
+    is_current: bool = False
+
+
+class BranchResponse(BaseModel):
+    id: UUID
+    country_code: str
+    name: str
+    cost_center: str | None = None
+    address: str | None = None
+    city: str | None = None
+    manager_name: str | None = None
+    phone: str | None = None
+    is_warehouse: bool = False
+    is_active: bool = True
+    notes: str | None = None
+    created_at: datetime
+    # How many stores ship from here. Shown so deactivating a branch that still
+    # has stores is a decision and not a surprise.
+    store_count: int = 0
+
+
+class BranchCreateRequest(BaseModel):
+    country_code: CountryCode
+    name: str = Field(min_length=1, max_length=120)
+    cost_center: str | None = Field(default=None, max_length=60)
+    address: str | None = Field(default=None, max_length=300)
+    city: str | None = Field(default=None, max_length=120)
+    manager_name: str | None = Field(default=None, max_length=120)
+    phone: str | None = Field(default=None, max_length=40)
+    is_warehouse: bool = False
+    notes: str | None = Field(default=None, max_length=1000)
+
+
+class BranchUpdateRequest(BaseModel):
+    """Every field optional: this is a patch, and omitted means unchanged.
+
+    `country_code` is absent on purpose. Moving a branch to another country would
+    silently move the stores hanging off it, so that is a new branch.
+    """
+
+    name: str | None = Field(default=None, min_length=1, max_length=120)
+    cost_center: str | None = Field(default=None, max_length=60)
+    address: str | None = Field(default=None, max_length=300)
+    city: str | None = Field(default=None, max_length=120)
+    manager_name: str | None = Field(default=None, max_length=120)
+    phone: str | None = Field(default=None, max_length=40)
+    is_warehouse: bool | None = None
+    is_active: bool | None = None
+    notes: str | None = Field(default=None, max_length=1000)
 
 
 class InviteRequest(BaseModel):

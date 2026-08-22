@@ -219,6 +219,17 @@ export function AppShell({ children }: { children: React.ReactNode }) {
               label="Usuarios"
             />
           )}
+          {/* Sin `can(...)`: TODO usuario administra su propia cuenta, y quien
+              menos permisos tiene es justamente quien más necesita ver escrito
+              a qué tiene acceso. Un `uploader` sin esta pantalla no distingue
+              un permiso de un error. */}
+          <NavItem
+            href="/cuenta"
+            active={pathname.startsWith("/cuenta")}
+            collapsed={collapsed}
+            icon={<PersonIcon />}
+            label="Mi cuenta"
+          />
         </nav>
 
         <div className="border-t border-line-subtle p-2.5">

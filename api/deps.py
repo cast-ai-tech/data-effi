@@ -58,6 +58,10 @@ class CurrentUser:
     role: str
     org_id: UUID | None = None
     is_org_admin: bool = False
+    # admin | analyst | viewer over the whole holding, or None for someone who
+    # only exists inside companies. NEVER grants access to a company's own data:
+    # core.membership decides that, per company and per country.
+    org_role: str | None = None
     # None = every country the company operates in. A tuple = the only ones this
     # membership may read.
     countries: tuple[str, ...] | None = None
@@ -70,6 +74,14 @@ class CurrentUser:
 
     def may_read_country(self, country: str) -> bool:
         return self.countries is None or country.upper() in self.countries
+
+    def manages_org(self) -> bool:
+        """May create companies and grant access across the holding."""
+        return self.org_role == "admin" or self.is_org_admin
+
+    def reads_org(self) -> bool:
+        """May see the consolidated roll-up of every company in the holding."""
+        return self.org_role in {"admin", "analyst", "viewer"} or self.is_org_admin
 
 
 def settings_dep() -> Settings:
@@ -100,6 +112,7 @@ def current_user(
             role=payload["role"],
             org_id=UUID(payload["oid"]) if payload.get("oid") else None,
             is_org_admin=bool(payload.get("adm", False)),
+            org_role=payload.get("orl"),
             countries=tuple(c.upper() for c in countries) if countries else None,
         )
     except (KeyError, ValueError, TypeError) as exc:

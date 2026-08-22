@@ -63,6 +63,7 @@ def create_access_token(
     role: str,
     org_id: UUID | None = None,
     is_org_admin: bool = False,
+    org_role: str | None = None,
     countries: list[str] | None = None,
 ) -> tuple[str, int]:
     """Return (token, expires_in_seconds).
@@ -86,7 +87,12 @@ def create_access_token(
         "email": email,
         "role": role,
         "oid": str(org_id) if org_id else None,
-        "adm": is_org_admin,
+        # `adm` is what the previously deployed API reads, and it keeps being
+        # emitted for as long as core.app_user.is_org_admin exists (migration
+        # 036 explains why it outlives this change). `orl` is the real answer:
+        # admin, analyst or viewer over the holding.
+        "adm": is_org_admin or org_role == "admin",
+        "orl": org_role,
         "cty": countries,
         "typ": "access",
         "iat": int(now.timestamp()),
