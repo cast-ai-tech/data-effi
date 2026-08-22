@@ -71,6 +71,24 @@ export interface Branch {
   store_count: number;
 }
 
+/** Una moneda contra el dólar y contra el peso colombiano. */
+export interface FxRate {
+  currency_code: string;
+  currency_symbol: string;
+  decimal_places: number;
+  country_codes: string[];
+  country_names: string[];
+  /** Cuánto vale UNA unidad de esta moneda. */
+  to_usd: number | null;
+  to_cop: number | null;
+  /** Cuántas unidades cuesta un dólar: así se cotiza hablando. */
+  per_usd: number | null;
+  rate_date: string | null;
+  source: string | null;
+  has_rate: boolean;
+  is_stale: boolean | null;
+}
+
 export interface OrgMember {
   user_id: string;
   email: string;

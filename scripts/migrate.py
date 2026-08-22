@@ -26,6 +26,8 @@ from pathlib import Path
 
 import psycopg
 
+from pipeline.dbconn import connect as db_connect
+
 MIGRATIONS_DIR = Path(__file__).resolve().parent.parent / "migrations"
 CONNECT_RETRIES = 30
 RETRY_DELAY_SECONDS = 2
@@ -44,7 +46,7 @@ def wait_for_database(dsn: str) -> psycopg.Connection:
     last_error: Exception | None = None
     for attempt in range(1, CONNECT_RETRIES + 1):
         try:
-            return psycopg.connect(dsn, autocommit=True)
+            return db_connect(dsn, autocommit=True)
         except psycopg.OperationalError as exc:
             last_error = exc
             print(f"  esperando a PostgreSQL… ({attempt}/{CONNECT_RETRIES})")

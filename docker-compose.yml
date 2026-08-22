@@ -35,7 +35,7 @@ x-app-env: &app-env
   AI_MODEL: ${AI_MODEL:-gemini-3.6-flash}
   AI_DAILY_TOKEN_BUDGET: ${AI_DAILY_TOKEN_BUDGET:-200000}
   TIER3_FETCH_ENABLED: ${TIER3_FETCH_ENABLED:-false}
-  FX_PROVIDER_URL: ${FX_PROVIDER_URL:-https://open.er-api.com/v6/latest}
+  FX_PROVIDER_URL: ${FX_PROVIDER_URL:-https://cdn.jsdelivr.net/npm/@fawazahmed0/currency-api@latest/v1/currencies}
   FX_PROVIDER_API_KEY: ${FX_PROVIDER_API_KEY:-}
 
 services:

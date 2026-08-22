@@ -61,4 +61,4 @@ services:
       - key: TIER3_FETCH_ENABLED
         value: "false"
       - key: FX_PROVIDER_URL
-        value: https://open.er-api.com/v6/latest
+        value: https://cdn.jsdelivr.net/npm/@fawazahmed0/currency-api@latest/v1/currencies

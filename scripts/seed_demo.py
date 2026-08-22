@@ -29,6 +29,8 @@ from uuid import UUID
 import psycopg
 from psycopg.rows import dict_row
 
+from pipeline.dbconn import connect as db_connect
+
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 DEMO_TENANT = UUID("d0000000-0000-4000-a000-000000000001")
@@ -159,7 +161,7 @@ def connect() -> psycopg.Connection:
     if not dsn:
         print("DATABASE_URL is not set", file=sys.stderr)
         raise SystemExit(1)
-    conn = psycopg.connect(dsn, autocommit=False, row_factory=dict_row)
+    conn = db_connect(dsn, autocommit=False, row_factory=dict_row)
     with conn.cursor() as cur:
         # Seeding legitimately writes across tenants; see migration 007.
         cur.execute("SELECT set_config('norte.service', 'on', false)")

@@ -26,6 +26,7 @@ from psycopg.types.json import Json
 from pipeline.ingest import IngestEngine
 from pipeline.models import BatchKind
 from pipeline.store_pg import PostgresStore
+from worker.official_rates import fetch_official_rates
 
 logger = logging.getLogger(__name__)
 
@@ -33,7 +34,12 @@ logger = logging.getLogger(__name__)
 # hash makes a repeated report a no-op.
 TIER3_LOOKBACK_DAYS = 14
 
-# Currencies Data Effi converts to USD for the global view.
+# Colombia's TRM, published by the Superintendencia Financiera. Free, no key,
+# Fallback only. The real list comes from core.country - see _fx_currencies -
+# because "el país es dato, no código": adding a country must not require a
+# release to make its money convertible. This tuple is what the job uses if that
+# query fails, and it is deliberately the set that existed before countries were
+# added by migration.
 FX_BASE_CURRENCIES = ("COP", "MXN", "PEN", "CLP", "GTQ", "USD")
 
 
@@ -131,35 +137,114 @@ def job_relink_orphans(conn: psycopg.Connection) -> dict[str, Any]:
 # =============================================================================
 
 
+def _fx_currencies(conn: psycopg.Connection) -> tuple[str, ...]:
+    """Every currency the supported countries actually bill in, plus USD.
+
+    Read from the database rather than hardcoded so that adding a country is one
+    row in core.country and nothing else - the rule this project states in
+    docs/arquitectura-multipais-conectores.md. USD is always included because it
+    is the currency everything converts INTO.
+    """
+    try:
+        with conn.cursor() as cur:
+            cur.execute(
+                "SELECT DISTINCT currency_code FROM core.country WHERE is_supported"
+            )
+            found = {row[0].strip().upper() for row in cur.fetchall()}
+    except Exception:
+        logger.warning("no pude leer las monedas de core.country; uso la lista fija",
+                       exc_info=True)
+        return FX_BASE_CURRENCIES
+    return tuple(sorted(found | {"USD"})) or FX_BASE_CURRENCIES
+
+
+def _provider_endpoint(provider_url: str) -> str:
+    """Where to ask this provider for "one dollar in every currency".
+
+    Two conventions, and neither is guessable from the base URL alone:
+
+        .../v6/latest        + /USD        er-api, exchangerate-api
+        .../v1/currencies    + /usd.json   @fawazahmed0/currency-api
+
+    Hardcoding either one is what tied this job to a single provider. Swapping
+    providers now means changing FX_PROVIDER_URL and nothing else, which matters
+    because the one that shipped originally turned out to quote the peso 20% off
+    the TRM.
+    """
+    base = provider_url.rstrip("/")
+    if base.endswith(".json") or base.endswith("/USD") or base.endswith("/usd"):
+        return base  # ya apunta al recurso exacto
+    if "currency-api" in base or base.endswith("/currencies"):
+        return f"{base}/usd.json"
+    return f"{base}/USD"
+
+
+def _parse_rate_payload(payload: dict[str, Any]) -> dict[str, float]:
+    """USD -> currency, out of whichever envelope the provider happens to use.
+
+    Three shapes in the wild, and the difference is not cosmetic: picking the
+    wrong key silently yields an empty dict, which the job then reports as "the
+    provider was unreachable" while the request actually succeeded.
+
+        {"rates": {...}}                 open.er-api, exchangerate-api
+        {"conversion_rates": {...}}      exchangerate-api v6 (paid)
+        {"date": ..., "usd": {...}}      @fawazahmed0/currency-api
+    """
+    rates = payload.get("rates") or payload.get("conversion_rates")
+    if rates:
+        return {str(k).upper(): float(v) for k, v in rates.items() if v}
+
+    # currency-api nests under the lowercased base currency and quotes its keys
+    # in lowercase too.
+    nested = payload.get("usd")
+    if isinstance(nested, dict):
+        return {str(k).upper(): float(v) for k, v in nested.items() if v}
+
+    return {}
+
+
 def job_refresh_fx(conn: psycopg.Connection, *, provider_url: str, api_key: str | None = None
                    ) -> dict[str, Any]:
     """Fetch today's rates to USD; fall back to the last known rate on failure.
 
     A missing rate is never invented. The global view marks `fx_missing` and shows
     local currency instead - a made-up conversion is worse than no conversion.
+
+    OFFICIAL RATES WIN. Where a central bank publishes its own rate - Colombia's
+    TRM, Perú's BCRP, Chile's observado, Guatemala's Banguat - that number
+    OVERWRITES whatever the general provider said, because it is the rate that
+    country's accounting is measured against. See worker/official_rates.py, which
+    also lists which currencies still fall back to the provider and why.
     """
     import httpx
 
     today = date.today()
     fetched: dict[str, float] = {}
     error: str | None = None
+    official_sources: dict[str, str] = {}
+    currencies = _fx_currencies(conn)
 
     try:
-        url = f"{provider_url.rstrip('/')}/USD"
+        url = _provider_endpoint(provider_url)
         params = {"apikey": api_key} if api_key else None
-        with httpx.Client(timeout=20.0) as client:
+        with httpx.Client(timeout=20.0, follow_redirects=True) as client:
             response = client.get(url, params=params)
             response.raise_for_status()
-            payload = response.json()
+            rates = _parse_rate_payload(response.json())
 
-        # Providers disagree on the envelope; accept the two common shapes.
-        rates = payload.get("rates") or payload.get("conversion_rates") or {}
-        for currency in FX_BASE_CURRENCIES:
-            # The API gives USD -> X. We store X -> USD, which is what the global
-            # view multiplies by.
-            usd_to_currency = rates.get(currency)
-            if usd_to_currency:
-                fetched[currency] = 1.0 / float(usd_to_currency)
+            for currency in currencies:
+                # The API gives USD -> X. We store X -> USD, which is what the
+                # global view multiplies by.
+                usd_to_currency = rates.get(currency)
+                if usd_to_currency:
+                    fetched[currency] = 1.0 / float(usd_to_currency)
+
+            # Las oficiales mandan sobre el proveedor general, moneda por
+            # moneda: un banco central publica la tasa contra la que se miden
+            # los libros de ese país, y el proveedor solo cotiza el mercado.
+            for currency, (per_usd, nombre) in fetch_official_rates(client, currencies).items():
+                fetched[currency] = 1.0 / per_usd
+                official_sources[currency] = nombre
     except Exception as exc:
         error = f"{type(exc).__name__}: {exc}"
         logger.warning("FX provider unreachable (%s); falling back to last known rates", error)
@@ -167,14 +252,15 @@ def job_refresh_fx(conn: psycopg.Connection, *, provider_url: str, api_key: str 
     written = 0
     with conn.cursor() as cur:
         for currency, rate in fetched.items():
+            source = official_sources.get(currency, "api")
             cur.execute(
                 """
                 INSERT INTO core.fx_rate (rate_date, base_currency, quote_currency, rate, source)
                 VALUES (%s, %s, 'USD', %s, %s)
                 ON CONFLICT (rate_date, base_currency, quote_currency)
-                DO UPDATE SET rate = EXCLUDED.rate, fetched_at = now()
+                DO UPDATE SET rate = EXCLUDED.rate, source = EXCLUDED.source, fetched_at = now()
                 """,
-                (today, currency, rate, "api"),
+                (today, currency, rate, source),
             )
             written += 1
 

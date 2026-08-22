@@ -12,6 +12,7 @@ import { useState } from "react";
 
 import { AppShell } from "@/components/AppShell";
 import { BranchesSection } from "@/components/BranchesSection";
+import { FxRatesSection } from "@/components/FxRatesSection";
 import { Button, Card, Chip, SkeletonRows } from "@/components/ui";
 import { ApiError, api } from "@/lib/api";
 import { countryFlag } from "@/lib/format";
@@ -39,6 +40,7 @@ export default function SettingsPage() {
       <div className="space-y-4">
         <CountriesSection onError={setError} />
         <BranchesSection onError={setError} />
+        <FxRatesSection onError={setError} />
         <ConnectionsLink />
         <UsersSection />
         <Tier3Notice />

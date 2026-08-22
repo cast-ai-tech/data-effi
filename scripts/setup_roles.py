@@ -19,8 +19,9 @@ from __future__ import annotations
 import os
 import sys
 
-import psycopg
 from psycopg import sql
+
+from pipeline.dbconn import connect as db_connect
 
 ROLES = {
     "norte_app": "POSTGRES_APP_PASSWORD",
@@ -36,7 +37,7 @@ def main() -> int:
         print("POSTGRES_ADMIN_URL is not set", file=sys.stderr)
         return 1
 
-    with psycopg.connect(dsn, autocommit=True) as conn, conn.cursor() as cur:
+    with db_connect(dsn, autocommit=True) as conn, conn.cursor() as cur:
         for role, env_var in ROLES.items():
             password = os.environ.get(env_var)
             if not password:

@@ -131,6 +131,45 @@ class UserResponse(BaseModel):
     workspaces: list[WorkspaceSummary] = Field(default_factory=list)
 
 
+class FxRateRow(BaseModel):
+    """Una moneda contra el dólar y contra el peso colombiano.
+
+    `to_usd` y `to_cop` son cuánto vale UNA unidad de esta moneda. `per_usd` es
+    el camino de vuelta - cuántas unidades cuesta un dólar - porque así es como
+    se cotiza hablando: "el dólar está a 3.900".
+    """
+
+    currency_code: str
+    currency_symbol: str
+    decimal_places: int
+    country_codes: list[str]
+    country_names: list[str]
+    to_usd: float | None = None
+    to_cop: float | None = None
+    per_usd: float | None = None
+    rate_date: date | None = None
+    source: str | None = None
+    has_rate: bool = False
+    # Más de tres días sin actualizar. No se oculta la tasa: se marca.
+    is_stale: bool | None = None
+
+
+class FxRateUpsertRequest(BaseModel):
+    """Fijar una tasa a mano, que queda con source='manual'.
+
+    Existe por el bolívar: VES se mueve más rápido de lo que una tasa diaria
+    puede seguir, y la oficial no es la que usa la calle. Quien opera allí sabe
+    cuál aplicar mejor que cualquier proveedor.
+    """
+
+    currency_code: Annotated[
+        str, StringConstraints(min_length=3, max_length=3, to_upper=True)
+    ]
+    # Cuántas unidades de esa moneda cuesta un dólar: 3900 para el peso, no 0.00025.
+    per_usd: float = Field(gt=0, description="Cuántas unidades equivalen a 1 USD")
+    rate_date: date | None = None
+
+
 class OrgRow(BaseModel):
     id: UUID
     slug: str

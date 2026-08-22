@@ -57,7 +57,12 @@
   --radius-card: 12px;
   --radius-control: 8px;
 
-  --font-sans: Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  /* "Twemoji Country Flags" va PRIMERA y cubre solo los indicadores
+     regionales: Windows no tiene esos glifos y sin ella 🇨🇴 se dibuja como
+     "CO". Para cualquier otro carácter no aporta nada y manda Inter.
+     La instala components/FlagFont.tsx, y solo si el navegador la necesita. */
+  --font-sans: "Twemoji Country Flags", Inter, -apple-system, BlinkMacSystemFont,
+    "Segoe UI", sans-serif;
 }
 
 /* Light theme. The product is dark-first; this keeps it usable in a bright room
