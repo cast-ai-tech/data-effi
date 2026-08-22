@@ -26,6 +26,7 @@ from psycopg.types.json import Json
 from pipeline.ingest import IngestEngine
 from pipeline.models import BatchKind
 from pipeline.store_pg import PostgresStore
+from worker.official_rates import fetch_official_rates
 
 logger = logging.getLogger(__name__)
 
@@ -34,9 +35,6 @@ logger = logging.getLogger(__name__)
 TIER3_LOOKBACK_DAYS = 14
 
 # Colombia's TRM, published by the Superintendencia Financiera. Free, no key,
-# and the only number the DIAN recognises - see _fetch_trm_oficial.
-TRM_DATASET_URL = "https://www.datos.gov.co/resource/32sa-8pi3.json"
-
 # Fallback only. The real list comes from core.country - see _fx_currencies -
 # because "el país es dato, no código": adding a country must not require a
 # release to make its money convertible. This tuple is what the job uses if that
@@ -205,41 +203,6 @@ def _parse_rate_payload(payload: dict[str, Any]) -> dict[str, float]:
     return {}
 
 
-def _fetch_trm_oficial(client: Any) -> tuple[float | None, date | None]:
-    """Colombia's TRM, from the Superintendencia Financiera's own dataset.
-
-    WHY THIS EXISTS AT ALL, GIVEN THERE IS ALREADY AN FX PROVIDER
-    The TRM is not "the dollar rate in Colombia", it is a specific number the
-    regulator publishes and the one the DIAN expects to see in the books. A
-    general provider quotes the market, which is close but never identical - and
-    the free one this project shipped with was quoting 3.663 the day the TRM was
-    3.048, a 20% gap that would have distorted every consolidated total.
-
-    Returns (None, None) on any failure, and the caller falls back to the general
-    provider. A missing TRM is not worth failing the whole job over.
-    """
-    try:
-        response = client.get(
-            TRM_DATASET_URL,
-            params={"$order": "vigenciadesde DESC", "$limit": 1},
-        )
-        response.raise_for_status()
-        rows = response.json()
-        if not rows:
-            return None, None
-
-        value = float(rows[0]["valor"])
-        # "2026-08-22T00:00:00.000" -> date(2026, 8, 22)
-        stamped = datetime.fromisoformat(rows[0]["vigenciadesde"]).date()
-        if value <= 0:
-            return None, None
-        return value, stamped
-    except Exception:
-        logger.warning("no pude leer la TRM oficial; uso el proveedor general",
-                       exc_info=True)
-        return None, None
-
-
 def job_refresh_fx(conn: psycopg.Connection, *, provider_url: str, api_key: str | None = None
                    ) -> dict[str, Any]:
     """Fetch today's rates to USD; fall back to the last known rate on failure.
@@ -247,17 +210,18 @@ def job_refresh_fx(conn: psycopg.Connection, *, provider_url: str, api_key: str 
     A missing rate is never invented. The global view marks `fx_missing` and shows
     local currency instead - a made-up conversion is worse than no conversion.
 
-    THE PESO IS A SPECIAL CASE ON PURPOSE. Colombia's TRM is fetched from the
-    regulator and OVERWRITES whatever the general provider said, because it is
-    the rate this operation's accounting is measured against. Every other
-    currency comes from the provider. See _fetch_trm_oficial.
+    OFFICIAL RATES WIN. Where a central bank publishes its own rate - Colombia's
+    TRM, Perú's BCRP, Chile's observado, Guatemala's Banguat - that number
+    OVERWRITES whatever the general provider said, because it is the rate that
+    country's accounting is measured against. See worker/official_rates.py, which
+    also lists which currencies still fall back to the provider and why.
     """
     import httpx
 
     today = date.today()
     fetched: dict[str, float] = {}
     error: str | None = None
-    trm_used = False
+    official_sources: dict[str, str] = {}
     currencies = _fx_currencies(conn)
 
     try:
@@ -275,11 +239,12 @@ def job_refresh_fx(conn: psycopg.Connection, *, provider_url: str, api_key: str 
                 if usd_to_currency:
                     fetched[currency] = 1.0 / float(usd_to_currency)
 
-            if "COP" in currencies:
-                trm, _ = _fetch_trm_oficial(client)
-                if trm:
-                    fetched["COP"] = 1.0 / trm
-                    trm_used = True
+            # Las oficiales mandan sobre el proveedor general, moneda por
+            # moneda: un banco central publica la tasa contra la que se miden
+            # los libros de ese país, y el proveedor solo cotiza el mercado.
+            for currency, (per_usd, nombre) in fetch_official_rates(client, currencies).items():
+                fetched[currency] = 1.0 / per_usd
+                official_sources[currency] = nombre
     except Exception as exc:
         error = f"{type(exc).__name__}: {exc}"
         logger.warning("FX provider unreachable (%s); falling back to last known rates", error)
@@ -287,7 +252,7 @@ def job_refresh_fx(conn: psycopg.Connection, *, provider_url: str, api_key: str 
     written = 0
     with conn.cursor() as cur:
         for currency, rate in fetched.items():
-            source = "trm_oficial" if (currency == "COP" and trm_used) else "api"
+            source = official_sources.get(currency, "api")
             cur.execute(
                 """
                 INSERT INTO core.fx_rate (rate_date, base_currency, quote_currency, rate, source)

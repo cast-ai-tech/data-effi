@@ -28,11 +28,20 @@ import { useApi } from "@/lib/hooks";
 import type { FxRate, User } from "@/lib/types";
 
 const SOURCE_LABEL: Record<string, string> = {
-  api: "Automática",
-  trm_oficial: "TRM oficial",
+  trm_oficial: "TRM · Superfinanciera",
+  oficial_bcrp: "Oficial · BCRP",
+  oficial_bcch: "Oficial · Banco Central de Chile",
+  oficial_banguat: "Oficial · Banguat",
+  oficial_banxico: "Oficial · Banxico",
+  oficial_bccr: "Oficial · BCCR",
+  api: "Proveedor internacional",
   manual: "Puesta a mano",
   carried_forward: "Arrastrada del día anterior",
 };
+
+/** Las que vienen de un banco central se marcan distinto: no es lo mismo la
+ *  tasa contra la que se miden los libros que una cotización de mercado. */
+const OFICIAL = new Set(Object.keys(SOURCE_LABEL).filter((k) => k.startsWith("oficial_") || k === "trm_oficial"));
 
 export function FxRatesSection({ onError }: { onError: (message: string) => void }) {
   const { data: user } = useApi<User>("/auth/me");
@@ -90,12 +99,14 @@ export function FxRatesSection({ onError }: { onError: (message: string) => void
       )}
 
       <p className="mt-3 text-[11px] text-ink-dim">
-        El peso colombiano sale de la <strong>TRM oficial</strong> que publica la
-        Superintendencia Financiera, no de un proveedor internacional: es la tasa
-        contra la que se mide la contabilidad. Las demás monedas se actualizan
-        solas cada día a las 10:05 UTC. Una que no se pueda traer se arrastra del
-        día anterior y queda marcada — nunca se inventa un valor, porque una tasa
-        inventada deforma en silencio todos los totales que la usan.
+        Cada moneda usa la tasa <strong>oficial de su banco central</strong> cuando
+        ese banco la publica: la TRM de la Superfinanciera en Colombia, el BCRP en
+        Perú, el dólar observado del Banco Central en Chile y el Banguat en
+        Guatemala. Las demás vienen de un proveedor internacional, y cada fila dice
+        cuál de las dos cosas es. Se actualizan solas cada día a las 10:05 UTC; una
+        que no se pueda traer se arrastra del día anterior y queda marcada — nunca
+        se inventa un valor, porque una tasa inventada deforma en silencio todos
+        los totales que la usan.
       </p>
     </Card>
   );
@@ -191,8 +202,10 @@ function FxRow({
           <span className="flex items-center gap-1.5">
             <span className="text-ink-dim">{rate.rate_date}</span>
             {rate.is_stale && <Chip tone="warning">Desactualizada</Chip>}
-            {rate.source && rate.source !== "api" && (
-              <Chip tone="neutral">{SOURCE_LABEL[rate.source] ?? rate.source}</Chip>
+            {rate.source && (
+              <Chip tone={OFICIAL.has(rate.source) ? "positive" : "neutral"}>
+                {SOURCE_LABEL[rate.source] ?? rate.source}
+              </Chip>
             )}
           </span>
         ) : (

@@ -206,3 +206,74 @@ def test_every_envelope_shape_is_understood():
         "COP": 3048.12
     }
     assert _parse_rate_payload({"algo": "inesperado"}) == {}
+
+
+# =============================================================================
+# Fuentes oficiales
+# =============================================================================
+
+
+def test_a_source_that_fails_does_not_take_the_others_down():
+    """Una caída del Banguat no puede dejar sin actualizar al resto del continente."""
+    from worker import official_rates
+
+    class ClienteRoto:
+        def get(self, *args, **kwargs):
+            raise RuntimeError("banco central caído")
+
+        def post(self, *args, **kwargs):
+            raise RuntimeError("banco central caído")
+
+    assert official_rates.fetch_official_rates(ClienteRoto(), ("COP", "PEN", "GTQ")) == {}
+
+
+def test_a_currency_with_no_official_source_is_skipped():
+    """VES, DOP y HNL no tienen API pública: se dejan al proveedor general."""
+    from worker.official_rates import OFFICIAL_SOURCES
+
+    for currency in ("VES", "DOP", "HNL", "USD"):
+        assert currency not in OFFICIAL_SOURCES
+
+
+def test_the_sources_that_need_a_token_skip_themselves_without_one(monkeypatch):
+    """Sin credencial no fallan: simplemente no existen, y el proveedor cubre."""
+    from worker import official_rates
+
+    monkeypatch.delenv("BANXICO_TOKEN", raising=False)
+    monkeypatch.delenv("BCCR_TOKEN", raising=False)
+    monkeypatch.delenv("BCCR_EMAIL", raising=False)
+
+    class ClienteQueNoDeberiaUsarse:
+        def get(self, *args, **kwargs):
+            raise AssertionError("no debería llamarse sin token")
+
+    assert official_rates._banxico_mexico(ClienteQueNoDeberiaUsarse()) == (None, None)
+    assert official_rates._bccr_costa_rica(ClienteQueNoDeberiaUsarse()) == (None, None)
+
+
+def test_the_peruvian_holiday_gap_is_walked_backwards():
+    """El BCRP manda "n.d." en feriados; hay que retroceder, no leer el último."""
+    from worker.official_rates import _bcrp_peru
+
+    class Cliente:
+        def get(self, *args, **kwargs):
+            class R:
+                @staticmethod
+                def raise_for_status():
+                    return None
+
+                @staticmethod
+                def json():
+                    return {
+                        "periods": [
+                            {"name": "20.Ago.26", "values": ["3.361"]},
+                            {"name": "21.Ago.26", "values": ["n.d."]},
+                            {"name": "22.Ago.26", "values": ["n.d."]},
+                        ]
+                    }
+
+            return R()
+
+    rate, stamped = _bcrp_peru(Cliente())
+    assert rate == 3.361
+    assert stamped is not None and stamped.day == 20

@@ -21,6 +21,7 @@ from apscheduler.schedulers.blocking import BlockingScheduler
 from apscheduler.triggers.cron import CronTrigger
 
 from api.settings import get_settings
+from pipeline.dbconn import connect as db_connect
 from worker.jobs import (
     job_calibrate_maturation,
     job_refresh_fx,
@@ -39,7 +40,7 @@ def _connect() -> psycopg.Connection:
     Declares the service context so row-level security lets these jobs see every
     tenant - which is the point of a worker. See migration 007.
     """
-    conn = psycopg.connect(get_settings().database_url, autocommit=False)
+    conn = db_connect(get_settings().database_url, autocommit=False)
     with conn.cursor() as cur:
         cur.execute("SELECT set_config('norte.service', 'on', false)")
     conn.commit()

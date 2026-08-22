@@ -27,6 +27,8 @@ import sys
 import psycopg
 from psycopg.rows import dict_row
 
+from pipeline.dbconn import connect as db_connect
+
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 ORG_SLUG = "distrilatam"
@@ -180,7 +182,7 @@ def main() -> None:
     args = parser.parse_args()
 
     print("Distrilatam" + (" (dry-run)" if args.dry_run else ""))
-    with psycopg.connect(_dsn(), row_factory=dict_row) as conn:
+    with db_connect(_dsn(), row_factory=dict_row) as conn:
         run(conn, dry_run=args.dry_run)
         if args.dry_run:
             conn.rollback()

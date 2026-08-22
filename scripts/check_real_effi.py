@@ -21,6 +21,8 @@ from uuid import UUID
 import psycopg
 from psycopg.rows import dict_row
 
+from pipeline.dbconn import connect as db_connect
+
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from pipeline.ingest import IngestEngine
@@ -39,7 +41,7 @@ def connect() -> psycopg.Connection:
     if not dsn:
         print("DATABASE_URL is not set", file=sys.stderr)
         raise SystemExit(1)
-    conn = psycopg.connect(dsn, autocommit=False, row_factory=dict_row)
+    conn = db_connect(dsn, autocommit=False, row_factory=dict_row)
     with conn.cursor() as cur:
         cur.execute("SELECT set_config('norte.service', 'on', false)")
     conn.commit()
