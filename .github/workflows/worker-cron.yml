@@ -1,0 +1,93 @@
+# Los jobs del worker, disparados desde fuera.
+#
+# El plan gratuito de Render no incluye Background Workers, asi que el
+# scheduler de worker/main.py no corre como servicio: WORKER_ENABLED=false.
+# En su lugar este workflow llama POST /worker/trigger/{job}, que existe en
+# api/routers/worker.py y esta protegido por un secreto compartido.
+#
+# Los horarios son los mismos de build_scheduler() en worker/main.py, que ya
+# usa UTC - igual que cron de GitHub Actions, asi que no hay conversion:
+#
+#     sync_sheets           :05 y :35 de cada hora
+#     relink_orphans        cada 30 min  (se agrupa con el anterior; el desfase
+#                                         de 5 min no le cambia nada a un relink)
+#     sync_tier3            06:15 y 18:15
+#     calibrate_maturation  07:30
+#     refresh_fx            10:05
+#
+# Un job que no aplica todavia - sin conexiones tier-3, sin hojas publicadas -
+# devuelve 200 y no hace nada. Eso es correcto, no un error.
+
+name: worker-cron
+
+on:
+  schedule:
+    - cron: '5,35 * * * *'
+    - cron: '15 6,18 * * *'
+    - cron: '30 7 * * *'
+    - cron: '5 10 * * *'
+  workflow_dispatch:
+    inputs:
+      jobs:
+        description: 'Jobs a ejecutar, separados por espacio'
+        required: true
+        default: 'relink_orphans'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: worker-cron
+  cancel-in-progress: false
+
+jobs:
+  trigger:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Elegir los jobs de este horario
+        id: pick
+        env:
+          SCHEDULE: ${{ github.event.schedule }}
+          MANUAL: ${{ inputs.jobs }}
+        run: |
+          case "$SCHEDULE" in
+            '5,35 * * * *')   JOBS='sync_sheets relink_orphans' ;;
+            '15 6,18 * * *')  JOBS='sync_tier3' ;;
+            '30 7 * * *')     JOBS='calibrate_maturation' ;;
+            '5 10 * * *')     JOBS='refresh_fx' ;;
+            *)                JOBS="$MANUAL" ;;
+          esac
+          echo "jobs=$JOBS" >> "$GITHUB_OUTPUT"
+          echo "Disparando: $JOBS"
+
+      - name: Llamar al worker
+        env:
+          API: https://data-effi-api.onrender.com
+          SECRET: ${{ secrets.WORKER_TRIGGER_SECRET }}
+          JOBS: ${{ steps.pick.outputs.jobs }}
+        run: |
+          set -uo pipefail
+          if [ -z "$SECRET" ]; then
+            echo "::error::Falta el secreto WORKER_TRIGGER_SECRET en el repositorio."
+            exit 1
+          fi
+
+          failed=0
+          for job in $JOBS; do
+            echo "::group::$job"
+            # --retry cubre el arranque en frio: el servicio free de Render
+            # duerme a los 15 min y la primera peticion tarda ~30 s en volver.
+            body=$(curl -sS -X POST "$API/worker/trigger/$job" \
+                     -H "X-Worker-Secret: $SECRET" \
+                     --max-time 180 --retry 3 --retry-delay 15 --retry-connrefused \
+                     -w '\n%{http_code}')
+            code=$(printf '%s' "$body" | tail -n1)
+            printf '%s\n' "$body" | sed '$d'
+            if [ "$code" != "200" ]; then
+              echo "::error::$job devolvio HTTP $code"
+              failed=1
+            fi
+            echo "::endgroup::"
+          done
+          exit $failed
