@@ -58,18 +58,36 @@ def create_access_token(
     settings: Settings,
     *,
     user_id: UUID,
-    tenant_id: UUID,
+    tenant_id: UUID | None,
     email: str,
     role: str,
+    org_id: UUID | None = None,
+    is_org_admin: bool = False,
+    countries: list[str] | None = None,
 ) -> tuple[str, int]:
-    """Return (token, expires_in_seconds)."""
+    """Return (token, expires_in_seconds).
+
+    The token names ONE company (`tid`) - the one the caller is currently
+    standing in - plus the grant that applies there: the role in that company
+    and, when the membership is limited, the countries it may read (`cty`).
+    Someone who belongs to four companies holds four different tokens over a
+    session, one per switch, so a stolen token never widens beyond the company
+    it was minted for.
+
+    `tid` is None only for an org admin holding no membership anywhere: they can
+    still read the consolidated roll-up, which asks each company in its own
+    scoped transaction rather than reading through this token.
+    """
     now = datetime.now(UTC)
     expires_at = now + timedelta(minutes=settings.jwt_access_ttl_minutes)
     payload = {
         "sub": str(user_id),
-        "tid": str(tenant_id),
+        "tid": str(tenant_id) if tenant_id else None,
         "email": email,
         "role": role,
+        "oid": str(org_id) if org_id else None,
+        "adm": is_org_admin,
+        "cty": countries,
         "typ": "access",
         "iat": int(now.timestamp()),
         "exp": int(expires_at.timestamp()),

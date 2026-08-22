@@ -14,14 +14,16 @@ from uuid import UUID
 
 from fastapi import APIRouter, Depends, Request, Response, status
 
-from api.db import execute, fetch_one
+from api.db import execute, fetch_all, fetch_one
 from api.deps import (
+    CAPABILITIES,
+    CurrentUser,
     CurrentUserDep,
     SettingsDep,
     UnscopedDbDep,
     client_ip_inet,
     rate_limit,
-    require_role,
+    require_cap,
 )
 from api.errors import ApiError, Conflict, Forbidden, NotFound, Unauthorized
 from api.schemas import (
@@ -31,8 +33,10 @@ from api.schemas import (
     LoginRequest,
     RefreshRequest,
     RegisterRequest,
+    SwitchWorkspaceRequest,
     TokenResponse,
     UserResponse,
+    WorkspaceSummary,
 )
 from api.security import (
     create_access_token,
@@ -48,6 +52,49 @@ from api.security import (
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/auth", tags=["auth"])
+
+
+def _require_tenant(user: CurrentUser) -> UUID:
+    """The company the caller is standing in, or a clear refusal."""
+    if user.tenant_id is None:
+        raise Forbidden(
+            "Tu usuario no está parado en ninguna sociedad. Elige una y vuelve a intentar."
+        )
+    return user.tenant_id
+
+
+def _assert_countries_active(conn, tenant_id: UUID, countries: list[str]) -> None:
+    """A scope may only name countries the company actually operates in.
+
+    Otherwise a typo ('CO' for Colombia written 'CL') silently produces a
+    membership that can see nothing, and the partner reports a broken dashboard
+    instead of a wrong letter.
+    """
+    # This endpoint runs on an unscoped connection (it reads core.app_user,
+    # which login needs before any tenant exists), and core.workspace_country is
+    # under row-level security - unscoped it returns zero rows and every country
+    # would look invalid. Scope the transaction just for this read.
+    execute(conn, "SELECT set_config('norte.tenant_id', %s, true)", (str(tenant_id),))
+    rows = fetch_all(
+        conn,
+        "SELECT country_code FROM core.workspace_country "
+        "WHERE tenant_id = %s AND is_active",
+        (tenant_id,),
+    )
+    active = {row["country_code"].upper() for row in rows}
+    unknown = [c for c in countries if c.upper() not in active]
+    if unknown:
+        raise ApiError(
+            "unknown_country",
+            f"Esta sociedad no opera en: {', '.join(unknown)}. "
+            f"Países activos: {', '.join(sorted(active)) or 'ninguno'}.",
+        )
+
+
+def slugify(name: str) -> str:
+    """A URL-safe handle for a company or an org. Never the identity - the uuid is."""
+    cleaned = "".join(c if c.isalnum() else "-" for c in name.lower().strip())
+    return "-".join(part for part in cleaned.split("-") if part)[:40]
 
 auth_rate_limit = Depends(rate_limit("auth", "rate_limit_auth_per_minute"))
 
@@ -75,24 +122,86 @@ def _record_auth_event(
     )
 
 
-def _issue_tokens(conn, settings, user: dict) -> TokenResponse:
+def _workspaces(conn, user_id: UUID) -> list[dict]:
+    """Every company this person may open, with the grant attached."""
+    return fetch_all(conn, "SELECT * FROM core.user_workspaces(%s)", (user_id,))
+
+
+def _pick_workspace(
+    workspaces: list[dict], wanted: UUID | None, fallback: UUID | None
+) -> dict | None:
+    """Which company this token stands in.
+
+    Order: the one explicitly asked for, then the person's default, then the
+    first one they have. An org admin with no membership gets None and can still
+    read the consolidated roll-up.
+    """
+    for target in (wanted, fallback):
+        if target is not None:
+            for ws in workspaces:
+                if ws["tenant_id"] == target:
+                    return ws
+    return workspaces[0] if workspaces else None
+
+
+def _issue_tokens(conn, settings, user: dict, *, tenant_id: UUID | None = None) -> TokenResponse:
+    """Mint a session standing in exactly one company.
+
+    The role in the token is the role of the MEMBERSHIP, not the legacy column
+    on the user row: the same person is owner of their own company and viewer of
+    a partner's, and only the membership knows which one applies here.
+    """
+    workspaces = _workspaces(conn, user["id"])
+    active = _pick_workspace(workspaces, tenant_id, user.get("tenant_id"))
+
+    if active is not None:
+        active_tenant = active["tenant_id"]
+        role = active["role"]
+        countries = list(active["country_scope"]) if active["country_scope"] else None
+    else:
+        # No membership anywhere: only an org admin can do anything from here.
+        active_tenant = None
+        role = user.get("role") or "viewer"
+        countries = None
+
     access_token, expires_in = create_access_token(
         settings,
         user_id=user["id"],
-        tenant_id=user["tenant_id"],
+        tenant_id=active_tenant,
         email=user["email"],
-        role=user["role"],
+        role=role,
+        org_id=user.get("org_id"),
+        is_org_admin=bool(user.get("is_org_admin")),
+        countries=countries,
     )
     refresh_token, token_hash = create_refresh_token()
     execute(
         conn,
-        "INSERT INTO core.refresh_token (user_id, token_hash, expires_at) VALUES (%s, %s, %s)",
-        (user["id"], token_hash, refresh_expiry(settings)),
+        "INSERT INTO core.refresh_token (user_id, token_hash, expires_at, tenant_id) "
+        "VALUES (%s, %s, %s, %s)",
+        (user["id"], token_hash, refresh_expiry(settings), active_tenant),
     )
     return TokenResponse(
         access_token=access_token,
         refresh_token=refresh_token,
         expires_in=expires_in,
+        tenant_id=active_tenant,
+        tenant_name=active["tenant_name"] if active else None,
+        role=role,
+        is_org_admin=bool(user.get("is_org_admin")),
+        countries=countries,
+        workspaces=[
+            WorkspaceSummary(
+                tenant_id=ws["tenant_id"],
+                name=ws["tenant_name"],
+                slug=ws["tenant_slug"],
+                role=ws["role"],
+                countries=list(ws["countries"] or []),
+                country_scope=list(ws["country_scope"]) if ws["country_scope"] else None,
+                share_pct=ws["share_pct"],
+            )
+            for ws in workspaces
+        ],
     )
 
 
@@ -116,11 +225,20 @@ def register(
             "que te envíe una invitación."
         )
 
-    slug = payload.tenant_name.lower().replace(" ", "-")[:40] or "dataeffi"
+    # The person registering runs the holding: their first company is one of
+    # possibly several, and everything else hangs off this org.
+    org = fetch_one(
+        conn,
+        "INSERT INTO core.org (slug, name) VALUES (%s, %s) "
+        "ON CONFLICT (slug) DO UPDATE SET name = EXCLUDED.name RETURNING id",
+        (slugify(payload.tenant_name) or "principal", payload.tenant_name),
+    )
+
+    slug = slugify(payload.tenant_name) or "dataeffi"
     tenant = fetch_one(
         conn,
-        "INSERT INTO core.tenant (slug, name) VALUES (%s, %s) RETURNING id, name",
-        (slug, payload.tenant_name),
+        "INSERT INTO core.tenant (slug, name, org_id) VALUES (%s, %s, %s) RETURNING id, name",
+        (slug, payload.tenant_name, org["id"]),
     )
 
     try:
@@ -131,11 +249,18 @@ def register(
     user = fetch_one(
         conn,
         """
-        INSERT INTO core.app_user (tenant_id, email, password_hash, full_name, role)
-        VALUES (%s, %s, %s, %s, 'owner')
-        RETURNING id, tenant_id, email, role
+        INSERT INTO core.app_user
+            (tenant_id, org_id, email, password_hash, full_name, role, is_org_admin)
+        VALUES (%s, %s, %s, %s, %s, 'owner', true)
+        RETURNING id, tenant_id, org_id, email, role, is_org_admin
         """,
-        (tenant["id"], payload.email.lower(), password_hash, payload.full_name),
+        (tenant["id"], org["id"], payload.email.lower(), password_hash, payload.full_name),
+    )
+
+    execute(
+        conn,
+        "INSERT INTO core.membership (user_id, tenant_id, role) VALUES (%s, %s, 'owner')",
+        (user["id"], tenant["id"]),
     )
 
     _record_auth_event(
@@ -161,7 +286,7 @@ def login(
     user = fetch_one(
         conn,
         """
-        SELECT id, tenant_id, email, role, password_hash, is_active
+        SELECT id, tenant_id, org_id, email, role, is_org_admin, password_hash, is_active
         FROM core.app_user WHERE lower(email) = lower(%s)
         """,
         (payload.email,),
@@ -202,8 +327,9 @@ def refresh(
     row = fetch_one(
         conn,
         """
-        SELECT rt.id AS token_id, u.id, u.tenant_id, u.email, u.role, u.is_active,
-               rt.expires_at, rt.revoked_at
+        SELECT rt.id AS token_id, u.id, u.tenant_id, u.org_id, u.email, u.role,
+               u.is_org_admin, u.is_active,
+               rt.expires_at, rt.revoked_at, rt.tenant_id AS session_tenant_id
         FROM core.refresh_token rt
         JOIN core.app_user u ON u.id = rt.user_id
         WHERE rt.token_hash = %s
@@ -224,9 +350,10 @@ def refresh(
     )
     _record_auth_event(
         conn, email=row["email"], event="refresh", request=request,
-        tenant_id=row["tenant_id"], user_id=row["id"],
+        tenant_id=row["session_tenant_id"] or row["tenant_id"], user_id=row["id"],
     )
-    return _issue_tokens(conn, settings, row)
+    # Stay in the company the session was standing in, not the default one.
+    return _issue_tokens(conn, settings, row, tenant_id=row["session_tenant_id"])
 
 
 @router.post(
@@ -250,16 +377,74 @@ def me(user: CurrentUserDep, conn: UnscopedDbDep) -> UserResponse:
     row = fetch_one(
         conn,
         """
-        SELECT u.id, u.email, u.full_name, u.role, u.tenant_id, u.created_at, t.name AS tenant_name
+        SELECT u.id, u.email, u.full_name, u.created_at, u.is_org_admin,
+               u.org_id, o.name AS org_name,
+               t.id AS tenant_id, t.name AS tenant_name
         FROM core.app_user u
-        JOIN core.tenant t ON t.id = u.tenant_id
+        LEFT JOIN core.org o ON o.id = u.org_id
+        LEFT JOIN core.tenant t ON t.id = %s
         WHERE u.id = %s
         """,
-        (user.id,),
+        (user.tenant_id, user.id),
     )
     if row is None:
         raise NotFound("El usuario del token ya no existe")
-    return UserResponse(**row)
+
+    workspaces = _workspaces(conn, user.id)
+    return UserResponse(
+        **row,
+        # The role that applies WHERE THE CALLER IS STANDING, not a global one.
+        role=user.role,
+        countries=list(user.countries) if user.countries else None,
+        capabilities=sorted(CAPABILITIES.get(user.role, frozenset())),
+        workspaces=[
+            WorkspaceSummary(
+                tenant_id=ws["tenant_id"],
+                name=ws["tenant_name"],
+                slug=ws["tenant_slug"],
+                role=ws["role"],
+                countries=list(ws["countries"] or []),
+                country_scope=list(ws["country_scope"]) if ws["country_scope"] else None,
+                share_pct=ws["share_pct"],
+            )
+            for ws in workspaces
+        ],
+    )
+
+
+@router.post(
+    "/switch",
+    response_model=TokenResponse,
+    summary="Cambiar de sociedad sin volver a iniciar sesión",
+)
+def switch_workspace(
+    payload: SwitchWorkspaceRequest,
+    conn: UnscopedDbDep,
+    settings: SettingsDep,
+    user: CurrentUserDep,
+) -> TokenResponse:
+    """Mint a token for another company this person belongs to.
+
+    The membership is re-read from the database rather than trusted from the
+    presented token: a grant revoked five minutes ago must not survive because
+    the browser still holds a token minted before it was.
+    """
+    row = fetch_one(
+        conn,
+        """
+        SELECT u.id, u.tenant_id, u.org_id, u.email, u.role, u.is_org_admin, u.is_active
+        FROM core.app_user u WHERE u.id = %s
+        """,
+        (user.id,),
+    )
+    if row is None or not row["is_active"]:
+        raise Unauthorized("Sesión inválida. Vuelve a iniciar sesión.")
+
+    allowed = {ws["tenant_id"] for ws in _workspaces(conn, user.id)}
+    if payload.tenant_id not in allowed:
+        raise Forbidden("No tienes acceso a esa sociedad")
+
+    return _issue_tokens(conn, settings, row, tenant_id=payload.tenant_id)
 
 
 @router.post(
@@ -271,28 +456,95 @@ def me(user: CurrentUserDep, conn: UnscopedDbDep) -> UserResponse:
 def invite(
     payload: InviteRequest,
     conn: UnscopedDbDep,
-    user: Annotated[object, Depends(require_role("owner"))],
+    user: Annotated[CurrentUser, Depends(require_cap("manage"))],
 ) -> InviteResponse:
-    existing = fetch_one(
-        conn,
-        "SELECT 1 FROM core.app_user WHERE lower(email) = lower(%s) AND tenant_id = %s",
-        (payload.email, user.tenant_id),
+    """Invite someone into THIS company, with a role and optionally a country scope.
+
+    Two shapes, because a partner in your Guatemala company may already have an
+    account from your Colombia one:
+
+      - unknown email  -> an invitation token they redeem to set a password
+      - known email    -> the membership is granted immediately, no token, no
+                          second password. `already_registered` says which
+                          happened so the UI can say "ya puede entrar" instead
+                          of handing over a link that does nothing.
+    """
+    tenant_id = _require_tenant(user)
+    email = payload.email.lower()
+    scope = list(payload.country_scope) if payload.country_scope else None
+
+    if scope:
+        _assert_countries_active(conn, tenant_id, scope)
+
+    person = fetch_one(
+        conn, "SELECT id FROM core.app_user WHERE lower(email) = lower(%s)", (email,)
     )
-    if existing:
-        raise Conflict("Esa persona ya tiene cuenta en este workspace")
+
+    if person is not None:
+        already = fetch_one(
+            conn,
+            "SELECT 1 FROM core.membership WHERE user_id = %s AND tenant_id = %s AND is_active",
+            (person["id"], tenant_id),
+        )
+        if already:
+            raise Conflict("Esa persona ya tiene acceso a esta sociedad")
+
+        execute(
+            conn,
+            """
+            INSERT INTO core.membership (user_id, tenant_id, role, country_scope, share_pct)
+            VALUES (%s, %s, %s, %s, %s)
+            ON CONFLICT (user_id, tenant_id) DO UPDATE
+                SET role = EXCLUDED.role,
+                    country_scope = EXCLUDED.country_scope,
+                    share_pct = EXCLUDED.share_pct,
+                    is_active = true
+            """,
+            (person["id"], tenant_id, payload.role, scope, payload.share_pct),
+        )
+        logger.info("existing user granted membership on tenant %s", tenant_id)
+        return InviteResponse(
+            id=person["id"],
+            email=email,
+            role=payload.role,
+            expires_at=datetime.now(UTC),
+            invitation_token=None,
+            already_registered=True,
+            country_scope=scope,
+            share_pct=payload.share_pct,
+        )
+
+    # A pending invitation for the same company is replaced, not duplicated:
+    # re-inviting someone is how you fix a typo'd role.
+    execute(
+        conn,
+        "DELETE FROM core.invitation "
+        "WHERE tenant_id = %s AND lower(email) = lower(%s) AND accepted_at IS NULL",
+        (tenant_id, email),
+    )
 
     token, token_hash = generate_invitation_token()
     expires_at = datetime.now(UTC) + timedelta(days=INVITATION_TTL_DAYS)
     row = fetch_one(
         conn,
         """
-        INSERT INTO core.invitation (tenant_id, email, role, token_hash, invited_by, expires_at)
-        VALUES (%s, %s, %s, %s, %s, %s)
-        RETURNING id, email, role, expires_at
+        INSERT INTO core.invitation
+            (tenant_id, email, role, token_hash, invited_by, expires_at, country_scope, share_pct)
+        VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
+        RETURNING id, email, role, expires_at, country_scope, share_pct
         """,
-        (user.tenant_id, payload.email.lower(), payload.role, token_hash, user.id, expires_at),
+        (
+            tenant_id,
+            email,
+            payload.role,
+            token_hash,
+            user.id,
+            expires_at,
+            scope,
+            payload.share_pct,
+        ),
     )
-    return InviteResponse(**row, invitation_token=token)
+    return InviteResponse(**row, invitation_token=token, already_registered=False)
 
 
 @router.post(
@@ -310,8 +562,11 @@ def accept_invite(
     invitation = fetch_one(
         conn,
         """
-        SELECT id, tenant_id, email, role, expires_at, accepted_at
-        FROM core.invitation WHERE token_hash = %s
+        SELECT i.id, i.tenant_id, i.email, i.role, i.expires_at, i.accepted_at,
+               i.country_scope, i.share_pct, t.org_id
+        FROM core.invitation i
+        JOIN core.tenant t ON t.id = i.tenant_id
+        WHERE i.token_hash = %s
         """,
         (hash_token(payload.token),),
     )
@@ -330,16 +585,36 @@ def accept_invite(
     user = fetch_one(
         conn,
         """
-        INSERT INTO core.app_user (tenant_id, email, password_hash, full_name, role)
-        VALUES (%s, %s, %s, %s, %s)
-        RETURNING id, tenant_id, email, role
+        INSERT INTO core.app_user (tenant_id, org_id, email, password_hash, full_name, role)
+        VALUES (%s, %s, %s, %s, %s, %s)
+        RETURNING id, tenant_id, org_id, email, role, is_org_admin
         """,
         (
             invitation["tenant_id"],
+            invitation["org_id"],
             invitation["email"],
             password_hash,
             payload.full_name,
             invitation["role"],
+        ),
+    )
+    execute(
+        conn,
+        """
+        INSERT INTO core.membership (user_id, tenant_id, role, country_scope, share_pct)
+        VALUES (%s, %s, %s, %s, %s)
+        ON CONFLICT (user_id, tenant_id) DO UPDATE
+            SET role = EXCLUDED.role,
+                country_scope = EXCLUDED.country_scope,
+                share_pct = EXCLUDED.share_pct,
+                is_active = true
+        """,
+        (
+            user["id"],
+            invitation["tenant_id"],
+            invitation["role"],
+            invitation["country_scope"],
+            invitation["share_pct"],
         ),
     )
     execute(

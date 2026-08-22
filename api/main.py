@@ -10,14 +10,26 @@ import logging
 from contextlib import asynccontextmanager
 from pathlib import Path
 
-from fastapi import FastAPI, Request
+from fastapi import Depends, FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
 from api.db import close_pools, healthcheck, init_pools
+from api.deps import require_any_cap, require_cap
 from api.errors import register_error_handlers
 from api.ingest_queue import get_queue, init_queue
-from api.routers import ai, auth, config, customers, ingest, kpis, orders, products, worker
+from api.routers import (
+    ai,
+    auth,
+    config,
+    customers,
+    ingest,
+    kpis,
+    orders,
+    org,
+    products,
+    worker,
+)
 from api.settings import get_settings
 
 logger = logging.getLogger(__name__)
@@ -98,14 +110,35 @@ def create_app() -> FastAPI:
         payload = healthcheck()
         return JSONResponse(status_code=200 if payload["status"] == "ok" else 503, content=payload)
 
+    # Authorisation by surface, not by endpoint.
+    #
+    # A role is mounted once here instead of being repeated on ~60 handlers,
+    # which is what makes `uploader` safe to add: a person who may only upload
+    # files is refused at the door of every reading surface, including endpoints
+    # written after this line. `read` also covers configuration READS - the
+    # writes inside that router keep their own owner/analyst guards.
+    read_only = [Depends(require_cap("read"))]
+
     app.include_router(auth.router)
-    app.include_router(config.router)
+    app.include_router(org.router)
+    # Not read-only: picking a country and a connection is part of uploading a
+    # file, so the one screen an `uploader` may use needs this router too.
+    app.include_router(
+        config.router, dependencies=[Depends(require_any_cap("read", "ingest"))]
+    )
+    # NOT mounted with a router-wide `ingest` guard, unlike the surfaces above.
+    # `POST /ingest/webhook/{token}` lives in this router and authenticates with
+    # the token in its own path - it is called by n8n, Make and Zapier, which
+    # hold no session and never send a bearer token. A guard on the router
+    # answers every one of those calls with 401 "Falta el token de acceso", so
+    # the capability is asserted on each human-facing endpoint instead. See
+    # `ingest_guard` in api/routers/ingest.py.
     app.include_router(ingest.router)
-    app.include_router(kpis.router)
-    app.include_router(products.router)
-    app.include_router(orders.router)
-    app.include_router(customers.router)
-    app.include_router(ai.router)
+    app.include_router(kpis.router, dependencies=read_only)
+    app.include_router(products.router, dependencies=read_only)
+    app.include_router(orders.router, dependencies=read_only)
+    app.include_router(customers.router, dependencies=read_only)
+    app.include_router(ai.router, dependencies=read_only)
     app.include_router(worker.router)
 
     return app

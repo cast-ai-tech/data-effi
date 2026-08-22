@@ -36,7 +36,7 @@ from fastapi import APIRouter, Query
 from pydantic import BaseModel
 
 from api.db import fetch_all, fetch_one
-from api.deps import DbDep
+from api.deps import CurrentUserDep, DbDep
 from api.errors import InvalidDateField, InvalidDateRange
 from api.schemas import (
     DATE_FIELDS,
@@ -662,16 +662,21 @@ def problem_rate(
 )
 def global_summary(
     conn: DbDep,
+    user: CurrentUserDep,
     date_from: OptionalDate = None,
     date_to: OptionalDate = None,
     date_field: DateFieldQuery = BY_CREATION,
 ) -> KpiResponse[GlobalRow]:
     """No country filter: this endpoint IS the comparison between countries.
 
+    Which is exactly why a limited membership is filtered here instead of at the
+    door: there is no `country` parameter to refuse, so a partner scoped to
+    Guatemala gets the Guatemala row and nothing else.
+
     The FX rate is not filtered by the range. It stays the latest one known,
     because "what is this worth to me" is a question about today.
     """
-    return _ranged(
+    response = _ranged(
         conn,
         "f_global_summary",
         GlobalRow,
@@ -681,6 +686,11 @@ def global_summary(
         date_field=date_field,
         order_by="contribution DESC NULLS LAST",
     )
+    if user.countries is not None:
+        response.rows = [
+            row for row in response.rows if row.country_code.upper() in user.countries
+        ]
+    return response
 
 
 @router.get(

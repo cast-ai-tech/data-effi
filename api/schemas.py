@@ -14,18 +14,36 @@ from __future__ import annotations
 
 from datetime import date, datetime
 from decimal import Decimal
-from typing import Any, Generic, Literal, TypeVar
+from typing import Annotated, Any, Generic, Literal, TypeVar
 from uuid import UUID
 
-from pydantic import BaseModel, EmailStr, Field
+from pydantic import BaseModel, EmailStr, Field, StringConstraints
 
-Role = Literal["owner", "analyst", "viewer"]
+# `uploader` is not a rung below `viewer`: it may write loads and may not read a
+# single number. See api/deps.CAPABILITIES for what each one actually unlocks.
+Role = Literal["owner", "analyst", "viewer", "uploader"]
+Capability = Literal["read", "ingest", "config", "manage"]
+CountryCode = Annotated[str, StringConstraints(min_length=2, max_length=2, to_upper=True)]
 WidgetState = Literal["available", "degraded", "blocked"]
 CatalogueStatus = Literal["sin_costo", "sin_revisar", "costo_desactualizado", "ok"]
 
 # Whether a percentage was measured or merely computed. Below ten terminal
 # guides a delivery rate is arithmetic, not evidence - see migration 021.
 SampleQuality = Literal["suficiente", "muestra_corta"]
+
+# Which date a number is anchored to. Defined up here rather than beside the KPI
+# models because the organization roll-up - the first models in this file - also
+# reports the basis it applied, and Pydantic resolves these aliases when the
+# class is built, not when it is used.
+DateBasis = Literal[
+    "creacion", "despacho", "entrega", "movimiento", "interaccion", "pauta"
+]
+
+# What the caller may ASK to filter on. A subset of the bases above: a guide has
+# these three dates, while "interaccion" and "pauta" belong to other sources and
+# are never a choice - the endpoints that use them have no other option.
+DateField = Literal["creacion", "despacho", "entrega"]
+DATE_FIELDS: tuple[str, ...] = ("creacion", "despacho", "entrega")
 
 
 # =============================================================================
@@ -51,11 +69,42 @@ class RefreshRequest(BaseModel):
     refresh_token: str
 
 
+class WorkspaceSummary(BaseModel):
+    """One company the caller may open, and the grant that applies there."""
+
+    tenant_id: UUID
+    name: str
+    slug: str
+    role: Role
+    countries: list[str] = Field(
+        default_factory=list, description="Países que opera la sociedad"
+    )
+    country_scope: list[str] | None = Field(
+        default=None,
+        description="Si no es null, los únicos países que esta persona puede ver",
+    )
+    share_pct: float | None = Field(
+        default=None, description="Participación del socio, solo informativa"
+    )
+
+
 class TokenResponse(BaseModel):
     access_token: str
     refresh_token: str
     token_type: str = "bearer"
     expires_in: int
+    # Which company this token stands in, and everything the UI needs to render
+    # the switcher without a second round trip.
+    tenant_id: UUID | None = None
+    tenant_name: str | None = None
+    role: Role | None = None
+    is_org_admin: bool = False
+    countries: list[str] | None = None
+    workspaces: list[WorkspaceSummary] = Field(default_factory=list)
+
+
+class SwitchWorkspaceRequest(BaseModel):
+    tenant_id: UUID
 
 
 class UserResponse(BaseModel):
@@ -63,30 +112,163 @@ class UserResponse(BaseModel):
     email: str
     full_name: str | None
     role: Role
-    tenant_id: UUID
-    tenant_name: str
+    tenant_id: UUID | None
+    tenant_name: str | None
     created_at: datetime
+    org_id: UUID | None = None
+    org_name: str | None = None
+    is_org_admin: bool = False
+    countries: list[str] | None = None
+    capabilities: list[Capability] = Field(default_factory=list)
+    workspaces: list[WorkspaceSummary] = Field(default_factory=list)
 
 
 class InviteRequest(BaseModel):
     email: EmailStr
     role: Role = "viewer"
+    country_scope: list[CountryCode] | None = Field(
+        default=None,
+        description="Países que podrá ver. Null = toda la sociedad.",
+        min_length=1,
+    )
+    share_pct: float | None = Field(
+        default=None, gt=0, le=100, description="Participación del socio (informativa)"
+    )
 
 
 class InviteResponse(BaseModel):
     id: UUID
     email: str
     role: Role
-    invitation_token: str = Field(
-        description="Show once. Not recoverable: only its hash is stored."
+    invitation_token: str | None = Field(
+        default=None,
+        description="Se muestra una sola vez. Null si la persona ya tenía cuenta.",
     )
     expires_at: datetime
+    already_registered: bool = Field(
+        default=False,
+        description="True cuando ya existía la cuenta y el acceso quedó activo al instante.",
+    )
+    country_scope: list[str] | None = None
+    share_pct: float | None = None
 
 
 class AcceptInviteRequest(BaseModel):
     token: str
     password: str = Field(min_length=10, max_length=200)
     full_name: str = Field(min_length=2, max_length=120)
+
+
+# =============================================================================
+# Organization: the holding above the companies
+#
+# Money here is ALWAYS in the org's base currency (USD by default). Per-company
+# figures keep their own currency; only the roll-up converts, and `fx_missing`
+# says when a company had to be left out of a total instead of being counted at
+# a rate nobody has.
+# =============================================================================
+
+
+class OrgTenantRow(BaseModel):
+    """One company's contribution to the consolidated picture."""
+
+    tenant_id: UUID
+    name: str
+    slug: str
+    countries: list[str] = Field(default_factory=list)
+    shipments: int = 0
+    delivered: int = 0
+    delivery_rate_pct: float | None = None
+    revenue_usd: float | None = None
+    ad_spend_usd: float | None = None
+    contribution_usd: float | None = None
+    share_pct: float | None = None
+    my_share_usd: float | None = Field(
+        default=None, description="contribution_usd x share_pct, cuando hay participación"
+    )
+    fx_missing: bool = False
+    last_shipment_date: date | None = None
+
+
+class OrgCountryRow(BaseModel):
+    """The same countries can appear in several companies; here they are added up."""
+
+    country_code: str
+    country_name: str
+    shipments: int = 0
+    delivered: int = 0
+    delivery_rate_pct: float | None = None
+    revenue_usd: float | None = None
+    contribution_usd: float | None = None
+    tenants: list[str] = Field(
+        default_factory=list, description="Sociedades que operan este país"
+    )
+
+
+class OrgTotals(BaseModel):
+    shipments: int = 0
+    delivered: int = 0
+    delivery_rate_pct: float | None = None
+    revenue_usd: float | None = None
+    ad_spend_usd: float | None = None
+    contribution_usd: float | None = None
+    my_share_usd: float | None = None
+
+
+class OrgSummaryResponse(BaseModel):
+    org_id: UUID
+    org_name: str
+    base_currency: str
+    date_from: date | None = None
+    date_to: date | None = None
+    date_basis: DateField | None = None
+    totals: OrgTotals
+    by_tenant: list[OrgTenantRow] = Field(default_factory=list)
+    by_country: list[OrgCountryRow] = Field(default_factory=list)
+    unavailable: list[str] = Field(
+        default_factory=list,
+        description="Sociedades que no pudieron leerse; sus números NO están en los totales.",
+    )
+
+
+class TenantCreateRequest(BaseModel):
+    name: str = Field(min_length=2, max_length=120)
+    countries: list[CountryCode] = Field(
+        default_factory=list, description="Países en los que opera la sociedad"
+    )
+    notes: str | None = Field(default=None, max_length=500)
+
+
+class TenantRow(BaseModel):
+    tenant_id: UUID
+    name: str
+    slug: str
+    countries: list[str] = Field(default_factory=list)
+    member_count: int = 0
+    notes: str | None = None
+    created_at: datetime
+
+
+class MemberRow(BaseModel):
+    user_id: UUID
+    email: str
+    full_name: str | None
+    role: Role
+    country_scope: list[str] | None = None
+    share_pct: float | None = None
+    is_active: bool = True
+    last_login_at: datetime | None = None
+
+
+class MemberUpdateRequest(BaseModel):
+    """Every field optional: this is a patch, and omitted means unchanged."""
+
+    role: Role | None = None
+    country_scope: list[CountryCode] | None = Field(default=None, min_length=1)
+    # Explicitly widening a limited membership back to the whole company.
+    clear_country_scope: bool = False
+    share_pct: float | None = Field(default=None, gt=0, le=100)
+    is_active: bool | None = None
 
 
 # =============================================================================
@@ -345,16 +527,6 @@ class BatchDetail(BaseModel):
 # puede honrar el `date_field` recibido devuelve la base que usó de verdad -
 # ver la cabecera de la migración 020 para los cuatro casos y su porqué.
 # =============================================================================
-
-DateBasis = Literal[
-    "creacion", "despacho", "entrega", "movimiento", "interaccion", "pauta"
-]
-
-# What the caller may ASK to filter on. A subset of the bases above: a guide has
-# these three dates, while "interaccion" and "pauta" belong to other sources and
-# are never a choice - the endpoints that use them have no other option.
-DateField = Literal["creacion", "despacho", "entrega"]
-DATE_FIELDS: tuple[str, ...] = ("creacion", "despacho", "entrega")
 
 RowT = TypeVar("RowT", bound=BaseModel)
 

@@ -6,15 +6,41 @@
  * drift here - the API integration tests will.
  */
 
-export type Role = "owner" | "analyst" | "viewer";
+/**
+ * `uploader` is not a lesser `viewer`: it may upload files and may not see a
+ * single number. Anything deciding what to render asks `capabilities`, never
+ * compares roles.
+ */
+export type Role = "owner" | "analyst" | "viewer" | "uploader";
+export type Capability = "read" | "ingest" | "config" | "manage";
 export type WidgetState = "available" | "degraded" | "blocked";
 export type TrafficLight = "verde" | "amarillo" | "rojo" | "sin_datos";
+
+/** One company the person may open, and the grant that applies inside it. */
+export interface Workspace {
+  tenant_id: string;
+  name: string;
+  slug: string;
+  role: Role;
+  /** Countries the company operates in. */
+  countries: string[];
+  /** If set, the only countries THIS person may read there. */
+  country_scope: string[] | null;
+  share_pct: number | null;
+}
 
 export interface Tokens {
   access_token: string;
   refresh_token: string;
   token_type: string;
   expires_in: number;
+  /** The company this token stands in. Null only for an admin with no membership. */
+  tenant_id: string | null;
+  tenant_name: string | null;
+  role: Role | null;
+  is_org_admin: boolean;
+  countries: string[] | null;
+  workspaces: Workspace[];
 }
 
 export interface User {
@@ -22,9 +48,104 @@ export interface User {
   email: string;
   full_name: string | null;
   role: Role;
-  tenant_id: string;
-  tenant_name: string;
+  tenant_id: string | null;
+  tenant_name: string | null;
   created_at: string;
+  org_id: string | null;
+  org_name: string | null;
+  is_org_admin: boolean;
+  countries: string[] | null;
+  capabilities: Capability[];
+  workspaces: Workspace[];
+}
+
+// ---------------------------------------------------------------------------
+// Organization: the holding above the companies. Money is in `base_currency`.
+// ---------------------------------------------------------------------------
+
+export interface OrgTenantRow {
+  tenant_id: string;
+  name: string;
+  slug: string;
+  countries: string[];
+  shipments: number;
+  delivered: number;
+  delivery_rate_pct: number | null;
+  revenue_usd: number | null;
+  ad_spend_usd: number | null;
+  contribution_usd: number | null;
+  share_pct: number | null;
+  my_share_usd: number | null;
+  fx_missing: boolean;
+  last_shipment_date: string | null;
+}
+
+export interface OrgCountryRow {
+  country_code: string;
+  country_name: string;
+  shipments: number;
+  delivered: number;
+  delivery_rate_pct: number | null;
+  revenue_usd: number | null;
+  contribution_usd: number | null;
+  tenants: string[];
+}
+
+export interface OrgTotals {
+  shipments: number;
+  delivered: number;
+  delivery_rate_pct: number | null;
+  revenue_usd: number | null;
+  ad_spend_usd: number | null;
+  contribution_usd: number | null;
+  my_share_usd: number | null;
+}
+
+export interface OrgSummary {
+  org_id: string;
+  org_name: string;
+  base_currency: string;
+  date_from: string | null;
+  date_to: string | null;
+  date_basis: string | null;
+  totals: OrgTotals;
+  by_tenant: OrgTenantRow[];
+  by_country: OrgCountryRow[];
+  /** Companies that could not be read; their numbers are NOT in the totals. */
+  unavailable: string[];
+}
+
+export interface TenantRow {
+  tenant_id: string;
+  name: string;
+  slug: string;
+  countries: string[];
+  member_count: number;
+  notes: string | null;
+  created_at: string;
+}
+
+export interface Member {
+  user_id: string;
+  email: string;
+  full_name: string | null;
+  role: Role;
+  country_scope: string[] | null;
+  share_pct: number | null;
+  is_active: boolean;
+  last_login_at: string | null;
+}
+
+export interface InviteResult {
+  id: string;
+  email: string;
+  role: Role;
+  /** Null when the person already had an account: access is immediate. */
+  invitation_token: string | null;
+  expires_at: string;
+  already_registered: boolean;
+  country_scope: string[] | null;
+  share_pct: number | null;
 }
 
 /** Everything the UI needs to format a number or a date for one country. */

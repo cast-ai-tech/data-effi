@@ -313,6 +313,18 @@ def rival_token(client, api_dsn, seeded) -> str:
             "VALUES (%s, %s, %s, %s, 'owner') ON CONFLICT DO NOTHING",
             (RIVAL_TENANT_ID, RIVAL_EMAIL, hash_password(RIVAL_PASSWORD), "Dueño Rival"),
         )
+        # Since 032 a person reaches a company through core.membership, not
+        # through app_user.tenant_id alone: /auth/login reads the companies from
+        # core.user_workspaces, and a user with no membership is refused with
+        # "Tu usuario no pertenece a ninguna sociedad". `tenant_id` now only
+        # decides WHICH company opens first, so seeding a rival straight in SQL
+        # has to grant the membership too.
+        cur.execute(
+            "INSERT INTO core.membership (user_id, tenant_id, role) "
+            "SELECT id, tenant_id, role FROM core.app_user WHERE lower(email) = lower(%s) "
+            "ON CONFLICT (user_id, tenant_id) DO NOTHING",
+            (RIVAL_EMAIL,),
+        )
         _insert_shipment(
             cur, tenant=RIVAL_TENANT_ID, connection=RIVAL_CONNECTION_ID,
             tracking="RIVAL-0001", person=BRUNO, status="delivered",
