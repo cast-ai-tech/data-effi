@@ -120,7 +120,19 @@ def test_a_currency_without_a_rate_says_so(client, owner):
 
 
 def test_a_hand_typed_rate_round_trips_in_the_direction_people_quote(client, owner):
-    """Se escribe "un dólar son 3900 pesos" y se lee igual, no invertido."""
+    """Se escribe "un dólar son 3900 pesos" y se lee igual, no invertido.
+
+    La tolerancia es 1e-4 y no algo más fino por una razón concreta:
+    `core.fx_rate.rate` es numeric(18,8) y guarda la dirección inversa, así que
+    1/3900 se redondea a 0,00025641 y al invertirlo vuelve como 3900,0039. Son
+    cuatro milésimas de peso en 3.900 - cuatro pesos por cada millón - y no vale
+    recrear mart.v_global_summary para recuperarlas.
+
+    Dónde SÍ importaría: una moneda por encima de unos 100.000 por dólar deja
+    menos de cinco cifras significativas y el error deja de ser ruido. El
+    bolívar estuvo ahí antes de la redenominación de 2021. Si vuelve a pasar,
+    la respuesta es ampliar la columna, no aflojar más este número.
+    """
     response = client.put(
         "/config/fx",
         headers=auth(owner["access_token"]),
@@ -129,9 +141,9 @@ def test_a_hand_typed_rate_round_trips_in_the_direction_people_quote(client, own
     assert response.status_code == 200, response.text
     body = response.json()
     assert body["source"] == "manual"
-    assert body["per_usd"] == pytest.approx(3900, rel=1e-6)
+    assert body["per_usd"] == pytest.approx(3900, rel=1e-4)
     # Y por dentro quedó guardada la inversa, que es lo que multiplica el mart.
-    assert body["to_usd"] == pytest.approx(1 / 3900, rel=1e-6)
+    assert body["to_usd"] == pytest.approx(1 / 3900, rel=1e-4)
 
 
 def test_the_peso_column_is_derived_from_the_dollar_one(client, owner):
@@ -149,7 +161,7 @@ def test_the_peso_column_is_derived_from_the_dollar_one(client, owner):
     )
 
     table = rates(client, owner["access_token"])
-    assert table["GTQ"]["to_cop"] == pytest.approx(3900 / 7.8, rel=1e-6)
+    assert table["GTQ"]["to_cop"] == pytest.approx(3900 / 7.8, rel=1e-4)
     # El peso contra sí mismo vale uno, que es la comprobación de que la
     # división usa la misma fuente en ambos lados.
     assert table["COP"]["to_cop"] == pytest.approx(1.0, rel=1e-9)
