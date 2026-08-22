@@ -23,7 +23,15 @@ from psycopg.types.json import Json
 from starlette.datastructures import UploadFile as StarletteUploadFile
 
 from api.db import check_rate_limit, connection, execute, fetch_all, fetch_one
-from api.deps import CurrentUserDep, DbDep, SettingsDep, client_ip, rate_limit, require_role
+from api.deps import (
+    CurrentUserDep,
+    DbDep,
+    SettingsDep,
+    client_ip,
+    rate_limit,
+    require_cap,
+    require_role,
+)
 from api.errors import ApiError, NotFound, PayloadTooLarge
 from api.ingest_queue import get_queue
 from api.schemas import (
@@ -53,6 +61,13 @@ router = APIRouter(prefix="/ingest", tags=["ingest"])
 
 ingest_rate_limit = Depends(rate_limit("ingest", "rate_limit_ingest_per_minute"))
 AnalystDep = Annotated[object, Depends(require_role("analyst"))]
+
+# Asserted per endpoint rather than on the router, because `/webhook/{token}`
+# below is machine-facing: its credential is the token in the path, and it must
+# stay reachable without a bearer token. Every OTHER endpoint here is used by a
+# person with a session, so each one carries this guard explicitly - including
+# any added later, which is the trade-off of not mounting it once.
+ingest_guard = Depends(require_cap("ingest"))
 
 _SAFE_NAME_RE = re.compile(r"[^A-Za-z0-9._-]+")
 MAX_FILES_PER_UPLOAD = 20
@@ -96,7 +111,7 @@ async def _read_within_limits(upload_file: UploadFile, settings) -> tuple[str, b
     "/upload",
     response_model=UploadAcceptedResponse,
     status_code=status.HTTP_202_ACCEPTED,
-    dependencies=[ingest_rate_limit],
+    dependencies=[ingest_guard, ingest_rate_limit],
     summary="Subir uno o varios reportes",
 )
 async def upload(
@@ -502,7 +517,7 @@ def _record_webhook_run(
 @router.post(
     "/detect",
     response_model=DetectResponse,
-    dependencies=[ingest_rate_limit],
+    dependencies=[ingest_guard, ingest_rate_limit],
     summary="Analizar un archivo sin guardarlo ni cargarlo",
 )
 async def detect(
@@ -571,7 +586,12 @@ async def detect(
     )
 
 
-@router.get("/jobs", response_model=list[UploadJobResponse], summary="Estado de las cargas")
+@router.get(
+    "/jobs",
+    response_model=list[UploadJobResponse],
+    dependencies=[ingest_guard],
+    summary="Estado de las cargas",
+)
 def list_jobs(
     conn: DbDep,
     user: CurrentUserDep,
@@ -589,7 +609,12 @@ def list_jobs(
     return [UploadJobResponse(**row) for row in rows]
 
 
-@router.get("/jobs/{job_id}", response_model=UploadJobResponse, summary="Estado de una carga")
+@router.get(
+    "/jobs/{job_id}",
+    response_model=UploadJobResponse,
+    dependencies=[ingest_guard],
+    summary="Estado de una carga",
+)
 def get_job(job_id: UUID, conn: DbDep, user: CurrentUserDep) -> UploadJobResponse:
     row = fetch_one(
         conn,
@@ -604,7 +629,12 @@ def get_job(job_id: UUID, conn: DbDep, user: CurrentUserDep) -> UploadJobRespons
     return UploadJobResponse(**row)
 
 
-@router.get("/batches", response_model=PaginatedBatches, summary="Historial de cargas")
+@router.get(
+    "/batches",
+    response_model=PaginatedBatches,
+    dependencies=[ingest_guard],
+    summary="Historial de cargas",
+)
 def list_batches(
     conn: DbDep,
     page: Annotated[int, Query(ge=1)] = 1,
@@ -637,7 +667,10 @@ def list_batches(
 
 
 @router.get(
-    "/batches/{batch_id}", response_model=BatchDetail, summary="Detalle de una carga"
+    "/batches/{batch_id}",
+    response_model=BatchDetail,
+    dependencies=[ingest_guard],
+    summary="Detalle de una carga",
 )
 def get_batch(batch_id: UUID, conn: DbDep, user: CurrentUserDep) -> BatchDetail:
     row = fetch_one(conn, "SELECT * FROM mart.v_batch_history WHERE batch_id = %s", (batch_id,))

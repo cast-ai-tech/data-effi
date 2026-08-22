@@ -126,7 +126,14 @@ def create_app() -> FastAPI:
     app.include_router(
         config.router, dependencies=[Depends(require_any_cap("read", "ingest"))]
     )
-    app.include_router(ingest.router, dependencies=[Depends(require_cap("ingest"))])
+    # NOT mounted with a router-wide `ingest` guard, unlike the surfaces above.
+    # `POST /ingest/webhook/{token}` lives in this router and authenticates with
+    # the token in its own path - it is called by n8n, Make and Zapier, which
+    # hold no session and never send a bearer token. A guard on the router
+    # answers every one of those calls with 401 "Falta el token de acceso", so
+    # the capability is asserted on each human-facing endpoint instead. See
+    # `ingest_guard` in api/routers/ingest.py.
+    app.include_router(ingest.router)
     app.include_router(kpis.router, dependencies=read_only)
     app.include_router(products.router, dependencies=read_only)
     app.include_router(orders.router, dependencies=read_only)
