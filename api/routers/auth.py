@@ -278,6 +278,16 @@ def register(
         "INSERT INTO core.membership (user_id, tenant_id, role) VALUES (%s, %s, 'owner')",
         (user["id"], tenant["id"]),
     )
+    # Whoever registers the deployment runs the holding. Migration 036 backfilled
+    # this row for the people who already existed; it has to be written here too,
+    # or the very first account is an org admin according to the legacy boolean
+    # and nobody at all according to core.org_membership.
+    execute(
+        conn,
+        "INSERT INTO core.org_membership (user_id, org_id, role) VALUES (%s, %s, 'admin') "
+        "ON CONFLICT (user_id, org_id) DO NOTHING",
+        (user["id"], org["id"]),
+    )
 
     _record_auth_event(
         conn, email=payload.email, event="register", request=request,

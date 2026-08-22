@@ -156,7 +156,7 @@ def test_an_org_viewer_consolidates_companies_they_do_not_belong_to(
     """Before the promotion the roll-up has one company. After it, both."""
     before = client.get("/org/summary", headers=auth(partner_token))
     assert before.status_code == 200, before.text
-    assert len(before.json()["tenants"]) == 1
+    assert len(before.json()["by_tenant"]) == 1
 
     granted = client.post(
         "/org/members",
@@ -175,7 +175,7 @@ def test_an_org_viewer_consolidates_companies_they_do_not_belong_to(
 
     after = client.get("/org/summary", headers=auth(again.json()["access_token"]))
     assert after.status_code == 200, after.text
-    assert len(after.json()["tenants"]) == 2
+    assert len(after.json()["by_tenant"]) == 2
 
 
 def test_an_org_viewer_still_cannot_create_a_company(client):
