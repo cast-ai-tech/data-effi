@@ -100,18 +100,48 @@ $do$;
 -- connecting as the superuser turns every policy above into decoration. This
 -- was exactly the state this project was in before this migration.
 -- =============================================================================
+-- WHY THE ATTRIBUTES ARE ASSERTED AND NOT RE-ASSERTED.
+--
+-- The obvious re-run guard is `ALTER ROLE norte_app WITH NOSUPERUSER
+-- NOBYPASSRLS`, in case someone granted either by hand. PostgreSQL refuses it
+-- unless the CALLER is a superuser - naming those two attributes in an ALTER is
+-- a superuser action even when the value being set is "off". On a managed
+-- PostgreSQL that is a wall: Supabase's `postgres` role has rolsuper = false, so
+-- the statement fails with
+--
+--     42501: permission denied to alter role
+--
+-- and takes the whole migration down with it, policies included.
+--
+-- CREATE ROLE is not affected: NOSUPERUSER and NOBYPASSRLS are the defaults, and
+-- naming them there only requires superuser when turning them ON. So the roles
+-- are created correctly anywhere, and the check below replaces the re-assertion:
+-- if either attribute is ever granted by hand, this migration fails loudly on
+-- its next run instead of leaving row-level security silently decorative.
 DO $do$
+DECLARE
+    r record;
 BEGIN
     IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'norte_app') THEN
         CREATE ROLE norte_app WITH LOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOBYPASSRLS;
     END IF;
-    -- Re-assert on re-run: someone may have granted these by hand.
-    ALTER ROLE norte_app WITH NOSUPERUSER NOBYPASSRLS NOCREATEROLE NOCREATEDB;
 
     IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'norte_readonly') THEN
         CREATE ROLE norte_readonly WITH LOGIN NOINHERIT NOSUPERUSER NOBYPASSRLS;
     END IF;
-    ALTER ROLE norte_readonly WITH NOSUPERUSER NOBYPASSRLS NOCREATEROLE NOCREATEDB;
+
+    -- Safe to re-assert anywhere: neither attribute is superuser-gated.
+    ALTER ROLE norte_app WITH NOCREATEROLE NOCREATEDB;
+
+    FOR r IN SELECT rolname, rolsuper, rolbypassrls FROM pg_roles
+             WHERE rolname IN ('norte_app', 'norte_readonly')
+    LOOP
+        IF r.rolsuper OR r.rolbypassrls THEN
+            RAISE EXCEPTION
+                'Role % has SUPERUSER=% BYPASSRLS=%. PostgreSQL exempts both from row-level security unconditionally, FORCE included, so every policy in this migration would be decoration. Revoke it as a superuser before serving traffic.',
+                r.rolname, r.rolsuper, r.rolbypassrls;
+        END IF;
+    END LOOP;
 END;
 $do$;
 
