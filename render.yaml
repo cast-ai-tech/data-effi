@@ -38,6 +38,8 @@ services:
         sync: false
       - key: CORS_ORIGINS
         sync: false
+      - key: PROXY_SHARED_SECRET
+        sync: false
 
       # --- valores fijos del despliegue gratuito ---
       - key: ENVIRONMENT

@@ -30,7 +30,7 @@ from uuid import UUID
 
 from fastapi import APIRouter, Depends, Query, status
 
-from api.db import connection, execute, fetch_all, fetch_one
+from api.db import connection, execute, fetch_all, fetch_one, fetch_required
 from api.deps import CurrentUser, CurrentUserDep, UnscopedDbDep
 from api.errors import ApiError, Conflict, Forbidden, NotFound
 from api.schemas import (
@@ -83,6 +83,17 @@ def require_org_admin(user: CurrentUserDep) -> CurrentUser:
 
 OrgUser = Annotated[CurrentUser, Depends(require_org)]
 OrgAdmin = Annotated[CurrentUser, Depends(require_org_admin)]
+
+
+def _org_id(user: CurrentUser) -> UUID:
+    """The org an `OrgAdmin` administers, as a plain UUID.
+
+    `require_org_admin` has already refused anyone without one; this only tells
+    the type checker so, at the call sites that pass it on.
+    """
+    if user.org_id is None:
+        raise Forbidden("Tu usuario no pertenece a ninguna organización.")
+    return user.org_id
 
 
 def _visible_tenants(conn, user: CurrentUser) -> list[dict]:
@@ -507,7 +518,7 @@ def grant_org_role(
 def update_org_member(
     user_id: UUID, payload: OrgMemberUpdateRequest, conn: UnscopedDbDep, user: OrgAdmin
 ) -> OrgMemberRow:
-    current = _org_member_row(conn, user.org_id, user_id)
+    current = _org_member_row(conn, _org_id(user), user_id)
 
     fields = payload.model_dump(exclude_unset=True)
     if not fields:
@@ -517,21 +528,21 @@ def update_org_member(
         fields.get("role", current.role) != "admin" or fields.get("is_active", True) is False
     )
     if current.role == "admin" and losing_admin:
-        _assert_not_last_org_admin(conn, user.org_id, user_id)
+        _assert_not_last_org_admin(conn, _org_id(user), user_id)
 
     if "role" in fields:
         execute(
             conn,
             "UPDATE core.org_membership SET role = %s WHERE org_id = %s AND user_id = %s",
-            (fields["role"], user.org_id, user_id),
+            (fields["role"], _org_id(user), user_id),
         )
     if "is_active" in fields:
         execute(
             conn,
             "UPDATE core.org_membership SET is_active = %s WHERE org_id = %s AND user_id = %s",
-            (fields["is_active"], user.org_id, user_id),
+            (fields["is_active"], _org_id(user), user_id),
         )
-    return _org_member_row(conn, user.org_id, user_id)
+    return _org_member_row(conn, _org_id(user), user_id)
 
 
 @router.delete(
@@ -545,14 +556,14 @@ def revoke_org_role(user_id: UUID, conn: UnscopedDbDep, user: OrgAdmin) -> None:
     Someone who is owner of two companies and analyst of the org keeps both
     companies after this - they simply stop seeing the consolidated picture.
     """
-    member = _org_member_row(conn, user.org_id, user_id)
+    member = _org_member_row(conn, _org_id(user), user_id)
     if member.role == "admin":
-        _assert_not_last_org_admin(conn, user.org_id, user_id)
+        _assert_not_last_org_admin(conn, _org_id(user), user_id)
 
     execute(
         conn,
         "DELETE FROM core.org_membership WHERE org_id = %s AND user_id = %s",
-        (user.org_id, user_id),
+        (_org_id(user), user_id),
     )
 
 
@@ -652,7 +663,7 @@ def create_tenant(payload: TenantCreateRequest, conn: UnscopedDbDep, user: OrgAd
         if missing:
             raise ApiError("unknown_country", f"País no soportado: {', '.join(sorted(missing))}")
 
-    tenant = fetch_one(
+    tenant = fetch_required(
         conn,
         "INSERT INTO core.tenant (slug, name, org_id, notes) VALUES (%s, %s, %s, %s) "
         "RETURNING id, slug, name, notes, created_at",

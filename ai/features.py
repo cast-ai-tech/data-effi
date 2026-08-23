@@ -50,7 +50,7 @@ from ai.nl2sql import (
     SYSTEM_PROMPT,
     validate_sql,
 )
-from api.db import fetch_all, fetch_one, get_readonly_pool
+from api.db import fetch_all, fetch_one, fetch_required, get_readonly_pool
 from api.settings import Settings
 
 logger = logging.getLogger(__name__)
@@ -147,7 +147,7 @@ def ensure_conversation(
                     conversation_id)
 
     title = title_hint.strip()[:80] or "Consulta"
-    row = fetch_one(
+    row = fetch_required(
         conn,
         """
         INSERT INTO raw.ai_conversation (tenant_id, user_id, country_code, title)
@@ -658,7 +658,7 @@ def ask_data(
         )
 
     try:
-        rows, columns = _execute_readonly(validation.sql, tenant_id)
+        rows, columns = _execute_readonly(validation.sql or "", tenant_id)
     except AiUnavailable as exc:
         _finish(
             {

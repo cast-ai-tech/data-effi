@@ -525,3 +525,33 @@ def test_fixture_totals_match_manual_arithmetic(engine, memory_store, guias_dia1
     assert len(returned) == 2
     assert len(open_ones) == 2
     assert sum(s.declared_value for s in delivered) == Decimal("659400")
+
+
+def test_reprocessing_a_movements_file_replaces_instead_of_duplicating(
+    engine, memory_store, guias_dia1, movimientos
+):
+    """`reprocess=True` on the in-memory store must mean "replace", as in Postgres.
+
+    Regression: `MemoryStore.clear_batch_rows` iterated the dict's KEYS, so it
+    never removed a row and turned the dict into a list on the way out.
+    """
+    _ingest(engine, guias_dia1, "dia1.csv")
+    first = _ingest(engine, movimientos, "movimientos.csv", kind=BatchKind.MOVEMENTS)
+    assert first.rows_inserted == 10
+    assert len(memory_store.movements) == 10
+
+    again = engine.ingest(
+        payload=movimientos,
+        source_name="movimientos.csv",
+        kind=BatchKind.MOVEMENTS,
+        tenant_id=TENANT_ID,
+        connection_id=CONNECTION_ID,
+        country_code=COUNTRY,
+        platform_code=PLATFORM,
+        default_currency=CURRENCY,
+        reprocess=True,
+    )
+    assert again.already_loaded is False
+    assert again.batch_id == first.batch_id
+    assert isinstance(memory_store.movements, dict)
+    assert len(memory_store.movements) == 10

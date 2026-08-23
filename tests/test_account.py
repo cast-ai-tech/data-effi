@@ -199,3 +199,43 @@ def test_changing_the_password_ends_every_session(client, account):
     assert client.post(
         "/auth/login", json={"email": EMAIL, "password": NEW_PASSWORD}
     ).status_code == 200
+
+
+def test_logging_out_revokes_the_refresh_token_server_side(client, account):
+    """The button in the sidebar must end the session everywhere, not just here.
+
+    Regression: the frontend used to POST an empty refresh_token, so the real
+    one stayed valid for fourteen days after "Cerrar sesión".
+    """
+    fresh = client.post("/auth/login", json={"email": EMAIL, "password": PASSWORD})
+    assert fresh.status_code == 200, fresh.text
+    refresh = fresh.json()["refresh_token"]
+
+    out = client.post("/auth/logout", json={"refresh_token": refresh})
+    assert out.status_code == 204, out.text
+
+    refreshed = client.post("/auth/refresh", json={"refresh_token": refresh})
+    assert refreshed.status_code == 401
+
+
+def test_an_unknown_email_takes_as_long_as_a_wrong_password(client, account):
+    """Both answers must look the same; the timing must not tell them apart.
+
+    argon2 verification dominates the request, so a login that skips it for an
+    unknown email answers an order of magnitude faster. The bound is loose on
+    purpose: it catches "skipped entirely", not scheduler jitter.
+    """
+    import time
+
+    def elapsed(email: str) -> float:
+        started = time.perf_counter()
+        response = client.post("/auth/login", json={"email": email, "password": "wrong-pw-1"})
+        assert response.status_code == 401
+        return time.perf_counter() - started
+
+    # Warm up once so the first-call cost of either path does not skew it.
+    elapsed(EMAIL)
+    elapsed("nadie@dataeffi.co")
+    known = min(elapsed(EMAIL) for _ in range(3))
+    unknown = min(elapsed("nadie@dataeffi.co") for _ in range(3))
+    assert unknown > known * 0.25, f"unknown={unknown:.4f}s known={known:.4f}s"

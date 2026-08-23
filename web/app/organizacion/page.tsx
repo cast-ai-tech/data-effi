@@ -21,7 +21,7 @@ import { useState } from "react";
 
 import { AppShell } from "@/components/AppShell";
 import { Card, Chip, EmptyState, SkeletonRows, cx } from "@/components/ui";
-import { api, storeTokens } from "@/lib/api";
+import { api } from "@/lib/api";
 import { useRangedApi } from "@/lib/date-range";
 import { countryFlag, formatNumber, formatPercent } from "@/lib/format";
 import { useApi } from "@/lib/hooks";
@@ -254,7 +254,7 @@ function OpenCompany({
   async function open() {
     setBusy(true);
     try {
-      storeTokens(await api.post<Tokens>("/auth/switch", { tenant_id: tenantId }));
+      await api.post<Tokens>("/auth/switch", { tenant_id: tenantId });
       window.location.assign("/global");
     } catch {
       setBusy(false);

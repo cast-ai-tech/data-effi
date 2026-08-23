@@ -130,7 +130,12 @@ class Store(Protocol):
         source_name: str,
         kind: BatchKind,
         content_hash: str,
+        reprocess: bool = False,
     ) -> BatchContext:
+        ...
+
+    def clear_batch_rows(self, ctx: BatchContext) -> int:
+        """Drop what a previous run of this same batch wrote. Returns the count."""
         ...
 
     def upsert_shipment(self, ctx: BatchContext, shipment: ShipmentInput) -> UpsertResult:
@@ -353,7 +358,14 @@ class MemoryStore:
     def clear_batch_rows(self, ctx) -> int:
         """In-memory twin of the Postgres store's reprocess cleanup."""
         before = len(self.movements)
-        self.movements = [m for m in self.movements if getattr(m, "batch_id", None) != ctx.batch_id]
+        # `movements` is a dict keyed by (tenant, key). Iterating it directly
+        # yields the KEYS, whose `batch_id` is always absent - so the previous
+        # comprehension kept every row and turned the dict into a list.
+        self.movements = {
+            key: record
+            for key, record in self.movements.items()
+            if getattr(record, "batch_id", None) != ctx.batch_id
+        }
         return before - len(self.movements)
 
     def register_batch(
@@ -893,12 +905,12 @@ class IngestEngine:
             # Archive the original row whatever happened to it. A row that
             # failed to parse is precisely the one somebody will want to read.
             if self._archive_rows:
-                payload, redacted = redact_row(raw, pii_headers, self._pii_salt)
+                row_payload, redacted = redact_row(raw, pii_headers, self._pii_salt)
                 archive.append(
                     SourceRow(
                         row_number=row_number,
                         entity_key=_entity_key_of(fields),
-                        payload=payload,
+                        payload=row_payload,
                         redacted_fields=redacted,
                     )
                 )

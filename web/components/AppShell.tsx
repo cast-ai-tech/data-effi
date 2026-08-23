@@ -8,13 +8,13 @@
 
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 
 import { CopilotPanel } from "@/components/CopilotPanel";
 import { DateFieldPicker, ExcludedByFieldBand } from "@/components/DateFieldPicker";
 import { DateRangePicker } from "@/components/DateRangePicker";
 import { Chip, StatusDot, cx } from "@/components/ui";
-import { api, clearTokens, storeTokens } from "@/lib/api";
+import { api, signOut as endSession } from "@/lib/api";
 import { DEFAULT_FIELD, useDateRange } from "@/lib/date-range";
 import { countryFlag, formatRelative } from "@/lib/format";
 import { useApi, usePersistentState } from "@/lib/hooks";
@@ -30,6 +30,15 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   const router = useRouter();
   const [collapsed, setCollapsed] = usePersistentState("dataeffi.sidebar.collapsed", false);
   const [copilotOpen, setCopilotOpen] = useState(false);
+  // Below the `md` breakpoint the sidebar is a drawer: hidden until the
+  // hamburger opens it, closed again by a tap outside or by navigating.
+  const [drawerOpen, setDrawerOpen] = useState(false);
+  useEffect(() => {
+    setDrawerOpen(false);
+  }, [pathname]);
+  // What the menu looks like: the narrow icon rail only exists on a wide
+  // screen. An open drawer on a phone always shows its labels.
+  const rail = collapsed && !drawerOpen;
   const { range, field } = useDateRange();
 
   const { data: countries } = useApi<Country[]>("/config/countries");
@@ -107,28 +116,36 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   }, [range, field]);
 
   async function signOut() {
-    try {
-      await api.post("/auth/logout", { refresh_token: "" });
-    } catch {
-      // Logging out must always succeed locally, even if the API is down.
-    }
-    clearTokens();
+    // The proxy revokes the refresh token server-side and clears the cookies.
+    await endSession();
     router.push("/login");
   }
 
   return (
     <div className="flex h-screen w-full overflow-hidden bg-page text-ink">
+      {drawerOpen && (
+        <div
+          className="fixed inset-0 z-40 bg-black/50 md:hidden"
+          onClick={() => setDrawerOpen(false)}
+          aria-hidden
+        />
+      )}
       <aside
         className={cx(
-          "flex shrink-0 flex-col border-r border-line-strong bg-sidebar transition-[width] duration-150",
-          collapsed ? "w-[64px]" : "w-[232px]",
+          "fixed inset-y-0 left-0 z-50 flex flex-col border-r border-line-strong bg-sidebar transition-transform duration-150",
+          "md:static md:z-auto md:shrink-0 md:translate-x-0 md:transition-[width]",
+          drawerOpen ? "translate-x-0" : "-translate-x-full",
+          // The collapsed rail only makes sense on a wide screen; the drawer
+          // is always full width when it is open.
+          collapsed ? "w-[232px] md:w-[64px]" : "w-[232px]",
         )}
+        aria-label="Menú principal"
       >
         <div className="flex items-center gap-2.5 border-b border-line-subtle px-[18px] py-5">
           <div className="flex size-7 shrink-0 items-center justify-center rounded-[7px] bg-accent text-[14px] font-extrabold text-on-accent">
             DE
           </div>
-          {!collapsed && (
+          {!rail && (
             <span className="text-[15px] font-bold tracking-tight">Data Effi</span>
           )}
         </div>
@@ -137,7 +154,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
             because every number below it means something different depending on
             the answer. Hidden for someone who only belongs to one. */}
         {(user?.workspaces?.length ?? 0) > 1 && (
-          <WorkspacePicker user={user!} collapsed={collapsed} />
+          <WorkspacePicker user={user!} collapsed={rail} />
         )}
 
         <nav className="flex flex-1 flex-col gap-0.5 overflow-y-auto p-2.5">
@@ -147,7 +164,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
             <NavItem
               href="/organizacion"
               active={pathname.startsWith("/organizacion")}
-              collapsed={collapsed}
+              collapsed={rail}
               icon={<StackIcon />}
               label="Organización"
             />
@@ -157,7 +174,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
             <NavItem
               href={`/global${rangeSuffix}`}
               active={pathname === "/global"}
-              collapsed={collapsed}
+              collapsed={rail}
               icon={<GridIcon />}
               label={
                 (user?.workspaces?.length ?? 0) > 1 ? "Esta sociedad" : "Global"
@@ -165,7 +182,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
             />
           )}
 
-          {!collapsed && activeCountries.length > 0 && (
+          {!rail && activeCountries.length > 0 && (
             <p className="px-2.5 pb-1.5 pt-3.5 text-[10.5px] font-bold uppercase tracking-[0.08em] text-ink-faint">
               Países
             </p>
@@ -175,7 +192,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
               key={country.code}
               country={country}
               open={currentCountry === country.code}
-              collapsed={collapsed}
+              collapsed={rail}
               pathname={pathname}
               rangeSuffix={rangeSuffix}
             />
@@ -187,7 +204,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
             <NavItem
               href="/ingest"
               active={pathname.startsWith("/ingest")}
-              collapsed={collapsed}
+              collapsed={rail}
               icon={<UploadIcon />}
               label="Cargar datos"
             />
@@ -196,7 +213,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
             <NavItem
               href="/connections"
               active={pathname.startsWith("/connections")}
-              collapsed={collapsed}
+              collapsed={rail}
               icon={<PlugIcon />}
               label="Conexiones"
             />
@@ -205,7 +222,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
             <NavItem
               href="/settings"
               active={pathname.startsWith("/settings")}
-              collapsed={collapsed}
+              collapsed={rail}
               icon={<GearIcon />}
               label="Configuración"
             />
@@ -214,7 +231,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
             <NavItem
               href="/usuarios"
               active={pathname.startsWith("/usuarios")}
-              collapsed={collapsed}
+              collapsed={rail}
               icon={<PeopleIcon />}
               label="Usuarios"
             />
@@ -226,14 +243,14 @@ export function AppShell({ children }: { children: React.ReactNode }) {
           <NavItem
             href="/cuenta"
             active={pathname.startsWith("/cuenta")}
-            collapsed={collapsed}
+            collapsed={rail}
             icon={<PersonIcon />}
             label="Mi cuenta"
           />
         </nav>
 
         <div className="border-t border-line-subtle p-2.5">
-          {!collapsed && user && (
+          {!rail && user && (
             <div className="mb-2 px-2.5">
               <p className="truncate text-[12px] font-semibold text-ink-2">
                 {user.full_name ?? user.email}
@@ -244,11 +261,11 @@ export function AppShell({ children }: { children: React.ReactNode }) {
           <button
             type="button"
             onClick={() => setCollapsed(!collapsed)}
-            className="flex w-full items-center gap-2.5 rounded-[8px] px-2.5 py-2 text-[12px] text-ink-muted hover:bg-white/[0.04]"
-            aria-label={collapsed ? "Expandir menú" : "Colapsar menú"}
+            className="hidden w-full items-center gap-2.5 rounded-[8px] px-2.5 py-2 text-[12px] text-ink-muted hover:bg-white/[0.04] md:flex"
+            aria-label={rail ? "Expandir menú" : "Colapsar menú"}
           >
-            <span aria-hidden>{collapsed ? "»" : "«"}</span>
-            {!collapsed && <span>Colapsar</span>}
+            <span aria-hidden>{rail ? "»" : "«"}</span>
+            {!rail && <span>Colapsar</span>}
           </button>
           <button
             type="button"
@@ -256,14 +273,24 @@ export function AppShell({ children }: { children: React.ReactNode }) {
             className="flex w-full items-center gap-2.5 rounded-[8px] px-2.5 py-2 text-[12px] text-ink-muted hover:bg-white/[0.04]"
           >
             <span aria-hidden>⏻</span>
-            {!collapsed && <span>Cerrar sesión</span>}
+            {!rail && <span>Cerrar sesión</span>}
           </button>
         </div>
       </aside>
 
       <div className="flex min-w-0 flex-1 flex-col">
-        <header className="flex h-14 shrink-0 items-center justify-between gap-4 border-b border-line-strong bg-page px-5">
-          <div className="min-w-0" />
+        <header className="flex h-14 shrink-0 items-center justify-between gap-4 border-b border-line-strong bg-page px-4 md:px-5">
+          <div className="flex min-w-0 items-center gap-2">
+            <button
+              type="button"
+              onClick={() => setDrawerOpen(true)}
+              aria-label="Abrir menú"
+              aria-expanded={drawerOpen}
+              className="flex size-9 items-center justify-center rounded-[8px] border border-line-strong text-ink-muted md:hidden"
+            >
+              <span aria-hidden className="text-[16px] leading-none">☰</span>
+            </button>
+          </div>
 
           <div className="flex items-center gap-2.5">
             {/* WHICH date is asked for here; which date each widget actually
@@ -292,7 +319,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
             number on the screen is. */}
         {rangeApplies && <ExcludedByFieldBand country={formatCountry} />}
 
-        <main className="flex-1 overflow-y-auto px-5 py-5">{children}</main>
+        <main className="flex-1 overflow-y-auto px-4 py-4 md:px-5 md:py-5">{children}</main>
       </div>
 
       {/* The copilot answers questions about the numbers, so it belongs to
@@ -335,6 +362,24 @@ function WorkspacePicker({ user, collapsed }: { user: User; collapsed: boolean }
 
   const current = user.workspaces.find((ws) => ws.tenant_id === user.tenant_id);
 
+  // Escape and a click anywhere else close the list, like every other menu.
+  useEffect(() => {
+    if (!open) return;
+    function onKey(event: KeyboardEvent) {
+      if (event.key === "Escape") setOpen(false);
+    }
+    function onClick(event: MouseEvent) {
+      const target = event.target as HTMLElement | null;
+      if (!target?.closest("[data-workspace-picker]")) setOpen(false);
+    }
+    document.addEventListener("keydown", onKey);
+    document.addEventListener("mousedown", onClick);
+    return () => {
+      document.removeEventListener("keydown", onKey);
+      document.removeEventListener("mousedown", onClick);
+    };
+  }, [open]);
+
   async function switchTo(tenantId: string) {
     if (tenantId === user.tenant_id) {
       setOpen(false);
@@ -342,8 +387,7 @@ function WorkspacePicker({ user, collapsed }: { user: User; collapsed: boolean }
     }
     setSwitching(tenantId);
     try {
-      const tokens = await api.post<Tokens>("/auth/switch", { tenant_id: tenantId });
-      storeTokens(tokens);
+      await api.post<Tokens>("/auth/switch", { tenant_id: tenantId });
       // Back to the neutral screen: the country you were reading may not even
       // exist in the company you just moved to.
       window.location.assign("/global");
@@ -355,7 +399,7 @@ function WorkspacePicker({ user, collapsed }: { user: User; collapsed: boolean }
 
   if (collapsed) {
     return (
-      <div className="border-b border-line-subtle px-2.5 py-2.5">
+      <div data-workspace-picker className="border-b border-line-subtle px-2.5 py-2.5">
         <button
           type="button"
           onClick={() => setOpen(!open)}
@@ -369,7 +413,7 @@ function WorkspacePicker({ user, collapsed }: { user: User; collapsed: boolean }
   }
 
   return (
-    <div className="relative border-b border-line-subtle px-2.5 py-2.5">
+    <div data-workspace-picker className="relative border-b border-line-subtle px-2.5 py-2.5">
       <button
         type="button"
         onClick={() => setOpen(!open)}

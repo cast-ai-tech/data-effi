@@ -58,8 +58,8 @@ jobs:
         run: ruff check .
 
       - name: Type check (mypy)
+        # Blocking since the audit of 2026-08-23 brought it to zero errors.
         run: mypy api pipeline worker ai --ignore-missing-imports
-        continue-on-error: true
 
       - name: Apply migrations
         env:

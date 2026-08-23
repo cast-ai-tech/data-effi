@@ -17,7 +17,7 @@ from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 
 from api.db import check_rate_limit, connection
 from api.errors import Forbidden, RateLimited, Unauthorized
-from api.security import TokenError, decode_access_token
+from api.security import TokenError, constant_time_equals, decode_access_token
 from api.settings import Settings, get_settings
 
 bearer_scheme = HTTPBearer(auto_error=False)
@@ -82,6 +82,22 @@ class CurrentUser:
     def reads_org(self) -> bool:
         """May see the consolidated roll-up of every company in the holding."""
         return self.org_role in {"admin", "analyst", "viewer"} or self.is_org_admin
+
+
+def tenant_of(user: CurrentUser) -> UUID:
+    """The company the caller stands in, as a plain UUID.
+
+    `CurrentUser.tenant_id` is Optional because an org admin may hold no
+    membership at all. Every endpoint that runs on `DbDep` has already been
+    refused for that case (see `db_for_user`), so this is the typed way to say
+    so at the call site instead of passing `UUID | None` into code that cannot
+    take one.
+    """
+    if user.tenant_id is None:
+        raise Forbidden(
+            "Tu usuario no pertenece a ninguna sociedad. Pide que te agreguen a una."
+        )
+    return user.tenant_id
 
 
 def settings_dep() -> Settings:
@@ -244,10 +260,31 @@ def country_scope_sql(
 
 
 def client_ip(request: Request) -> str:
-    """Best-effort caller identity, for rate limiting. Always a string."""
+    """Best-effort caller identity, for rate limiting. Always a string.
+
+    `X-Forwarded-For` is a list the caller may start and every proxy APPENDS
+    to. The FIRST entry is therefore whatever the caller typed - a script that
+    rotates it gets a fresh rate-limit bucket per request and brute-forces
+    `/auth/login` at will. The LAST entry is the one written by the proxy in
+    front of this API (Render, a load balancer), which is the only hop that is
+    not under the caller's control. With no proxy at all the header is absent
+    and the socket peer is used, so local development is unaffected.
+    """
+    settings = get_settings()
+
+    # The web app's own proxy, authenticated by a shared secret. Without this
+    # every browser would share one bucket: the proxy's egress address.
+    if settings.proxy_shared_secret:
+        presented = request.headers.get("x-proxy-secret") or ""
+        claimed = (request.headers.get("x-client-ip") or "").strip()
+        if claimed and constant_time_equals(presented, settings.proxy_shared_secret):
+            return claimed[:64]
+
     forwarded = request.headers.get("x-forwarded-for")
-    if forwarded:
-        return forwarded.split(",")[0].strip()[:64]
+    if forwarded and settings.trust_proxy_headers:
+        hops = [hop.strip() for hop in forwarded.split(",") if hop.strip()]
+        if hops:
+            return hops[-1][:64]
     return request.client.host if request.client else "unknown"
 
 

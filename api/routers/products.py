@@ -22,8 +22,8 @@ from uuid import UUID
 
 from fastapi import APIRouter, Depends, Query, Response, status
 
-from api.db import fetch_all, fetch_one
-from api.deps import CurrentUserDep, DbDep, require_role
+from api.db import fetch_all, fetch_one, fetch_required
+from api.deps import CurrentUser, CurrentUserDep, DbDep, require_role, tenant_of
 from api.errors import ApiError, Conflict, NotFound
 from api.schemas import (
     CatalogueStatus,
@@ -38,7 +38,7 @@ logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/products", tags=["products"])
 
-AnalystDep = Annotated[object, Depends(require_role("analyst"))]
+AnalystDep = Annotated[CurrentUser, Depends(require_role("analyst"))]
 
 COST_HISTORY_LIMIT = 20
 
@@ -144,7 +144,7 @@ def create_product(
             f"Puede haberlo creado una carga de archivos: edítalo en vez de crearlo de nuevo."
         )
 
-    supplier_id = _resolve_supplier(conn, user.tenant_id, payload.supplier_name)
+    supplier_id = _resolve_supplier(conn, tenant_of(user), payload.supplier_name)
 
     # A cost somebody typed is a cost somebody confirmed. Setting reviewed_by in
     # the same statement is also what makes the history trigger record it as
@@ -152,7 +152,7 @@ def create_product(
     reviewed_at = datetime.now(UTC) if payload.unit_cost is not None else None
     reviewed_by = user.id if payload.unit_cost is not None else None
 
-    created = fetch_one(
+    created = fetch_required(
         conn,
         """
         INSERT INTO core.product
@@ -245,7 +245,7 @@ def update_product(
         # None for either - and None clears the column because it only appears
         # in the SET when the caller sent the field at all.
         assignments.append("supplier_id = %(supplier_id)s")
-        params["supplier_id"] = _resolve_supplier(conn, user.tenant_id, payload.supplier_name)
+        params["supplier_id"] = _resolve_supplier(conn, tenant_of(user), payload.supplier_name)
 
     if "unit_cost" in sent:
         # Typing a cost is a person vouching for it; clearing one withdraws
@@ -315,7 +315,7 @@ def _resolve_supplier(conn, tenant_id: UUID, name: str | None) -> UUID | None:
         return None
     cleaned = name.strip()
 
-    created = fetch_one(
+    created = fetch_required(
         conn,
         """
         INSERT INTO core.supplier (tenant_id, name, name_norm)

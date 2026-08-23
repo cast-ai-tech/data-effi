@@ -426,3 +426,33 @@ def test_revoking_access_removes_the_company_from_that_person(
     login = client.post("/auth/login", json={"email": LOADER_EMAIL, "password": LOADER_PASSWORD})
     assert login.status_code == 200
     assert login.json()["workspaces"] == []
+
+
+def test_uploader_can_actually_upload(client, owner_in_guatemala, loader_token, guias_dia1):
+    """The one thing an uploader exists for. Refused with 403 until this test.
+
+    `require_cap("ingest")` on the route lets the role in; a second seniority
+    check inside the handler (`at_least("analyst")`) was throwing it back out.
+    """
+    connection = client.post(
+        "/config/connections",
+        headers=auth(owner_in_guatemala),
+        json={"platform_code": "manual_xlsx", "name": "Carga Guatemala"},
+    )
+    assert connection.status_code == 201, connection.text
+
+    response = client.post(
+        "/ingest/upload",
+        data={"connection_id": connection.json()["connection_id"], "kind": "shipments"},
+        files={"files": ("guias.csv", guias_dia1, "text/csv")},
+        headers=auth(loader_token),
+    )
+    assert response.status_code == 202, response.text
+    assert len(response.json()["jobs"]) == 1
+
+    detected = client.post(
+        "/ingest/detect",
+        files={"file": ("guias.csv", guias_dia1, "text/csv")},
+        headers=auth(loader_token),
+    )
+    assert detected.status_code == 200, detected.text

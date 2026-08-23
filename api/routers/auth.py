@@ -9,12 +9,12 @@ from __future__ import annotations
 
 import logging
 from datetime import UTC, datetime, timedelta
-from typing import Annotated
+from typing import Annotated, cast
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, Request, Response, status
 
-from api.db import execute, fetch_all, fetch_one
+from api.db import execute, fetch_all, fetch_one, fetch_required
 from api.deps import (
     CAPABILITIES,
     CurrentUser,
@@ -28,13 +28,16 @@ from api.deps import (
 from api.errors import ApiError, Conflict, Forbidden, NotFound, Unauthorized
 from api.schemas import (
     AcceptInviteRequest,
+    Capability,
     InviteRequest,
     InviteResponse,
     LoginRequest,
+    OrgRole,
     PasswordChangeRequest,
     ProfileUpdateRequest,
     RefreshRequest,
     RegisterRequest,
+    Role,
     SessionRow,
     SwitchWorkspaceRequest,
     TokenResponse,
@@ -103,6 +106,11 @@ auth_rate_limit = Depends(rate_limit("auth", "rate_limit_auth_per_minute"))
 
 INVITATION_TTL_DAYS = 7
 
+# Verified against on login attempts for emails that do not exist, so the
+# request costs the same argon2 work as a real one. Computed once at import;
+# the value is never compared for equality with anything a user sends.
+_DUMMY_HASH = hash_password("not-a-real-password-just-timing-ballast")
+
 
 def _record_auth_event(
     conn, *, email: str | None, event: str, request: Request,
@@ -147,14 +155,15 @@ def _pick_workspace(
     return workspaces[0] if workspaces else None
 
 
-def _org_role(conn, user_id: UUID) -> str | None:
+def _org_role(conn, user_id: UUID) -> OrgRole | None:
     """What this person may do ACROSS the companies of their org, if anything.
 
     Read at every mint, exactly like the memberships beside it: a role revoked
     an hour ago must not survive in the next token just because the session did.
     """
     row = fetch_one(conn, "SELECT role FROM core.user_org_role(%s)", (user_id,))
-    return row["role"] if row else None
+    # The column is constrained to the same three values as the Literal.
+    return cast(OrgRole, row["role"]) if row else None
 
 
 def _issue_tokens(conn, settings, user: dict, *, tenant_id: UUID | None = None) -> TokenResponse:
@@ -243,7 +252,7 @@ def register(
 
     # The person registering runs the holding: their first company is one of
     # possibly several, and everything else hangs off this org.
-    org = fetch_one(
+    org = fetch_required(
         conn,
         "INSERT INTO core.org (slug, name) VALUES (%s, %s) "
         "ON CONFLICT (slug) DO UPDATE SET name = EXCLUDED.name RETURNING id",
@@ -251,7 +260,7 @@ def register(
     )
 
     slug = slugify(payload.tenant_name) or "dataeffi"
-    tenant = fetch_one(
+    tenant = fetch_required(
         conn,
         "INSERT INTO core.tenant (slug, name, org_id) VALUES (%s, %s, %s) RETURNING id, name",
         (slug, payload.tenant_name, org["id"]),
@@ -262,7 +271,7 @@ def register(
     except ValueError as exc:
         raise ApiError("weak_password", str(exc)) from exc
 
-    user = fetch_one(
+    user = fetch_required(
         conn,
         """
         INSERT INTO core.app_user
@@ -318,9 +327,13 @@ def login(
         (payload.email,),
     )
 
-    # Same message and roughly the same work whether the user exists or not:
-    # a faster "no such user" response is an account enumeration oracle.
-    if user is None or not verify_password(user["password_hash"], payload.password):
+    # Same message AND the same work whether the user exists or not: skipping
+    # argon2 when there is no row makes "no such user" answer in microseconds
+    # and "wrong password" in milliseconds, which is an account enumeration
+    # oracle. The dummy hash is verified and its result thrown away.
+    stored_hash = user["password_hash"] if user is not None else _DUMMY_HASH
+    matched = verify_password(stored_hash, payload.password)
+    if user is None or not matched:
         _record_auth_event(conn, email=payload.email, event="login_failed", request=request)
         raise Unauthorized("Correo o contraseña incorrectos")
 
@@ -423,9 +436,12 @@ def me(user: CurrentUserDep, conn: UnscopedDbDep) -> UserResponse:
         **row,
         org_role=org_role,
         # The role that applies WHERE THE CALLER IS STANDING, not a global one.
-        role=user.role,
+        # Both values were read from columns constrained to these Literals.
+        role=cast(Role, user.role),
         countries=list(user.countries) if user.countries else None,
-        capabilities=sorted(CAPABILITIES.get(user.role, frozenset())),
+        capabilities=cast(
+            "list[Capability]", sorted(CAPABILITIES.get(user.role, frozenset()))
+        ),
         workspaces=[
             WorkspaceSummary(
                 tenant_id=ws["tenant_id"],
@@ -685,7 +701,7 @@ def invite(
 
     token, token_hash = generate_invitation_token()
     expires_at = datetime.now(UTC) + timedelta(days=INVITATION_TTL_DAYS)
-    row = fetch_one(
+    row = fetch_required(
         conn,
         """
         INSERT INTO core.invitation
@@ -742,7 +758,7 @@ def accept_invite(
     except ValueError as exc:
         raise ApiError("weak_password", str(exc)) from exc
 
-    user = fetch_one(
+    user = fetch_required(
         conn,
         """
         INSERT INTO core.app_user (tenant_id, org_id, email, password_hash, full_name, role)

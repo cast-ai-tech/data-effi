@@ -52,7 +52,8 @@ def advisory_lock(conn: psycopg.Connection, job_name: str):
     """Try to take the lock for this job. Yields False when someone else has it."""
     with conn.cursor() as cur:
         cur.execute("SELECT pg_try_advisory_lock(hashtext(%s))", (job_name,))
-        acquired = bool(cur.fetchone()[0])
+        found = cur.fetchone()
+        acquired = bool(found and found[0])
     try:
         yield acquired
     finally:
@@ -127,7 +128,8 @@ def _jsonable(value: Any) -> Any:
 def job_relink_orphans(conn: psycopg.Connection) -> dict[str, Any]:
     with conn.cursor() as cur:
         cur.execute("SELECT core.relink_orphan_movements(NULL)")
-        linked = int(cur.fetchone()[0])
+        found = cur.fetchone()
+        linked = int(found[0]) if found else 0
     conn.commit()
     return {"movements_linked": linked}
 
@@ -321,7 +323,7 @@ def job_calibrate_maturation(conn: psycopg.Connection) -> dict[str, Any]:
                 """,
                 (workspace["tenant_id"], workspace["country_code"]),
             )
-            delivered = cur.fetchone()["delivered"]
+            delivered = (cur.fetchone() or {}).get("delivered", 0)
             if delivered < MIN_DELIVERIES_FOR_CALIBRATION:
                 continue
 
@@ -329,7 +331,7 @@ def job_calibrate_maturation(conn: psycopg.Connection) -> dict[str, Any]:
                 "SELECT core.measure_maturation_p90(%s, %s) AS p90",
                 (workspace["tenant_id"], workspace["country_code"]),
             )
-            p90 = cur.fetchone()["p90"]
+            p90 = (cur.fetchone() or {}).get("p90")
             if p90 is None or p90 <= 0:
                 continue
 

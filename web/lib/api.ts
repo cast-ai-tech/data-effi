@@ -1,18 +1,27 @@
 /**
  * API client.
  *
- * Access tokens live in memory and in a cookie the middleware can read; refresh
- * tokens live in a cookie only. On a 401 the client refreshes once, silently,
- * and replays the request - the user should never be bounced to the login screen
- * because a 15-minute token expired while they were reading a chart.
+ * Every request goes to `/api/backend/<path>` on THIS origin, where a route
+ * handler (app/api/backend/[...path]/route.ts) adds the bearer token from an
+ * HttpOnly cookie and forwards it to the API. Nothing here ever holds a token:
+ * a script running on this page cannot read one, which is the whole point.
+ *
+ * Refresh is the proxy's job too. A 401 that comes back here means the session
+ * is really over, so the page goes to the login screen once, remembering where
+ * it was.
  */
 
 import type { ApiErrorBody } from "@/lib/types";
 
-const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
+/** Where the browser sends its calls: this origin, through the proxy. */
+const PROXY_BASE = "/api/backend";
 
-const ACCESS_COOKIE = "dataeffi_access";
-const REFRESH_COOKIE = "dataeffi_refresh";
+/**
+ * The API's PUBLIC origin. Not used to make requests any more - only to
+ * compare against URLs the API hands out (the webhook screen checks that the
+ * address it shows is not an internal one).
+ */
+const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
 
 export class ApiError extends Error {
   readonly status: number;
@@ -28,88 +37,25 @@ export class ApiError extends Error {
   }
 }
 
-// ---------------------------------------------------------------------------
-// Token storage
-// ---------------------------------------------------------------------------
-
-function readCookie(name: string): string | null {
-  if (typeof document === "undefined") return null;
-  const match = document.cookie.match(new RegExp(`(?:^|; )${name}=([^;]*)`));
-  return match ? decodeURIComponent(match[1]) : null;
+/**
+ * The session is gone for good. Every widget on screen would now fail one by
+ * one, so go to the login screen once, remembering where the reader was.
+ */
+function sendToLogin(): void {
+  if (typeof window === "undefined") return;
+  if (window.location.pathname.startsWith("/login")) return;
+  const next = window.location.pathname + window.location.search;
+  window.location.assign(`/login?next=${encodeURIComponent(next)}`);
 }
 
-function writeCookie(name: string, value: string, maxAgeSeconds: number): void {
-  if (typeof document === "undefined") return;
-  const secure = window.location.protocol === "https:" ? "; Secure" : "";
-  document.cookie =
-    `${name}=${encodeURIComponent(value)}; path=/; max-age=${maxAgeSeconds}` +
-    `; SameSite=Lax${secure}`;
-}
-
-function clearCookie(name: string): void {
-  if (typeof document === "undefined") return;
-  document.cookie = `${name}=; path=/; max-age=0; SameSite=Lax`;
-}
-
-export function getAccessToken(): string | null {
-  return readCookie(ACCESS_COOKIE);
-}
-
-export function storeTokens(tokens: {
-  access_token: string;
-  refresh_token: string;
-  expires_in: number;
-}): void {
-  writeCookie(ACCESS_COOKIE, tokens.access_token, tokens.expires_in);
-  writeCookie(REFRESH_COOKIE, tokens.refresh_token, 60 * 60 * 24 * 14);
-}
-
-export function clearTokens(): void {
-  clearCookie(ACCESS_COOKIE);
-  clearCookie(REFRESH_COOKIE);
-}
-
-export function isAuthenticated(): boolean {
-  return Boolean(readCookie(ACCESS_COOKIE) || readCookie(REFRESH_COOKIE));
-}
-
-// ---------------------------------------------------------------------------
-// Silent refresh
-// ---------------------------------------------------------------------------
-
-// One in-flight refresh at a time: six widgets loading at once must not fire six
-// refreshes and invalidate each other's rotated token.
-let refreshInFlight: Promise<boolean> | null = null;
-
-async function refreshTokens(): Promise<boolean> {
-  const refreshToken = readCookie(REFRESH_COOKIE);
-  if (!refreshToken) return false;
-
-  if (!refreshInFlight) {
-    refreshInFlight = (async () => {
-      try {
-        const response = await fetch(`${API_URL}/auth/refresh`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ refresh_token: refreshToken }),
-        });
-        if (!response.ok) {
-          clearTokens();
-          return false;
-        }
-        storeTokens(await response.json());
-        return true;
-      } catch {
-        return false;
-      } finally {
-        // Let the next 401 start a fresh attempt.
-        setTimeout(() => {
-          refreshInFlight = null;
-        }, 0);
-      }
-    })();
+/** End the session: the proxy revokes the refresh token and clears the cookies. */
+export async function signOut(): Promise<void> {
+  try {
+    await request<void>("/auth/logout", { method: "POST", auth: false });
+  } catch {
+    // Logging out must always succeed locally, even if the API is down: the
+    // proxy clears the cookies before it even reaches the API.
   }
-  return refreshInFlight;
 }
 
 // ---------------------------------------------------------------------------
@@ -118,13 +64,12 @@ async function refreshTokens(): Promise<boolean> {
 
 interface RequestOptions extends Omit<RequestInit, "body"> {
   body?: unknown;
-  /** Set false for login/register, which must not trigger a refresh loop. */
+  /** Set false for login/register/logout: a 401 there is an answer, not an expired session. */
   auth?: boolean;
-  retryOn401?: boolean;
 }
 
 export async function request<T>(path: string, options: RequestOptions = {}): Promise<T> {
-  const { body, auth = true, retryOn401 = true, headers, ...rest } = options;
+  const { body, auth = true, headers, ...rest } = options;
 
   const finalHeaders: Record<string, string> = {
     ...(headers as Record<string, string> | undefined),
@@ -138,22 +83,15 @@ export async function request<T>(path: string, options: RequestOptions = {}): Pr
     finalHeaders["Content-Type"] = "application/json";
   }
 
-  if (auth) {
-    const token = getAccessToken();
-    if (token) finalHeaders.Authorization = `Bearer ${token}`;
-  }
-
-  const response = await fetch(`${API_URL}${path}`, {
+  const response = await fetch(`${PROXY_BASE}${path}`, {
     ...rest,
     headers: finalHeaders,
     body: payload,
+    credentials: "same-origin",
   });
 
-  if (response.status === 401 && auth && retryOn401) {
-    const refreshed = await refreshTokens();
-    if (refreshed) {
-      return request<T>(path, { ...options, retryOn401: false });
-    }
+  if (response.status === 401 && auth) {
+    sendToLogin();
   }
 
   if (response.status === 204) {

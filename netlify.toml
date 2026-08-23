@@ -14,6 +14,9 @@
 #
 # NEXT_PUBLIC_API_URL se carga en el dashboard, no aqui: Next la incrusta
 # en el bundle del navegador en tiempo de build, y apunta a la API en Render.
+# API_URL y PROXY_SHARED_SECRET tambien van en el dashboard: los lee el
+# servidor (web/app/api/backend), que es quien habla con la API; el navegador
+# ya no la llama directo.
 
 [build]
   base    = "web"

@@ -139,7 +139,7 @@ class EffiSessionFetcher:
         return cls(
             session_token=token,
             consent_granted_at=consent_granted_at,
-            base_url=base_url or os.environ.get("EFFI_BASE_URL", DEFAULT_BASE_URL),
+            base_url=base_url or os.environ.get("EFFI_BASE_URL") or DEFAULT_BASE_URL,
             **kwargs,
         )
 

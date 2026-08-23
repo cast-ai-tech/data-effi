@@ -101,7 +101,7 @@ def _sniff_delimiter(sample: str) -> str:
         return dialect.delimiter
     except csv.Error:
         counts = {sep: sample.count(sep) for sep in (";", ",", "\t", "|")}
-        return max(counts, key=counts.get) if any(counts.values()) else ","
+        return max(counts, key=lambda sep: counts[sep]) if any(counts.values()) else ","
 
 
 def _read_csv(payload: bytes) -> tuple[list[str], list[list[Any]]]:

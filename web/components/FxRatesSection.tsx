@@ -185,6 +185,7 @@ function FxRow({
             value={value}
             onChange={(event) => setValue(event.target.value)}
             autoFocus
+            aria-label="Tasa por dólar"
             className="w-28 rounded-lg border border-line-subtle bg-transparent px-2 py-1 text-right text-[12px] text-ink outline-none focus:border-line"
           />
         ) : rate.per_usd === null ? (

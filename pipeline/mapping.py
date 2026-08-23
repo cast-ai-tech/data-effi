@@ -286,10 +286,13 @@ def build_header_map(headers: list[str], kind: BatchKind) -> tuple[dict[int, str
         key = normalize_text(header)
         if not key:
             continue
-        field_name = lookup.get(key)
-        if field_name and field_name not in taken:
-            mapped[position] = field_name
-            taken.add(field_name)
+        matched = lookup.get(key)
+        if matched and matched not in taken:
+            mapped[position] = matched
+            # `matched`, not the loop variable from the alias table above: that
+            # one holds whatever field was listed LAST, so the wrong name went
+            # into `taken` and a second column for the same field slipped through.
+            taken.add(matched)
         else:
             unmapped.append(str(header).strip())
 

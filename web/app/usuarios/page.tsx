@@ -21,6 +21,7 @@
 import { useMemo, useState } from "react";
 
 import { AppShell } from "@/components/AppShell";
+import { ConfirmDialog } from "@/components/ConfirmDialog";
 import { Card, Chip, EmptyState, SkeletonRows, cx } from "@/components/ui";
 import { ApiError, api } from "@/lib/api";
 import { countryFlag, formatRelative } from "@/lib/format";
@@ -327,13 +328,11 @@ function MemberItem({
     }
   }
 
+  // `window.confirm` is deliberately not used here: see ConfirmDialog.tsx.
+  const [confirmingRevoke, setConfirmingRevoke] = useState(false);
+
   async function revoke() {
     if (!tenantId) return;
-    const confirmed = window.confirm(
-      `¿Quitarle el acceso a ${member.email}? Su cuenta y sus otras sociedades no se tocan.`,
-    );
-    if (!confirmed) return;
-
     setBusy(true);
     setError(null);
     try {
@@ -384,7 +383,7 @@ function MemberItem({
           {!isMe && (
             <button
               type="button"
-              onClick={revoke}
+              onClick={() => setConfirmingRevoke(true)}
               disabled={busy}
               className="rounded-[7px] border border-line-strong px-2.5 py-1 text-[11.5px] text-negative disabled:opacity-50"
             >
@@ -455,6 +454,27 @@ function MemberItem({
       )}
 
       {error && <p className="mt-2 text-[11.5px] text-negative">{error}</p>}
+
+      {confirmingRevoke && (
+        <ConfirmDialog
+          title="Quitar el acceso a esta sociedad"
+          confirmLabel="Quitar acceso"
+          pending={busy}
+          details={[
+            { label: "Persona", value: member.full_name ?? member.email },
+            { label: "Correo", value: member.email },
+            { label: "Rol", value: roleLabel },
+          ]}
+          consequence="Deja de ver esta sociedad de inmediato. Sus otras sociedades y su cuenta no se tocan; se le puede volver a invitar."
+          onCancel={() => setConfirmingRevoke(false)}
+          onConfirm={async () => {
+            await revoke();
+            setConfirmingRevoke(false);
+          }}
+        >
+          {member.email} perderá el acceso a esta sociedad.
+        </ConfirmDialog>
+      )}
     </li>
   );
 }
@@ -475,6 +495,7 @@ function SharePctEditor({
       <span className="text-[11px] text-ink-dim">Participación %:</span>
       <input
         type="number"
+        aria-label="Participación en porcentaje"
         min="0.01"
         max="100"
         step="0.01"

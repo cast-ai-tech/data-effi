@@ -22,7 +22,7 @@ from fastapi import APIRouter, Depends, File, Form, Query, Request, UploadFile, 
 from psycopg.types.json import Json
 from starlette.datastructures import UploadFile as StarletteUploadFile
 
-from api.db import check_rate_limit, connection, execute, fetch_all, fetch_one
+from api.db import check_rate_limit, connection, execute, fetch_all, fetch_one, fetch_required
 from api.deps import (
     CurrentUserDep,
     DbDep,
@@ -31,7 +31,6 @@ from api.deps import (
     country_scope_sql,
     rate_limit,
     require_cap,
-    require_role,
 )
 from api.errors import ApiError, NotFound, PayloadTooLarge
 from api.ingest_queue import get_queue
@@ -61,7 +60,6 @@ logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/ingest", tags=["ingest"])
 
 ingest_rate_limit = Depends(rate_limit("ingest", "rate_limit_ingest_per_minute"))
-AnalystDep = Annotated[object, Depends(require_role("analyst"))]
 
 # Asserted per endpoint rather than on the router, because `/webhook/{token}`
 # below is machine-facing: its credential is the token in the path, and it must
@@ -96,12 +94,28 @@ async def _read_within_limits(upload_file: UploadFile, settings) -> tuple[str, b
             f"Se aceptan {', '.join(SUPPORTED_EXTENSIONS)}.",
         )
 
-    payload = await upload_file.read()
-    if len(payload) > settings.max_upload_bytes:
-        raise PayloadTooLarge(
-            f"'{filename}' pesa {len(payload) / 1_048_576:.1f} MB y el máximo "
-            f"es {settings.max_upload_mb} MB."
-        )
+    # Read in chunks and stop at the limit instead of buffering the whole file
+    # first: twenty 25 MB files read whole is 500 MB of RAM on a box that has
+    # 512, and the size check would arrive after the damage.
+    too_large = PayloadTooLarge(
+        f"'{filename}' supera el máximo de {settings.max_upload_mb} MB."
+    )
+    declared = getattr(upload_file, "size", None)
+    if declared is not None and declared > settings.max_upload_bytes:
+        raise too_large
+
+    chunks: list[bytes] = []
+    total = 0
+    while True:
+        chunk = await upload_file.read(1024 * 1024)
+        if not chunk:
+            break
+        total += len(chunk)
+        if total > settings.max_upload_bytes:
+            raise too_large
+        chunks.append(chunk)
+    payload = b"".join(chunks)
+
     if not payload:
         raise ApiError("empty_file", f"'{filename}' está vacío")
 
@@ -120,6 +134,7 @@ async def upload(
     user: CurrentUserDep,
     settings: SettingsDep,
     connection_id: Annotated[UUID, Form(description="Conexión a la que pertenecen los archivos")],
+    files: Annotated[list[UploadFile], File()],
     kind: Annotated[str, Form(description="shipments | movements | ads | cs")] = "shipments",
     reprocess: Annotated[
         bool,
@@ -130,14 +145,10 @@ async def upload(
             )
         ),
     ] = False,
-    files: Annotated[list[UploadFile], File()] = ...,
 ) -> UploadAcceptedResponse:
-    if not user.at_least("analyst"):
-        raise ApiError(
-            "forbidden", "Tu rol no permite cargar datos",
-            status_code=status.HTTP_403_FORBIDDEN,
-        )
-
+    # Who may upload is decided by `ingest_guard` on the route, not by seniority
+    # here: `uploader` outranks nobody and must still be let through. Keeping a
+    # second `at_least("analyst")` check was what silently refused that role.
     try:
         batch_kind = BatchKind(kind)
     except ValueError as exc:
@@ -188,7 +199,7 @@ async def upload(
         stored_path = upload_dir / f"{uuid.uuid4()}_{filename}"
         stored_path.write_bytes(payload)
 
-        row = fetch_one(
+        row = fetch_required(
             conn,
             """
             INSERT INTO raw.upload_job
@@ -493,7 +504,7 @@ def _queue_webhook_job(
     stored_path.write_bytes(payload)
 
     with connection(service=True) as conn:
-        row = fetch_one(
+        row = fetch_required(
             conn,
             """
             INSERT INTO raw.upload_job
@@ -545,7 +556,7 @@ def _record_webhook_run(
 async def detect(
     user: CurrentUserDep,
     settings: SettingsDep,
-    file: Annotated[UploadFile, File(description="Un solo archivo. No se almacena.")] = ...,
+    file: Annotated[UploadFile, File(description="Un solo archivo. No se almacena.")],
 ) -> DetectResponse:
     """Say what Data Effi understood about a file, before anything is committed.
 
@@ -554,12 +565,6 @@ async def detect(
     Ecuador, 1.649 filas, 43 columnas reconocidas" while the operator can still
     change their mind.
     """
-    if not user.at_least("analyst"):
-        raise ApiError(
-            "forbidden", "Tu rol no permite analizar archivos",
-            status_code=status.HTTP_403_FORBIDDEN,
-        )
-
     filename, payload = await _read_within_limits(file, settings)
     file_format = sniff_format(payload, filename)
 

@@ -134,7 +134,7 @@ def recreate_test_database() -> str:
     if not admin or not admin_target or not app_target:
         raise RuntimeError("No DATABASE_URL available for the PostgreSQL tests")
 
-    with psycopg.connect(admin, autocommit=True) as conn, conn.cursor() as cur:
+    with psycopg.connect(admin, autocommit=True, connect_timeout=5) as conn, conn.cursor() as cur:
         # Roles and databases live in catalogs shared by the whole cluster, not
         # in the per-process database. Two suites reaching CREATE ROLE at the
         # same moment collide on pg_authid with "tuple concurrently updated" -
@@ -170,7 +170,7 @@ def drop_test_database() -> None:
     if not admin:
         return
     try:
-        with psycopg.connect(admin, autocommit=True) as conn, conn.cursor() as cur:
+        with psycopg.connect(admin, autocommit=True, connect_timeout=5) as conn, conn.cursor() as cur:
             cur.execute(
                 "SELECT pg_terminate_backend(pid) FROM pg_stat_activity "
                 "WHERE datname = %s AND pid <> pg_backend_pid()",
@@ -194,7 +194,7 @@ def sweep_abandoned_test_databases() -> int:
         return 0
     dropped = 0
     try:
-        with psycopg.connect(admin, autocommit=True) as conn, conn.cursor() as cur:
+        with psycopg.connect(admin, autocommit=True, connect_timeout=5) as conn, conn.cursor() as cur:
             cur.execute(
                 r"SELECT datname FROM pg_database WHERE datname LIKE 'norte\_test\_%%'"
             )
@@ -244,7 +244,7 @@ def apply_migrations(dsn: str) -> None:
     """
     import hashlib
 
-    with psycopg.connect(dsn, autocommit=True) as conn:
+    with psycopg.connect(dsn, autocommit=True, connect_timeout=5) as conn:
         conn.execute(
             """
             CREATE TABLE IF NOT EXISTS public.schema_migration (
@@ -278,14 +278,14 @@ def _prepare_app_role(admin_dsn_value: str, app_dsn: str) -> None:
 
     readonly_password = env.get("POSTGRES_READONLY_PASSWORD")
     if readonly_password:
-        with psycopg.connect(admin_dsn_value, autocommit=True) as ro, ro.cursor() as ro_cur:
+        with psycopg.connect(admin_dsn_value, autocommit=True, connect_timeout=5) as ro, ro.cursor() as ro_cur:
             ro_cur.execute(
                 sql.SQL("ALTER ROLE norte_readonly WITH PASSWORD {}").format(
                     sql.Literal(readonly_password)
                 )
             )
 
-    with psycopg.connect(admin_dsn_value, autocommit=True) as conn, conn.cursor() as cur:
+    with psycopg.connect(admin_dsn_value, autocommit=True, connect_timeout=5) as conn, conn.cursor() as cur:
         cur.execute(
             sql.SQL("ALTER ROLE norte_app WITH PASSWORD {}").format(sql.Literal(password))
         )
@@ -358,7 +358,7 @@ def truncate_data(conn: psycopg.Connection) -> None:
     if not admin:
         raise RuntimeError("POSTGRES_ADMIN_URL is not available")
 
-    with psycopg.connect(admin, autocommit=True) as admin_conn, admin_conn.cursor() as cur:
+    with psycopg.connect(admin, autocommit=True, connect_timeout=5) as admin_conn, admin_conn.cursor() as cur:
         cur.execute(
             """
             TRUNCATE core.movement, core.shipment, core.cs_interaction, core.ad_spend,

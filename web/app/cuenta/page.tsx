@@ -23,7 +23,7 @@ import { useState } from "react";
 
 import { AppShell } from "@/components/AppShell";
 import { Button, Card, Chip, EmptyState, SkeletonRows } from "@/components/ui";
-import { ApiError, api, clearTokens } from "@/lib/api";
+import { ApiError, api } from "@/lib/api";
 import { countryFlag, formatRelative } from "@/lib/format";
 import { useApi } from "@/lib/hooks";
 import type { Session, User } from "@/lib/types";
@@ -239,9 +239,9 @@ function PasswordCard() {
         current_password: current,
         new_password: next,
       });
-      // Every session died with the change, this one included. Going straight to
-      // the login screen is honest; staying here would fail on the next request.
-      clearTokens();
+      // Every session died with the change, this one included, and the proxy
+      // already cleared the cookies. Going straight to the login screen is
+      // honest; staying here would fail on the next request.
       router.push("/login");
     } catch (err) {
       setError(err instanceof ApiError ? err.message : "No se pudo cambiar");

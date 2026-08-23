@@ -11,7 +11,7 @@ import asyncio
 import logging
 from typing import Annotated, Any
 
-from fastapi import APIRouter, Header
+from fastapi import APIRouter, Header, Query
 
 from api.deps import SettingsDep
 from api.errors import ApiError, NotFound, Unauthorized
@@ -65,7 +65,7 @@ async def trigger(
 def recent_runs(
     settings: SettingsDep,
     x_worker_secret: Annotated[str | None, Header(alias="X-Worker-Secret")] = None,
-    limit: int = 20,
+    limit: Annotated[int, Query(ge=1, le=100)] = 20,
 ) -> list[dict[str, Any]]:
     if not x_worker_secret or not constant_time_equals(
         x_worker_secret, settings.worker_trigger_secret

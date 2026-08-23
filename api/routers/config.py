@@ -15,7 +15,7 @@ from uuid import UUID
 
 from fastapi import APIRouter, Depends, Query, Request, Response, status
 
-from api.db import execute, fetch_all, fetch_one
+from api.db import execute, fetch_all, fetch_one, fetch_required
 from api.deps import (
     CurrentUser,
     CurrentUserDep,
@@ -48,8 +48,8 @@ logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/config", tags=["config"])
 
-OwnerDep = Annotated[object, Depends(require_role("owner"))]
-AnalystDep = Annotated[object, Depends(require_role("analyst"))]
+OwnerDep = Annotated[CurrentUser, Depends(require_role("owner"))]
+AnalystDep = Annotated[CurrentUser, Depends(require_role("analyst"))]
 
 
 @router.get("/countries", response_model=list[CountryResponse], summary="Países disponibles")
@@ -107,7 +107,7 @@ def activate_country(
         ),
     )
 
-    row = fetch_one(
+    row = fetch_required(
         conn,
         """
         SELECT c.*, wc.is_active, wc.maturation_days, wc.maturation_days_suggested
@@ -337,7 +337,7 @@ def create_connection(
                 f"{platform['name']} es una conexión global y una tienda pertenece a un "
                 "país. Crea la tienda desde una conexión por país.",
             )
-        store = fetch_one(
+        store = fetch_required(
             conn,
             """
             INSERT INTO core.store (tenant_id, country_code, name) VALUES (%s, %s, %s)
@@ -351,7 +351,7 @@ def create_connection(
     consent_at = datetime.now(UTC) if payload.consent_granted else None
 
     try:
-        created = fetch_one(
+        created = fetch_required(
             conn,
             """
             INSERT INTO core.connection
@@ -554,7 +554,7 @@ def create_webhook(
         )
 
     token, token_hash = create_webhook_token()
-    row = fetch_one(
+    row = fetch_required(
         conn,
         """
         UPDATE core.connection SET
@@ -825,7 +825,7 @@ def create_branch(
             f"Ya existe una sucursal llamada '{payload.name}' en {payload.country_code}"
         )
 
-    row = fetch_one(
+    row = fetch_required(
         conn,
         """
         INSERT INTO core.branch

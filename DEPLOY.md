@@ -381,3 +381,30 @@ de commit. Van por el gestor de contraseñas o un canal privado:
 Para desarrollar en local no hace falta compartir los de producción: genera unos
 propios con los comandos del paso 3. Los de producción solo se comparten cuando
 llega el momento de desplegar.
+
+
+---
+
+## Sesión con cookies HttpOnly (desde la auditoría del 2026-08-23)
+
+El navegador **ya no llama a la API directamente**. Todas las peticiones van a
+`/api/backend/...` en el mismo dominio de la web, y un pequeño servidor dentro de
+Next (`web/app/api/backend/[...path]/route.ts`) las reenvía a la API agregando el
+token, que vive en una cookie `HttpOnly` que ningún script puede leer.
+
+Eso agrega **dos variables** al despliegue de la web y **una** al de la API:
+
+| Dónde | Variable | Valor |
+|---|---|---|
+| Netlify (web) | `API_URL` | La URL de la API en Render, p. ej. `https://data-effi-api.onrender.com` |
+| Netlify (web) | `PROXY_SHARED_SECRET` | Un secreto nuevo: `openssl rand -hex 32` |
+| Render (API) | `PROXY_SHARED_SECRET` | **El mismo valor** que en Netlify |
+
+`NEXT_PUBLIC_API_URL` sigue existiendo (la pantalla de conexiones la usa para
+comparar la URL del webhook), y `CORS_ORIGINS` ya no es necesario para la web,
+aunque no estorba.
+
+Sin `PROXY_SHARED_SECRET` todo funciona, pero la API ve a todos los navegadores
+con la misma dirección (la del servidor de Netlify) y el límite de intentos de
+login se comparte entre todos los usuarios. Con el secreto, cada navegador
+tiene su propio límite.

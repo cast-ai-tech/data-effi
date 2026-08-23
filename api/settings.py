@@ -54,6 +54,17 @@ class Settings(BaseSettings):
     # it cannot be allowed to be wrong. Unset falls back to the request's host,
     # which is right in local development and nowhere else.
     public_api_url: str | None = None
+    # Whether `X-Forwarded-For` is believed at all. True behind Render, a load
+    # balancer or any reverse proxy that appends the caller's address; set it
+    # to false when the API is reached DIRECTLY, or a caller can pick their own
+    # rate-limit bucket by writing the header themselves.
+    trust_proxy_headers: bool = True
+    # The web app fronts the API through its own server (app/api/backend). From
+    # here every request then arrives from ONE address - the web server's - and
+    # the real caller travels in `X-Client-IP`. That header is believed only
+    # when `X-Proxy-Secret` matches this value; anyone reaching the API directly
+    # cannot forge it. Unset = the header is ignored and the last hop is used.
+    proxy_shared_secret: str | None = None
     max_upload_mb: int = 25
     ingest_max_concurrency: int = 4
     rate_limit_auth_per_minute: int = 10
@@ -135,7 +146,8 @@ class Settings(BaseSettings):
 @lru_cache
 def get_settings() -> Settings:
     try:
-        return Settings()
+        # Every required field is read from the environment by pydantic-settings.
+        return Settings()  # type: ignore[call-arg]
     except Exception as exc:
         print("\n" + "=" * 72, file=sys.stderr)
         print("Data Effi no puede arrancar: falta configuración.", file=sys.stderr)

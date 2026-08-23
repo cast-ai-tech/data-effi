@@ -22,6 +22,7 @@ x-app-env: &app-env
   # chose not to store contact data at all.
   PII_ENCRYPTION_KEY: ${PII_ENCRYPTION_KEY:-}
   WORKER_TRIGGER_SECRET: ${WORKER_TRIGGER_SECRET:?WORKER_TRIGGER_SECRET is required}
+  PROXY_SHARED_SECRET: ${PROXY_SHARED_SECRET:-}
   CORS_ORIGINS: ${CORS_ORIGINS:-http://localhost:3000}
   # The origin outside callers (n8n, Make, Zapier) use to reach the API.
   # Empty falls back to the request host, which behind a proxy is internal.
@@ -129,6 +130,9 @@ services:
       # name nothing else resolves. Setting it here wins over that default.
       HOSTNAME: 0.0.0.0
       PORT: 3000
+      # Server-side: the web container reaches the API over the compose network.
+      API_URL: http://api:8000
+      PROXY_SHARED_SECRET: ${PROXY_SHARED_SECRET:-}
     ports:
       - "${WEB_PORT:-3000}:3000"
     depends_on:

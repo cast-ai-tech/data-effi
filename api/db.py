@@ -143,6 +143,22 @@ def fetch_one(
         return cur.fetchone()
 
 
+def fetch_required(
+    conn: psycopg.Connection, query: str, params: dict[str, Any] | tuple[Any, ...] | None = None
+) -> dict[str, Any]:
+    """`fetch_one` for statements that MUST yield a row: INSERT ... RETURNING,
+    or a SELECT on a row this same transaction just wrote.
+
+    An empty result there is not "not found" - it is a broken invariant, and
+    raising here names it instead of letting a `None[...]` TypeError surface
+    three frames later as a generic 500.
+    """
+    row = fetch_one(conn, query, params)
+    if row is None:
+        raise RuntimeError("expected exactly one row, the statement returned none")
+    return row
+
+
 def execute(
     conn: psycopg.Connection, query: str, params: dict[str, Any] | tuple[Any, ...] | None = None
 ) -> int:

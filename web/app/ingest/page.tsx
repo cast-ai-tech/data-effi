@@ -12,22 +12,32 @@ import Link from "next/link";
 import { useCallback, useEffect, useRef, useState } from "react";
 
 import { AppShell } from "@/components/AppShell";
-import { Button, Card, Chip, EmptyState, SkeletonRows, cx } from "@/components/ui";
+import { Button, Card, Chip, EmptyState, ErrorState, SkeletonRows, cx } from "@/components/ui";
 import { ApiError, api } from "@/lib/api";
 import { countryFlag, formatBytes, formatRelative } from "@/lib/format";
 import { useApi } from "@/lib/hooks";
 import type { BatchDetail, BatchSummary, Connection, UploadJob } from "@/lib/types";
 
+// Same four the API accepts (pipeline.models.BatchKind). `ads` was missing
+// here, so a manual ad-spend file could only arrive through the webhook.
 const KINDS = [
   { value: "shipments", label: "Guías" },
   { value: "movements", label: "Movimientos de dinero" },
+  { value: "ads", label: "Inversión en pauta" },
   { value: "cs", label: "Confirmación de servicio" },
 ] as const;
 
+// Mirrors pipeline.readers.SUPPORTED_EXTENSIONS. The picker must not refuse a
+// file the API would accept, or the reverse.
+const ACCEPTED_EXTENSIONS = ".csv,.xlsx,.xlsm,.xls,.txt,.tsv,.html,.htm";
+
 export default function IngestPage() {
-  const { data: connections, loading: loadingConnections } = useApi<Connection[]>(
+  const { data: connections, loading: loadingConnections, error: connectionsError, reload: reloadConnections } = useApi<Connection[]>(
     "/config/connections",
   );
+  // Bumped when a load finishes, so the history below refreshes on its own
+  // instead of waiting for the operator to find the "Actualizar" button.
+  const [historyNonce, setHistoryNonce] = useState(0);
 
   const [connectionId, setConnectionId] = useState<string>("");
   const [kind, setKind] = useState<string>("shipments");
@@ -87,6 +97,8 @@ export default function IngestPage() {
       <Card className="mb-4">
         {loadingConnections ? (
           <SkeletonRows rows={2} />
+        ) : connectionsError ? (
+          <ErrorState message={connectionsError.message} onRetry={reloadConnections} />
         ) : (connections ?? []).length === 0 ? (
           <EmptyState
             title="Todavía no tienes conexiones"
@@ -151,8 +163,20 @@ export default function IngestPage() {
                 void upload(event.dataTransfer.files);
               }}
               onClick={() => inputRef.current?.click()}
+              // A div that opens the file picker is a button in everything but
+              // name: it needs the role, a place in the tab order and the two
+              // keys a button answers to, or a keyboard user cannot upload.
+              role="button"
+              tabIndex={0}
+              aria-label="Elegir archivos para cargar"
+              onKeyDown={(event) => {
+                if (event.key === "Enter" || event.key === " ") {
+                  event.preventDefault();
+                  inputRef.current?.click();
+                }
+              }}
               className={cx(
-                "flex cursor-pointer flex-col items-center justify-center gap-2 rounded-[12px] border-2 border-dashed px-6 py-12 text-center transition-colors",
+                "flex cursor-pointer flex-col items-center justify-center gap-2 rounded-[12px] border-2 border-dashed px-6 py-12 text-center transition-colors focus:outline-none focus-visible:border-accent focus-visible:ring-2 focus-visible:ring-accent/40",
                 dragging
                   ? "border-accent bg-accent/[0.06]"
                   : "border-line-input bg-sunken hover:border-line-strong",
@@ -162,13 +186,13 @@ export default function IngestPage() {
                 Arrastra tus reportes aquí
               </p>
               <p className="text-[12px] text-ink-dim">
-                o haz clic para elegirlos · .csv, .xlsx · hasta 25 MB cada uno
+                o haz clic para elegirlos · Excel (.xlsx, .xls), CSV o TXT · hasta 25 MB cada uno
               </p>
               <input
                 ref={inputRef}
                 type="file"
                 multiple
-                accept=".csv,.xlsx,.xlsm,.txt,.tsv"
+                accept={ACCEPTED_EXTENSIONS}
                 className="hidden"
                 onChange={(event) => {
                   if (event.target.files) void upload(event.target.files);
@@ -193,6 +217,7 @@ export default function IngestPage() {
               <JobRow
                 key={job.id}
                 job={job}
+                onFinished={() => setHistoryNonce((n) => n + 1)}
                 onReprocess={
                   lastFiles.length > 0 ? () => void upload(lastFiles, true) : undefined
                 }
@@ -202,16 +227,19 @@ export default function IngestPage() {
         </Card>
       )}
 
-      <BatchHistory />
+      <BatchHistory nonce={historyNonce} />
     </AppShell>
   );
 }
 
 function JobRow({
   job: initial,
+  onFinished,
   onReprocess,
 }: {
   job: UploadJob;
+  /** Called once, when the job reaches a terminal state. */
+  onFinished?: () => void;
   onReprocess?: () => void;
 }) {
   const [job, setJob] = useState(initial);
@@ -220,6 +248,7 @@ function JobRow({
   useEffect(() => {
     if (finished) return;
     let cancelled = false;
+    let timer: ReturnType<typeof setTimeout>;
 
     const poll = async () => {
       try {
@@ -227,18 +256,21 @@ function JobRow({
         if (cancelled) return;
         setJob(next);
         if (!["done", "failed", "duplicate"].includes(next.status)) {
-          setTimeout(poll, 900);
+          timer = setTimeout(poll, 900);
+        } else {
+          onFinished?.();
         }
       } catch {
         // Give up quietly; the history table below is the durable record.
       }
     };
 
-    const timer = setTimeout(poll, 600);
+    timer = setTimeout(poll, 600);
     return () => {
       cancelled = true;
       clearTimeout(timer);
     };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [job.id, finished]);
 
   const tone =
@@ -364,9 +396,10 @@ function BatchResult({ batchId }: { batchId: string }) {
   );
 }
 
-function BatchHistory() {
-  const { data, loading, reload } = useApi<{ items: BatchSummary[]; total: number }>(
+function BatchHistory({ nonce }: { nonce: number }) {
+  const { data, loading, error, reload } = useApi<{ items: BatchSummary[]; total: number }>(
     "/ingest/batches?page=1&page_size=20",
+    [nonce],
   );
 
   return (
@@ -380,7 +413,9 @@ function BatchHistory() {
     >
       {loading && <SkeletonRows rows={4} />}
 
-      {!loading && (data?.items ?? []).length === 0 && (
+      {!loading && error && <ErrorState message={error.message} onRetry={reload} />}
+
+      {!loading && !error && (data?.items ?? []).length === 0 && (
         <EmptyState
           title="Todavía no hay cargas"
           instruction="Sube tu primer reporte arriba y aparecerá aquí con su resultado."

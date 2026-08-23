@@ -71,14 +71,17 @@ async def lifespan(app: FastAPI):
 def create_app() -> FastAPI:
     settings = get_settings()
 
+    # The interactive docs map every route, parameter and error code of the
+    # API. Useful on a laptop; a free reconnaissance report on the internet.
+    production = settings.environment == "production"
     app = FastAPI(
         title="Data Effi API",
         description=DESCRIPTION,
         version="1.0.0",
         lifespan=lifespan,
-        docs_url="/docs",
-        redoc_url="/redoc",
-        openapi_url="/openapi.json",
+        docs_url=None if production else "/docs",
+        redoc_url=None if production else "/redoc",
+        openapi_url=None if production else "/openapi.json",
     )
 
     app.add_middleware(

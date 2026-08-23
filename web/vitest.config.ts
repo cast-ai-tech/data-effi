@@ -1,30 +1,23 @@
 import { fileURLToPath } from "node:url";
 
+import react from "@vitejs/plugin-react";
 import { defineConfig } from "vitest/config";
 
 const projectRoot = fileURLToPath(new URL(".", import.meta.url));
 
 /**
- * JSX is compiled by esbuild with React's automatic runtime rather than by
- * `@vitejs/plugin-react`.
+ * JSX is compiled by `@vitejs/plugin-react` with React's automatic runtime.
  *
- * The installed plugin is v6, which declares `vite: ^8`, while vitest 2 runs on
- * its own bundled vite 5. Under that mismatch the plugin loads but its
- * transform never applies, and every .tsx test dies with "React is not
- * defined". esbuild's automatic runtime produces the same output for tests -
- * the plugin's extra value is Fast Refresh and the React Compiler, neither of
- * which a test run uses. If the plugin is ever needed here, pin
- * `@vitejs/plugin-react@^4` (the version that supports vite 5) and add it to
- * `plugins` instead.
+ * Vitest 4 runs on vite 8 (rolldown), which is exactly what plugin-react v6
+ * declares - so the plugin applies cleanly here, where under vitest 2's
+ * bundled vite 5 it silently did not and JSX had to go through the `esbuild`
+ * option instead. That option no longer exists on the rolldown pipeline.
  *
- * tsconfig.json says `"jsx": "preserve"` for Next's own compiler, so the value
- * has to be overridden here rather than inherited.
+ * tsconfig.json says `"jsx": "preserve"` for Next's own compiler, so the
+ * runtime has to be chosen here rather than inherited.
  */
 export default defineConfig({
-  esbuild: {
-    jsx: "automatic",
-    jsxImportSource: "react",
-  },
+  plugins: [react()],
   resolve: {
     // Mirrors the `@/*` -> `./*` mapping in tsconfig.json.
     alias: {

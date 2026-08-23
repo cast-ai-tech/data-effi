@@ -21,7 +21,7 @@ from uuid import UUID
 
 from fastapi import APIRouter, Query
 
-from api.deps import CurrentUserDep, DbDep, SettingsDep
+from api.deps import CurrentUserDep, DbDep, SettingsDep, tenant_of
 from api.errors import NotFound
 from api.schemas import (
     AlertResponse,
@@ -56,7 +56,7 @@ async def brief(
     country_code = country.upper()
     try:
         result = await asyncio.to_thread(
-            generate_brief, conn, settings, user.tenant_id, country_code
+            generate_brief, conn, settings, tenant_of(user), country_code
         )
     except AiUnavailable as exc:
         return BriefResponse(
@@ -115,7 +115,7 @@ async def ask(
             ask_data,
             conn,
             settings,
-            user.tenant_id,
+            tenant_of(user),
             payload.question,
             payload.country_code.upper() if payload.country_code else None,
             conversation_id=payload.conversation_id,
@@ -144,7 +144,7 @@ async def ask(
 def conversations(conn: DbDep, user: CurrentUserDep) -> ConversationsResponse:
     from ai.features import list_conversations
 
-    rows = list_conversations(conn, user.tenant_id)
+    rows = list_conversations(conn, tenant_of(user))
     return ConversationsResponse(
         conversations=[ConversationSummary(**row) for row in rows]
     )
@@ -160,7 +160,7 @@ def conversation_detail(
 ) -> ConversationDetail:
     from ai.features import get_conversation
 
-    found = get_conversation(conn, user.tenant_id, conversation_id)
+    found = get_conversation(conn, tenant_of(user), conversation_id)
     if found is None:
         raise NotFound("Esa conversación no existe en esta cuenta.")
     return ConversationDetail(**found)
@@ -183,7 +183,7 @@ def feedback(
 
     result = record_feedback(
         conn,
-        user.tenant_id,
+        tenant_of(user),
         payload.message_id,
         helpful=payload.helpful,
         comment=payload.comment,
@@ -228,7 +228,7 @@ async def recommendations(
     if narrative and found:
         try:
             paragraph = await asyncio.to_thread(
-                narrate, conn, settings, user.tenant_id, country_code, found
+                narrate, conn, settings, tenant_of(user), country_code, found
             )
         except AiUnavailable as exc:
             degraded = True
@@ -248,7 +248,7 @@ async def recommendations(
 def usage(conn: DbDep, user: CurrentUserDep, settings: SettingsDep) -> dict:
     from ai.client import tokens_used_today
 
-    used = tokens_used_today(conn, user.tenant_id)
+    used = tokens_used_today(conn, tenant_of(user))
     return {
         "tokens_used_today": used,
         "daily_budget": settings.ai_daily_token_budget,
