@@ -105,20 +105,24 @@ async function forward(
     if (value) headers.set(name, value);
   }
   // The API rate-limits and audits by caller address; behind this proxy the
-  // socket peer is always us, so the original chain travels in the header the
-  // API already reads (last hop wins, see api/deps.py).
-  const forwardedFor = request.headers.get("x-forwarded-for");
-  if (forwardedFor) headers.set("x-forwarded-for", forwardedFor);
-  // Better: tell the API who the browser is, signed with a secret only the
-  // two servers know (PROXY_SHARED_SECRET on both). The first hop of the chain
-  // is the browser as the platform in front of us (Netlify, Docker's network)
-  // saw it.
+  // socket peer is always us. Tell it who the browser is, signed with a secret
+  // only the two servers know (PROXY_SHARED_SECRET on both).
+  //
+  // WHICH address: never the first entry of X-Forwarded-For - the browser can
+  // write that one itself and pick its own rate-limit bucket. The platform in
+  // front of us sets a header the client cannot forge (Netlify:
+  // x-nf-client-connection-ip; most reverse proxies: x-real-ip); failing
+  // those, the LAST hop of the chain is the one the nearest trusted proxy
+  // appended, which is the same rule api/deps.py applies.
   const secret = process.env.PROXY_SHARED_SECRET;
-  const clientIp = forwardedFor?.split(",")[0]?.trim();
+  const clientIp = trustedClientIp(request);
   if (secret && clientIp) {
     headers.set("x-proxy-secret", secret);
     headers.set("x-client-ip", clientIp);
+    // With a signed identity the chain is redundant; without one, forward
+    // ONLY the trusted address so the API's "last hop" is never client-typed.
   }
+  if (clientIp) headers.set("x-forwarded-for", clientIp);
   if (accessToken) headers.set("authorization", `Bearer ${accessToken}`);
 
   return fetch(`${API_URL}/${path}${request.nextUrl.search}`, {
@@ -128,6 +132,16 @@ async function forward(
     redirect: "manual",
     cache: "no-store",
   });
+}
+
+function trustedClientIp(request: NextRequest): string | null {
+  for (const name of ["x-nf-client-connection-ip", "x-real-ip"]) {
+    const value = request.headers.get(name)?.trim();
+    if (value) return value.slice(0, 64);
+  }
+  const chain = request.headers.get("x-forwarded-for") ?? "";
+  const hops = chain.split(",").map((hop) => hop.trim()).filter(Boolean);
+  return hops.length ? hops[hops.length - 1].slice(0, 64) : null;
 }
 
 async function refresh(request: NextRequest, refreshToken: string): Promise<TokenBody | null> {
