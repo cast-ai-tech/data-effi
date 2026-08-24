@@ -1,0 +1,31 @@
+# Data Effi - gitleaks configuration.
+#
+# The default rules stay on. What is allow-listed here are values that LOOK like
+# secrets and are not: example lines in the documentation, the throwaway
+# passwords the test suite registers accounts with, and the CI-only values in
+# the workflow file, none of which open anything that exists outside the job
+# they run in. Real secrets live in .env (git-ignored) and in the hosting
+# dashboards; a real one landing in any of these paths would still be a
+# mistake, but not one this scanner can tell apart from the examples.
+
+[extend]
+useDefault = true
+
+[allowlist]
+description = "Documentation examples, test fixtures and CI-only values"
+paths = [
+  '''^tests/''',
+  '''^web/tests/''',
+  '''^\.github/workflows/ci\.yml$''',
+  '''^README\.md$''',
+  '''^DEPLOY\.md$''',
+  '''^render\.yaml$''',
+  '''^\.env\.example$''',
+]
+# Placeholder shapes the docs use on purpose.
+regexes = [
+  '''CHANGE_ME''',
+  '''<clave de''',
+  '''not-a-secret''',
+  '''una-clave-larga-de-prueba''',
+]

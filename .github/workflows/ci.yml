@@ -120,7 +120,7 @@ jobs:
       # organisation repositories; the scanner itself is still free.
       - name: Scan for committed secrets
         run: |
-          docker run --rm -v "$PWD:/repo" zricethezav/gitleaks:latest             detect --source /repo --no-banner --redact --exit-code 1
+          docker run --rm -v "$PWD:/repo" zricethezav/gitleaks:latest             detect --source /repo --config /repo/.gitleaks.toml             --no-banner --redact --exit-code 1
 
       - uses: actions/setup-python@v5
         with:
