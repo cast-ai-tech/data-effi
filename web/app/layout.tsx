@@ -1,5 +1,6 @@
 import type { Metadata, Viewport } from "next";
 import { Inter } from "next/font/google";
+import { headers } from "next/headers";
 
 import { FlagFont } from "@/components/FlagFont";
 import { Suspense } from "react";
@@ -27,7 +28,17 @@ export const viewport: Viewport = {
   initialScale: 1,
 };
 
-export default function RootLayout({ children }: { children: React.ReactNode }) {
+// Rendered per request, never prerendered. The Content-Security-Policy that
+// middleware.ts sends carries a nonce that changes on every request, and Next
+// only stamps that nonce onto its own inline scripts while rendering the page
+// for THAT request. A page built once at deploy time has no nonce to match
+// and every script on it is blocked - which is exactly what happened.
+export const dynamic = "force-dynamic";
+
+export default async function RootLayout({ children }: { children: React.ReactNode }) {
+  // Reading the request headers is what opts the whole tree into dynamic
+  // rendering; the nonce itself is picked up by Next from the CSP header.
+  await headers();
   return (
     <html lang="es" className={inter.variable}>
       <body className="min-h-screen bg-page text-ink antialiased">
