@@ -496,7 +496,10 @@ def test_decisions_work_without_the_model(client, owner_token):
 def test_carrier_by_zone_endpoint(client, owner_token):
     response = client.get("/kpis/carrier-by-zone?country=CO", headers=auth(owner_token))
     assert response.status_code == 200, response.text
-    rows = response.json()
+    body = response.json()
+    # Same envelope as every other KPI; `date_basis` null says no range applies.
+    assert body["date_basis"] is None
+    rows = body["rows"]
     assert isinstance(rows, list)
     # The view is a rolling 90-day window, so the fixture's July guides drop
     # out of it with time; the shape is what this pins, not the count.
