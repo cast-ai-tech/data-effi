@@ -31,8 +31,10 @@ from api.deps import (
     country_scope_sql,
     rate_limit,
     require_cap,
+    tenant_of,
 )
 from api.errors import ApiError, NotFound, PayloadTooLarge
+from api.events import emit
 from api.ingest_queue import get_queue
 from api.schemas import (
     BatchDetail,
@@ -215,6 +217,12 @@ async def upload(
             ),
         )
         jobs.append(UploadJobResponse(**row))
+        # The screen hears "queued" in the same commit that makes the job real.
+        emit(
+            conn, tenant_of(user), "upload_job.updated",
+            country_code=owner["country_code"],
+            payload=_job_event(row, "queued"),
+        )
 
     # Commit before queueing: the worker must be able to see the rows.
     conn.commit()
@@ -519,9 +527,25 @@ def _queue_webhook_job(
             ),
         )
 
+        emit(
+            conn, target["tenant_id"], "upload_job.updated",
+            country_code=target.get("country_code"),
+            payload=_job_event(row, "queued"),
+        )
+
     job = UploadJobResponse(**row)
     get_queue().submit(job.id)
     return job
+
+
+def _job_event(row: dict[str, Any], status_value: str) -> dict[str, Any]:
+    """The payload of `upload_job.updated`: identifiers and state, no text."""
+    return {
+        "job_id": row["id"],
+        "status": status_value,
+        "kind": row["kind"],
+        "filename": row["filename"],
+    }
 
 
 def _record_webhook_run(

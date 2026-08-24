@@ -9,6 +9,7 @@
 
 import AgingBars from "@/components/widgets/aging_bars";
 import CapitalInStreet from "@/components/widgets/capital_in_street";
+import CarrierByZone from "@/components/widgets/carrier_by_zone";
 import CarrierTable from "@/components/widgets/carrier_table";
 import CashCycle from "@/components/widgets/cash_cycle";
 import CohortCurve from "@/components/widgets/cohort_curve";
@@ -50,6 +51,9 @@ export const WIDGET_REGISTRY: Record<string, WidgetComponent> = {
   // Orders, customers and the honest contribution split (migration 015).
   contribution_split: ContributionSplitWidget,
   capital_in_street: CapitalInStreet,
+
+  // Carrier per zone (migration 039). Tab `logistica` in `core.widget_catalog`.
+  carrier_by_zone: CarrierByZone,
 };
 
 /** Tabs of the country dashboard, in display order. */

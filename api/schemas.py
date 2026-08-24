@@ -1353,6 +1353,10 @@ class BriefResponse(BaseModel):
 
 
 class AlertResponse(BaseModel):
+    # Present when the alert was persisted (raw.notification); the panel uses
+    # them to mark it read. Absent on the live, unstored detection.
+    id: int | None = None
+    country_code: str | None = None
     code: str
     severity: Literal["info", "warning", "critical"]
     title: str
@@ -1476,3 +1480,132 @@ class RecommendationsResponse(BaseModel):
     )
     degraded: bool = False
     degraded_reason: str | None = None
+
+
+# =============================================================================
+# Notifications, events, decisions (migration 039)
+# =============================================================================
+
+NotificationKind = Literal["urgent", "digest", "system"]
+Severity = Literal["info", "warning", "critical"]
+
+
+class NotificationItem(BaseModel):
+    id: int
+    kind: NotificationKind
+    code: str
+    severity: Severity
+    country_code: str | None
+    title: str
+    finding: str
+    action: str
+    impact_amount: float | None
+    impact_currency: str | None
+    deep_link: str | None
+    created_at: datetime
+    read_at: datetime | None
+    payload: dict[str, Any] = Field(default_factory=dict)
+
+
+class NotificationsResponse(BaseModel):
+    items: list[NotificationItem]
+    unread_count: int
+    critical_unread_count: int
+    next_before: int | None = Field(
+        default=None,
+        description="Pasa este id como `before` para traer la página anterior. Null al final.",
+    )
+
+
+class UnreadCountResponse(BaseModel):
+    unread_count: int
+    critical_unread_count: int
+
+
+class ReadAllResponse(BaseModel):
+    marked: int
+
+
+THRESHOLD_KEYS: tuple[str, ...] = (
+    "efectividad_tipica_pct",
+    "flete_tipico",
+    "dias_a_caja_tipicos",
+    "alistamiento_tipico_dias",
+)
+
+
+class ThresholdRow(BaseModel):
+    key: str
+    value: str
+    source: Literal["user", "inferred", "system"]
+    confidence: float | None
+    updated_at: datetime
+
+
+class ThresholdsResponse(BaseModel):
+    country_code: str
+    thresholds: list[ThresholdRow]
+
+
+class ThresholdsUpdateRequest(BaseModel):
+    thresholds: dict[str, str] = Field(
+        description=(
+            "Clave -> valor. Solo se aceptan las cuatro claves conocidas. Un valor vacío "
+            "borra el umbral fijado a mano y deja que se vuelva a inferir de los datos."
+        )
+    )
+
+
+class EventItem(BaseModel):
+    id: int
+    type: str
+    country_code: str | None
+    payload: dict[str, Any] = Field(default_factory=dict)
+    created_at: datetime
+
+
+class EventsResponse(BaseModel):
+    cursor: int = Field(description="Pásalo como `since` en la siguiente llamada.")
+    events: list[EventItem]
+
+
+Verdict = Literal["keep", "cut", "watch", "switch", "call", "hold", "ok"]
+DecisionScope = Literal["products", "carriers", "office", "cash"]
+
+
+class DecisionItem(BaseModel):
+    key: str
+    label: str
+    verdict: Verdict
+    headline: str
+    numbers: dict[str, Any] = Field(default_factory=dict)
+    impact_amount: float | None
+    impact_currency: str | None
+    deep_link: str
+
+
+class DecisionsResponse(BaseModel):
+    scope: DecisionScope
+    country_code: str
+    items: list[DecisionItem]
+    thresholds: dict[str, Any] = Field(default_factory=dict)
+    narrative: str | None = None
+    degraded: bool = False
+    degraded_reason: str | None = None
+
+
+class CarrierZoneRow(BaseModel):
+    """mart.v_carrier_by_zone - delivery rate per carrier per city, last 90 days."""
+
+    country_code: str
+    level1_name: str
+    city_name: str
+    carrier_id: UUID | None
+    carrier_name: str
+    shipments: int
+    terminal: int
+    delivery_rate_pct: float | None
+    avg_days_to_deliver: float | None
+    avg_freight: float | None
+    delivered_value: float | None
+    currency_code: str | None

@@ -27,6 +27,7 @@ ALLOWED_JOBS = (
     "relink_orphans",
     "refresh_fx",
     "calibrate_maturation",
+    "daily_digest",
 )
 
 

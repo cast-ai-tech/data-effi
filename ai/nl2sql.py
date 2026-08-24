@@ -73,6 +73,8 @@ ALLOWED_VIEWS: frozenset[str] = frozenset(
         "v_office_rescue",
         "v_freight_analysis",
         "v_product_catalogue",
+        # Migration 039: which carrier delivers best in each city
+        "v_carrier_by_zone",
     }
 )
 
@@ -332,6 +334,13 @@ mart.v_office_rescue(country_code, carrier_name, level1_name, city_name, shipmen
     -- Guías esperando en oficina de la transportadora: ni entregadas ni devueltas.
     -- value_still_recoverable es el valor de la banda de 8 a 21 días, que es la que
     -- todavía se rescata con una llamada. Pasados 21 días normalmente se devuelve sola.
+
+mart.v_carrier_by_zone(country_code, level1_name, city_name, carrier_name, shipments,
+    terminal, delivery_rate_pct, avg_days_to_deliver, avg_freight, delivered_value,
+    currency_code)
+    -- Efectividad por transportadora POR CIUDAD, últimos 90 días. Responde "¿quién
+    -- entrega mejor en esta zona?". terminal son las guías ya resueltas (entregadas o
+    -- devueltas); con menos de 30 la tasa es ruido.
 
 mart.v_freight_analysis(country_code, carrier_name, service_level, shipments,
     avg_weight_kg, total_weight_kg, freight_total, avg_freight, freight_per_kg,

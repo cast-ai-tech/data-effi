@@ -16,7 +16,6 @@ import type { Country, LayoutWidget, WidgetState } from "@/lib/types";
  */
 vi.mock("@/lib/hooks", () => ({
   useApi: vi.fn(() => ({ data: null, loading: true, error: null, reload: vi.fn() })),
-  usePolling: vi.fn(() => ({ data: null, loading: true, error: null, reload: vi.fn() })),
   usePersistentState: vi.fn(() => [null, vi.fn()]),
 }));
 

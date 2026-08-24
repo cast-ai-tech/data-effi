@@ -1013,3 +1013,140 @@ export interface ContributionSplit {
   net_contribution: number | null;
   maturity_pct: number | null;
 }
+
+// ---------------------------------------------------------------------------
+// Notifications, live events and decisions (migration 039).
+//
+// The bell reads `Notification`; the long-poll reads `EventsResponse`; the
+// decision strips read `Decision`. None of them is date-ranged: a decision is
+// about the operation as it stands, not about the window the reader picked.
+// ---------------------------------------------------------------------------
+
+/** `urgent` lands the moment a load finishes; `digest` is the 7 am summary. */
+export type NotificationKind = "urgent" | "digest" | "system";
+export type NotificationSeverity = "info" | "warning" | "critical";
+
+/**
+ * What a digest carries. The recommendations and alerts are the same shape the
+ * copilot panel already renders, minus `detected_at`, so one card serves both.
+ */
+export interface NotificationPayload {
+  brief?: string;
+  recommendations?: AlertLike[];
+  alerts?: AlertLike[];
+  [key: string]: unknown;
+}
+
+/** An alert as it travels inside a notification payload: no detection time. */
+export type AlertLike = Omit<Alert, "detected_at"> & {
+  detected_at?: string;
+  deep_link: string | null;
+};
+
+export interface Notification {
+  id: number;
+  kind: NotificationKind;
+  code: string;
+  severity: NotificationSeverity;
+  country_code: string | null;
+  title: string;
+  finding: string;
+  action: string;
+  impact_amount: number | null;
+  impact_currency: string | null;
+  deep_link: string | null;
+  created_at: string;
+  /** Null until THIS reader opened it: the state is per person, not per row. */
+  read_at: string | null;
+  payload: NotificationPayload;
+}
+
+export interface NotificationsResponse {
+  items: Notification[];
+  unread_count: number;
+  critical_unread_count: number;
+  /** Pass as `before` to fetch the next, older page. Null on the last page. */
+  next_before: number | null;
+}
+
+export interface UnreadCount {
+  unread_count: number;
+  critical_unread_count: number;
+}
+
+/** A learned threshold, or one the operator typed over it (`source = "user"`). */
+export interface Threshold {
+  key: string;
+  value: string;
+  source: string;
+  confidence: number | null;
+  updated_at: string | null;
+}
+
+export interface ThresholdsResponse {
+  country_code: string;
+  thresholds: Threshold[];
+}
+
+/** One row of `raw.event`, as the long-poll hands it over. */
+export interface LiveEvent {
+  id: number;
+  type: string;
+  country_code: string | null;
+  payload: Record<string, unknown>;
+  created_at: string;
+}
+
+/** `GET /events`. Without `since` only `cursor` is meaningful and `events` is empty. */
+export interface EventsResponse {
+  cursor: number;
+  events: LiveEvent[];
+}
+
+export type DecisionScope = "products" | "carriers" | "office" | "cash";
+
+/**
+ * The verb. `cut/call/switch` ask for an action, `keep/ok` say leave it alone,
+ * `watch/hold` say not yet.
+ */
+export type Verdict = "keep" | "cut" | "watch" | "switch" | "call" | "hold" | "ok";
+
+export interface Decision {
+  key: string;
+  label: string;
+  verdict: Verdict;
+  headline: string;
+  /** Scope-specific figures: `product_id`, `best_carrier`, `p50`... */
+  numbers: Record<string, unknown>;
+  impact_amount: number | null;
+  impact_currency: string | null;
+  deep_link: string | null;
+}
+
+export interface DecisionsResponse {
+  scope: DecisionScope;
+  country_code: string;
+  items: Decision[];
+  thresholds: Record<string, unknown>;
+  /** Only with `narrative=true`, and only if the model answered. */
+  narrative: string | null;
+  degraded: boolean;
+  degraded_reason: string | null;
+}
+
+/** `mart.v_carrier_by_zone`: the same carrier measured city by city, last 90 days. */
+export interface CarrierZoneRow {
+  country_code: string;
+  level1_name: string;
+  city_name: string;
+  carrier_id: string | null;
+  carrier_name: string;
+  shipments: number;
+  /** Delivered or returned: the guides that already have an outcome. */
+  terminal: number;
+  delivery_rate_pct: number | null;
+  avg_days_to_deliver: number | null;
+  avg_freight: number | null;
+  delivered_value: number | null;
+  currency_code: string | null;
+}

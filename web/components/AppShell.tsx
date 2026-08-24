@@ -13,11 +13,13 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { CopilotPanel } from "@/components/CopilotPanel";
 import { DateFieldPicker, ExcludedByFieldBand } from "@/components/DateFieldPicker";
 import { DateRangePicker } from "@/components/DateRangePicker";
+import { NotificationBell } from "@/components/NotificationBell";
 import { Chip, StatusDot, cx } from "@/components/ui";
 import { api, signOut as endSession } from "@/lib/api";
 import { DEFAULT_FIELD, useDateRange } from "@/lib/date-range";
 import { countryFlag, formatRelative } from "@/lib/format";
 import { useApi, usePersistentState } from "@/lib/hooks";
+import { useNotifications } from "@/lib/notifications";
 import type { Capability, Connection, Country, Tokens, User } from "@/lib/types";
 
 /**
@@ -40,6 +42,14 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   // screen. An open drawer on a phone always shows its labels.
   const rail = collapsed && !drawerOpen;
   const { range, field } = useDateRange();
+
+  // The long-poll runs only while a signed-in screen is on: the login page
+  // never mounts this shell, so it never asks `/events` without a session.
+  const { setActive } = useNotifications();
+  useEffect(() => {
+    setActive(true);
+    return () => setActive(false);
+  }, [setActive]);
 
   const { data: countries } = useApi<Country[]>("/config/countries");
   const { data: user } = useApi<User>("/auth/me");
@@ -301,6 +311,13 @@ export function AppShell({ children }: { children: React.ReactNode }) {
                 <DateFieldPicker />
                 <DateRangePicker country={formatCountry} />
               </>
+            )}
+
+            {/* Both a reader and an uploader hear about loads finishing; the
+                API filters what each may see. Hidden until the capabilities
+                are known, so it never flashes for someone who has neither. */}
+            {(can("read") || can("ingest")) && (
+              <NotificationBell countryCode={currentCountry} />
             )}
 
             <Link

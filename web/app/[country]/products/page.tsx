@@ -23,6 +23,7 @@ import { useMemo, useState } from "react";
 
 import { AppShell } from "@/components/AppShell";
 import { CountryMissing } from "@/components/browse";
+import { VERDICT_META, decisionsPath } from "@/components/DecisionStrip";
 import {
   Button,
   Card,
@@ -47,6 +48,8 @@ import { useApi } from "@/lib/hooks";
 import type {
   CatalogueStatus,
   Country,
+  Decision,
+  DecisionsResponse,
   ProductCatalogueRow,
   ProductCostEntry,
   ProductDetail,
@@ -208,6 +211,25 @@ function ProductsScreen() {
   const { data, error, loading, reload } = useApi<ProductCatalogueRow[]>("/products");
   const { data: user } = useApi<User>("/auth/me");
 
+  // Seguir / cortar / vigilar, per product, for the country in the address
+  // bar. The catalogue is tenant-wide but a verdict is not: the same product
+  // can pay in Colombia and bleed in Ecuador, so the chip says which one.
+  const { data: decisions } = useApi<DecisionsResponse>(
+    countryCode && !missing ? decisionsPath(countryCode, "products") : null,
+    [countryCode],
+  );
+  const verdictByProduct = useMemo(() => {
+    const map = new Map<string, Decision>();
+    for (const item of decisions?.items ?? []) {
+      if (typeof item.numbers.product_id === "string") map.set(item.numbers.product_id, item);
+    }
+    return map;
+  }, [decisions]);
+  const cutCount = useMemo(
+    () => (decisions?.items ?? []).filter((item) => item.verdict === "cut").length,
+    [decisions],
+  );
+
   const [search, setSearch] = useState("");
   const [statuses, setStatuses] = useState<Set<CatalogueStatus>>(new Set());
   const [panel, setPanel] = useState<PanelTarget>(null);
@@ -316,6 +338,21 @@ function ProductsScreen() {
           )}
         >
           {notice.message}
+        </p>
+      )}
+
+      {cutCount > 0 && (
+        <p
+          role="status"
+          className="mb-4 rounded-[8px] border border-accent/30 bg-accent/[0.08] px-3 py-2 text-[12px] leading-relaxed text-ink"
+        >
+          <span className="font-semibold text-accent">
+            {cutCount === 1
+              ? "1 producto está bajo su punto de equilibrio"
+              : `${cutCount} productos están bajo su punto de equilibrio`}
+          </span>{" "}
+          en {routeCountry?.name ?? countryCode}: cada despacho pierde plata. La columna
+          «Decisión» dice cuáles.
         </p>
       )}
 
@@ -443,6 +480,7 @@ function ProductsScreen() {
                     "Margen %",
                     "Guías",
                     "% entrega",
+                    "Decisión",
                     "Estado",
                   ].map((header, index) => (
                     <th
@@ -515,6 +553,18 @@ function ProductsScreen() {
                       </td>
                       <td className={cx("px-3 py-2 text-right", deliveryTone(rate))}>
                         {formatPercent(rate)}
+                      </td>
+                      <td className="px-3 py-2 text-left">
+                        {(() => {
+                          const verdict = verdictByProduct.get(row.product_id);
+                          if (!verdict) return <span className="text-ink-dim">—</span>;
+                          const verdictMeta = VERDICT_META[verdict.verdict];
+                          return (
+                            <span title={verdict.headline}>
+                              <Chip tone={verdictMeta.tone}>{verdictMeta.label}</Chip>
+                            </span>
+                          );
+                        })()}
                       </td>
                       <td className="px-3 py-2 text-left">
                         <span title={meta.explanation}>

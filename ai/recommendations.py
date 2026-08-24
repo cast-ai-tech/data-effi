@@ -638,9 +638,10 @@ def refresh_after_batch(
     Never raises: this runs as a side effect of a successful ingestion, and a
     successful ingestion must stay successful.
     """
+    from ai.alerts import persist_findings
     from ai.memory import infer_thresholds
 
-    result: dict[str, Any] = {"thresholds": 0, "recommendations": 0}
+    result: dict[str, Any] = {"thresholds": 0, "recommendations": 0, "notified": 0}
     try:
         if country_code:
             result["thresholds"] = len(infer_thresholds(conn, tenant_id, country_code))
@@ -651,6 +652,14 @@ def refresh_after_batch(
                 "post-ingestion: %d recommendations for tenant %s (%s): %s",
                 len(found), tenant_id, country_code or "todos",
                 ", ".join(sorted({item["code"] for item in found})),
+            )
+        # Only the critical ones go out right now; warnings wait for the 7 am
+        # digest. The fingerprint window keeps a repeated load from repeating
+        # the notification.
+        critical = [item for item in found if item["severity"] == "critical"]
+        if critical:
+            result["notified"] = len(
+                persist_findings(conn, tenant_id, country_code, critical, kind="urgent")
             )
     except Exception:
         logger.warning(

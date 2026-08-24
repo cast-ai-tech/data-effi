@@ -6,6 +6,7 @@ import { FlagFont } from "@/components/FlagFont";
 import { Suspense } from "react";
 
 import { DateRangeProvider } from "@/lib/date-range";
+import { NotificationsProvider } from "@/lib/notifications";
 
 import "./globals.css";
 
@@ -56,7 +57,14 @@ export default async function RootLayout({ children }: { children: React.ReactNo
           órdenes, productos - reads the same filter.
         */}
         <Suspense fallback={null}>
-          <DateRangeProvider>{children}</DateRangeProvider>
+          <DateRangeProvider>
+            {/*
+              Live events and the bell's counters. Mounted here so a screen
+              that is not the dashboard - Cargar datos, Productos - still hears
+              that a load finished. It stays idle until AppShell turns it on.
+            */}
+            <NotificationsProvider>{children}</NotificationsProvider>
+          </DateRangeProvider>
         </Suspense>
       </body>
     </html>

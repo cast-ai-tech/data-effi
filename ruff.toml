@@ -18,8 +18,11 @@ ignore = [
 "api/schemas.py" = ["S105"]
 # S608: these modules build a WHERE clause by joining string literals that are
 # written in the file itself. Every user-supplied VALUE is bound as a query
-# parameter - none are interpolated. Audited 2026-08-20.
+# parameter - none are interpolated. Audited 2026-08-20; notifications and
+# events added 2026-08-23 under the same rule.
 "api/routers/kpis.py" = ["S608"]
+"api/routers/notifications.py" = ["S608"]
+"api/routers/events.py" = ["S608"]
 "api/routers/ingest.py" = ["S608"]
 "api/routers/config.py" = ["S608"]
 "api/routers/products.py" = ["S608"]

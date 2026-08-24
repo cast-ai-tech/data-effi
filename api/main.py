@@ -23,8 +23,10 @@ from api.routers import (
     auth,
     config,
     customers,
+    events,
     ingest,
     kpis,
+    notifications,
     orders,
     org,
     products,
@@ -142,6 +144,16 @@ def create_app() -> FastAPI:
     app.include_router(orders.router, dependencies=read_only)
     app.include_router(customers.router, dependencies=read_only)
     app.include_router(ai.router, dependencies=read_only)
+    # Same reasoning as `config`: an uploader watches their own loads through
+    # the event feed, and the feed itself cuts them to `upload_job.*` events.
+    # Notifications share the guard so the bell renders for every role; the
+    # rows an uploader can reach are the ones the digest and the loads write.
+    app.include_router(
+        events.router, dependencies=[Depends(require_any_cap("read", "ingest"))]
+    )
+    app.include_router(
+        notifications.router, dependencies=[Depends(require_any_cap("read", "ingest"))]
+    )
     app.include_router(worker.router)
 
     return app

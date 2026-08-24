@@ -20,10 +20,15 @@ import {
   cx,
   useShowMore,
 } from "@/components/ui";
+import { decisionsPath } from "@/components/DecisionStrip";
 import type { WidgetProps } from "@/components/widgets/types";
 import { useRangedApi } from "@/lib/date-range";
 import { formatMoney, formatNumber } from "@/lib/format";
-import type { OfficeRescueRow } from "@/lib/types";
+import { useApi } from "@/lib/hooks";
+import type { Decision, DecisionsResponse, OfficeRescueRow } from "@/lib/types";
+
+/** How many cities "Llamar primero" names. Five is one morning's calls. */
+const CALL_FIRST = 5;
 
 /**
  * The four bands, in the order they decay.
@@ -100,6 +105,17 @@ export default function OfficeRescue({ countryCode, country }: WidgetProps) {
     `/kpis/office-rescue?country=${countryCode}`,
   );
 
+  // Who to call first comes from the decisions endpoint, ordered by what is
+  // still recoverable and filtered to the 8-21 day window where a call works.
+  const { data: decisions } = useApi<DecisionsResponse>(
+    decisionsPath(countryCode, "office"),
+    [countryCode],
+  );
+  const callFirst = useMemo<Decision[]>(
+    () => (decisions?.items ?? []).filter((item) => item.verdict === "call").slice(0, CALL_FIRST),
+    [decisions],
+  );
+
   const model = useMemo(() => {
     const rows = data ?? [];
     if (rows.length === 0) return null;
@@ -172,6 +188,44 @@ export default function OfficeRescue({ countryCode, country }: WidgetProps) {
         enfriaron, pero la transportadora aún no las devuelve. Después de tres semanas se
         regresan solas y ese dinero se pierde junto con el flete de ida y el de vuelta.
       </p>
+
+      {callFirst.length > 0 && (
+        <section
+          aria-label="Llamar primero"
+          className="mt-4 rounded-[10px] border border-accent/30 bg-accent/[0.06] p-3"
+        >
+          <h4 className="text-[10.5px] font-bold uppercase tracking-[0.08em] text-accent">
+            Llamar primero
+          </h4>
+          <ol className="mt-2 space-y-1.5">
+            {callFirst.map((item, index) => {
+              const shipments = Number(item.numbers.shipments);
+              return (
+                <li key={item.key} className="flex items-baseline gap-2 text-[12px]">
+                  <span className="w-4 shrink-0 text-right text-ink-dim">{index + 1}.</span>
+                  <span className="min-w-0 flex-1 truncate text-ink-2">
+                    <span className="font-semibold text-ink">{item.label}</span>
+                    {typeof item.numbers.carrier_name === "string" && (
+                      <span className="text-ink-dim"> · {item.numbers.carrier_name}</span>
+                    )}
+                    {Number.isFinite(shipments) && shipments > 0 && (
+                      <span className="text-ink-dim">
+                        {" "}
+                        · {formatNumber(shipments, country, 0)} guías
+                      </span>
+                    )}
+                  </span>
+                  {item.impact_amount !== null && (
+                    <span className="shrink-0 font-semibold text-ink-2">
+                      {formatMoney(item.impact_amount, country)}
+                    </span>
+                  )}
+                </li>
+              );
+            })}
+          </ol>
+        </section>
+      )}
 
       <ul className="mt-4 space-y-2.5">
         {model.bands.map((band) => {

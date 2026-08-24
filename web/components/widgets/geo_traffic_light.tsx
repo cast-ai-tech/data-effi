@@ -24,9 +24,11 @@ import {
   cx,
 } from "@/components/ui";
 import type { WidgetProps } from "@/components/widgets/types";
+import { bestCarrierByZone } from "@/lib/carrier-zones";
 import { useRangedApi } from "@/lib/date-range";
 import { formatNumber, formatPercent } from "@/lib/format";
-import type { GeoRow, TrafficLight } from "@/lib/types";
+import { useApi } from "@/lib/hooks";
+import type { CarrierZoneRow, GeoRow, TrafficLight } from "@/lib/types";
 
 type LightTone = "positive" | "warning" | "negative" | "neutral";
 
@@ -118,6 +120,15 @@ export default function GeoTrafficLight({ countryCode, country }: WidgetProps) {
 
   const groups = useMemo(() => (data ? groupByLevel1(data) : []), [data]);
 
+  // A red department is only half the finding; the other half is who could
+  // deliver there instead. Measured over 90 days, not over the range, so the
+  // note does not vanish the moment the reader narrows to last week.
+  const { data: zoneRows } = useApi<CarrierZoneRow[]>(
+    `/kpis/carrier-by-zone?country=${countryCode}`,
+    [countryCode],
+  );
+  const bestByLevel1 = useMemo(() => bestCarrierByZone(zoneRows ?? []), [zoneRows]);
+
   const level1Label = country.geo_level1_label || "Zona";
   const subtitle = `Entrega por ${level1Label.toLowerCase()}; abra uno para ver sus ciudades`;
 
@@ -192,6 +203,17 @@ export default function GeoTrafficLight({ countryCode, country }: WidgetProps) {
                   <span className="sr-only">{LIGHT_LABEL[group.light]}</span>
                 </span>
               </button>
+
+              {isOpen && bestByLevel1.get(group.key) && (
+                <p className="bg-sunken/60 px-4 py-1.5 pl-10 text-[11px] text-ink-muted">
+                  Mejor transportadora aquí:{" "}
+                  <span className="font-semibold text-accent">
+                    {bestByLevel1.get(group.key)!.carrier_name}
+                  </span>{" "}
+                  ({formatPercent(bestByLevel1.get(group.key)!.delivery_rate_pct)} de
+                  entrega en 90 días)
+                </p>
+              )}
 
               {isOpen && (
                 <ul className="bg-sunken/60 pb-1">

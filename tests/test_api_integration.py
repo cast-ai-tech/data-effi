@@ -478,6 +478,110 @@ def test_alerts_work_without_the_model(client, owner_token):
     assert "alerts" in response.json()
 
 
+def test_decisions_work_without_the_model(client, owner_token):
+    for scope in ("products", "carriers", "office", "cash"):
+        response = client.get(
+            f"/ai/decisions?country=CO&scope={scope}", headers=auth(owner_token)
+        )
+        assert response.status_code == 200, response.text
+        body = response.json()
+        assert body["scope"] == scope
+        assert body["degraded"] is False
+        assert all(
+            item["verdict"] in ("keep", "cut", "watch", "switch", "call", "hold", "ok")
+            for item in body["items"]
+        )
+
+
+def test_carrier_by_zone_endpoint(client, owner_token):
+    response = client.get("/kpis/carrier-by-zone?country=CO", headers=auth(owner_token))
+    assert response.status_code == 200, response.text
+    rows = response.json()
+    assert isinstance(rows, list)
+    # The view is a rolling 90-day window, so the fixture's July guides drop
+    # out of it with time; the shape is what this pins, not the count.
+    for row in rows:
+        assert {"carrier_name", "city_name", "delivery_rate_pct", "terminal"} <= set(row)
+
+
+# =============================================================================
+# Notifications and the event feed
+# =============================================================================
+
+
+def test_events_without_a_cursor_returns_the_cursor_only(client, owner_token):
+    response = client.get("/events", headers=auth(owner_token))
+    assert response.status_code == 200, response.text
+    body = response.json()
+    assert body["events"] == []
+    # The uploads earlier in this module already appended events.
+    assert body["cursor"] >= 1
+
+
+def test_events_after_the_cursor_come_back_in_order(client, owner_token):
+    response = client.get("/events?since=0&wait=0", headers=auth(owner_token))
+    assert response.status_code == 200, response.text
+    events = response.json()["events"]
+    assert events, "the uploads must have emitted upload_job.updated"
+    ids = [event["id"] for event in events]
+    assert ids == sorted(ids)
+    assert {"upload_job.updated", "batch.finished"} <= {event["type"] for event in events}
+    assert response.json()["cursor"] == ids[-1]
+
+
+def test_events_refuse_a_wait_past_the_ceiling(client, owner_token):
+    response = client.get("/events?since=0&wait=30", headers=auth(owner_token))
+    assert response.status_code == 422
+
+
+def test_notifications_list_and_counts(client, owner_token):
+    response = client.get("/notifications?country=CO", headers=auth(owner_token))
+    assert response.status_code == 200, response.text
+    body = response.json()
+    assert {"items", "unread_count", "critical_unread_count", "next_before"} <= set(body)
+
+    counts = client.get("/notifications/unread-count", headers=auth(owner_token))
+    assert counts.status_code == 200
+    assert counts.json()["unread_count"] == body["unread_count"]
+
+    marked = client.post("/notifications/read-all?country=CO", headers=auth(owner_token))
+    assert marked.status_code == 200
+    assert marked.json()["marked"] == body["unread_count"]
+
+
+def test_thresholds_round_trip(client, owner_token):
+    response = client.get("/notifications/thresholds?country=CO", headers=auth(owner_token))
+    assert response.status_code == 200, response.text
+    assert response.json()["country_code"] == "CO"
+
+    put = client.put(
+        "/notifications/thresholds?country=CO",
+        json={"thresholds": {"efectividad_tipica_pct": "60"}},
+        headers=auth(owner_token),
+    )
+    assert put.status_code == 200, put.text
+    rows = {row["key"]: row for row in put.json()["thresholds"]}
+    assert rows["efectividad_tipica_pct"]["value"] == "60"
+    assert rows["efectividad_tipica_pct"]["source"] == "user"
+
+    bad = client.put(
+        "/notifications/thresholds?country=CO",
+        json={"thresholds": {"no_existe": "1"}},
+        headers=auth(owner_token),
+    )
+    assert bad.status_code == 400
+
+    reset = client.put(
+        "/notifications/thresholds?country=CO",
+        json={"thresholds": {"efectividad_tipica_pct": ""}},
+        headers=auth(owner_token),
+    )
+    assert reset.status_code == 200
+    assert all(
+        row["source"] != "user" for row in reset.json()["thresholds"]
+    ), "an empty value must remove the hand-set threshold"
+
+
 # =============================================================================
 # Worker webhook
 # =============================================================================

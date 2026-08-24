@@ -11,16 +11,27 @@
 
 import { useMemo } from "react";
 
-import { Card, EmptyState, ErrorState, SkeletonRows } from "@/components/ui";
+import { VERDICT_META, decisionsPath } from "@/components/DecisionStrip";
+import { Card, Chip, EmptyState, ErrorState, SkeletonRows } from "@/components/ui";
 import type { WidgetProps } from "@/components/widgets/types";
 import { useRangedApi } from "@/lib/date-range";
 import { formatMoney, formatNumber } from "@/lib/format";
-import type { CashCycleRow } from "@/lib/types";
+import { useApi } from "@/lib/hooks";
+import type { CashCycleRow, DecisionsResponse } from "@/lib/types";
 
 export default function CashCycle({ countryCode, country }: WidgetProps) {
   const { data, error, loading, reload } = useRangedApi<CashCycleRow[]>(
     `/kpis/cash-cycle?country=${countryCode}`,
   );
+
+  // The one-sentence verdict ("te llegan ~X en N días") comes from the
+  // decisions endpoint, not from this widget's arithmetic, so the strip above
+  // the tab and the card below it can never say two different things.
+  const { data: decisions } = useApi<DecisionsResponse>(
+    decisionsPath(countryCode, "cash"),
+    [countryCode],
+  );
+  const verdict = decisions?.items[0] ?? null;
 
   /**
    * The view is grouped by country, so a filtered request returns one row.
@@ -67,6 +78,15 @@ export default function CashCycle({ countryCode, country }: WidgetProps) {
 
   return (
     <Card title="Ciclo de caja" subtitle={SUBTITLE}>
+      {verdict && (
+        <p className="mb-4 flex items-start gap-2 text-[13px] font-semibold leading-snug text-ink">
+          <Chip tone={VERDICT_META[verdict.verdict].tone} className="mt-0.5 shrink-0">
+            {VERDICT_META[verdict.verdict].label}
+          </Chip>
+          <span>{verdict.headline}</span>
+        </p>
+      )}
+
       <div className="flex flex-wrap items-end gap-x-10 gap-y-4">
         <div>
           <p className="text-[10.5px] font-bold uppercase tracking-[0.08em] text-ink-faint">

@@ -18,11 +18,13 @@ from contextlib import contextmanager
 from datetime import UTC, date, datetime, timedelta
 from typing import Any
 from uuid import UUID
+from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 import psycopg
 from psycopg.rows import dict_row
 from psycopg.types.json import Json
 
+from api.events import emit
 from pipeline.ingest import IngestEngine
 from pipeline.models import BatchKind
 from pipeline.store_pg import PostgresStore
@@ -88,6 +90,7 @@ def run_job(
         result = {**result, "elapsed_seconds": round(elapsed, 2)}
         _record(conn, job_name, tenant_id, "ok", result, None)
         logger.info("job %s ok in %.2fs: %s", job_name, elapsed, result)
+        broadcast(conn, "job_run.finished", {"job": job_name, "ok": True})
         return {"status": "ok", **result}
 
 
@@ -108,6 +111,28 @@ def _record(
             (job_name, tenant_id, status, Json(_jsonable(result)), error),
         )
     conn.commit()
+
+
+def broadcast(conn: psycopg.Connection, event_type: str, payload: dict[str, Any]) -> int:
+    """Append one event per active tenant, so every open dashboard refreshes.
+
+    Runs in the service context the worker already declared. Never raises: an
+    event nobody heard is a stale screen until the next poll, not a failed job.
+    """
+    try:
+        with conn.cursor() as cur:
+            cur.execute(
+                "SELECT DISTINCT tenant_id FROM core.workspace_country WHERE is_active"
+            )
+            tenants = [row[0] for row in cur.fetchall()]
+        for tenant_id in tenants:
+            emit(conn, tenant_id, event_type, payload=payload)
+        conn.commit()
+        return len(tenants)
+    except Exception:
+        conn.rollback()
+        logger.warning("could not broadcast %s", event_type, exc_info=True)
+        return 0
 
 
 def _jsonable(value: Any) -> Any:
@@ -284,6 +309,9 @@ def job_refresh_fx(conn: psycopg.Connection, *, provider_url: str, api_key: str 
             )
             written = cur.rowcount
     conn.commit()
+
+    if written:
+        broadcast(conn, "fx.refreshed", {})
 
     return {"rates_written": written, "source": "api" if fetched else "carried_forward",
             "error": error}
@@ -614,10 +642,168 @@ def _country_for_connection(
     return country_code, country["currency_code"]
 
 
+# =============================================================================
+# Job: daily digest
+# =============================================================================
+
+# Local hour after which a country's digest may be written. The cron fires at
+# :50 of 10-13 UTC, which is 05:50-08:50 in Bogotá and 04:50-07:50 in Mexico
+# City; each run writes the digest for the countries already past seven and
+# leaves the rest for the next one. The fingerprint makes a second pass a no-op.
+DIGEST_LOCAL_HOUR = 7
+
+# The event feed only ever moves forward; a week is more than any cursor
+# needs. Notifications are the operator's history: a quarter.
+EVENT_RETENTION_DAYS = 7
+NOTIFICATION_RETENTION_DAYS = 90
+
+
+def job_daily_digest(
+    conn: psycopg.Connection, *, settings: Any, now: datetime | None = None
+) -> dict[str, Any]:
+    """One digest per country per local day, plus the retention sweep.
+
+    Per (tenant, country): detect with SQL, collect the signal view, ask the
+    model for the brief IF it is on and inside budget, then write the warnings
+    and criticals as urgent notifications (the fingerprint keeps the ones the
+    last load already sent from repeating) and the digest itself.
+
+    Idempotent: the digest fingerprint is `digest|CC|date`, and everything
+    else dedups on its own fingerprint. Never raises for one tenant's failure -
+    it is logged, counted and the loop goes on.
+    """
+    from ai.alerts import persist_digest, persist_findings
+    from ai.client import AiUnavailable
+    from ai.features import collect_alerts, generate_brief
+    from ai.memory import ensure_thresholds
+    from ai.recommendations import detect
+
+    swept = _sweep_retention(conn)
+
+    with conn.cursor(row_factory=dict_row) as cur:
+        cur.execute(
+            """
+            SELECT wc.tenant_id, wc.country_code, c.timezone
+            FROM core.workspace_country wc
+            JOIN core.country c ON c.code = wc.country_code
+            WHERE wc.is_active
+            ORDER BY wc.tenant_id, wc.country_code
+            """
+        )
+        workspaces = cur.fetchall()
+
+    moment = now or datetime.now(UTC)
+    written: list[dict[str, Any]] = []
+    skipped_early = 0
+    already = 0
+    errors = 0
+
+    for workspace in workspaces:
+        tenant_id = workspace["tenant_id"]
+        country_code = workspace["country_code"]
+        local = moment.astimezone(_zone(workspace["timezone"]))
+        if local.hour < DIGEST_LOCAL_HOUR:
+            skipped_early += 1
+            continue
+
+        # The mart views filter by core.current_tenant_id(); the service
+        # context lets the writes through RLS but does not pick a tenant.
+        _scope_session(conn, tenant_id)
+        try:
+            ensure_thresholds(conn, tenant_id, country_code)
+            found = detect(conn, country_code)
+            alerts = collect_alerts(conn, country_code)
+
+            brief: str | None = None
+            try:
+                brief = generate_brief(conn, settings, tenant_id, country_code).get("summary")
+            except AiUnavailable as exc:
+                logger.info("digest brief degraded for %s: %s", country_code, exc.reason)
+
+            urgent = [item for item in found if item["severity"] in ("warning", "critical")]
+            notified = persist_findings(conn, tenant_id, country_code, urgent, kind="urgent")
+            digest_id = persist_digest(
+                conn, tenant_id, country_code,
+                brief=brief, recommendations=found, alerts=alerts,
+                local_date=local.date(),
+            )
+            conn.commit()
+        except Exception:
+            conn.rollback()
+            errors += 1
+            logger.warning(
+                "daily digest failed for tenant %s (%s)", tenant_id, country_code,
+                exc_info=True,
+            )
+            continue
+        finally:
+            _scope_session(conn, None)
+
+        if digest_id is None:
+            already += 1
+            continue
+        written.append(
+            {
+                "tenant_id": tenant_id,
+                "country_code": country_code,
+                "notification_id": digest_id,
+                "findings": len(found),
+                "notified": len(notified),
+                "brief": brief is not None,
+            }
+        )
+
+    return {
+        "digests": written,
+        "count": len(written),
+        "already_written": already,
+        "before_local_hour": skipped_early,
+        "errors": errors,
+        **swept,
+    }
+
+
+def _sweep_retention(conn: psycopg.Connection) -> dict[str, int]:
+    with conn.cursor() as cur:
+        cur.execute(
+            "DELETE FROM raw.event WHERE created_at < now() - make_interval(days => %s)",
+            (EVENT_RETENTION_DAYS,),
+        )
+        events_deleted = cur.rowcount
+        cur.execute(
+            "DELETE FROM raw.notification "
+            "WHERE created_at < now() - make_interval(days => %s)",
+            (NOTIFICATION_RETENTION_DAYS,),
+        )
+        notifications_deleted = cur.rowcount
+    conn.commit()
+    return {"events_deleted": events_deleted, "notifications_deleted": notifications_deleted}
+
+
+def _zone(name: str | None) -> ZoneInfo:
+    """An unknown timezone name falls back to Bogotá rather than to a crash."""
+    try:
+        return ZoneInfo(name or "America/Bogota")
+    except ZoneInfoNotFoundError:
+        logger.warning("unknown timezone %r; using America/Bogota", name)
+        return ZoneInfo("America/Bogota")
+
+
+def _scope_session(conn: psycopg.Connection, tenant_id: UUID | None) -> None:
+    """Session-level, not transaction-level: the body commits several times."""
+    with conn.cursor() as cur:
+        cur.execute(
+            "SELECT set_config('norte.tenant_id', %s, false)",
+            (str(tenant_id) if tenant_id else "",),
+        )
+    conn.commit()
+
+
 JOB_NAMES = (
     "sync_tier3",
     "sync_sheets",
     "relink_orphans",
     "refresh_fx",
     "calibrate_maturation",
+    "daily_digest",
 )

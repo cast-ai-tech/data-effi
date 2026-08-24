@@ -17,6 +17,7 @@ from pathlib import Path
 from uuid import UUID
 
 from api.db import connection, execute, fetch_all, fetch_one
+from api.events import emit
 from api.settings import Settings
 from pipeline.ingest import IngestEngine
 from pipeline.models import BatchKind
@@ -91,6 +92,7 @@ class IngestQueue:
                 "UPDATE raw.upload_job SET status = 'processing', started_at = now() WHERE id = %s",
                 (job_id,),
             )
+            _announce(conn, job, "processing")
 
         path = Path(job["storage_path"])
         try:
@@ -130,6 +132,22 @@ class IngestQueue:
                     """,
                     (status, report.batch_id, report.content_hash, error, job_id),
                 )
+                # Same transaction as the status: the screen must never hear
+                # "done" about a load it cannot yet read.
+                _announce(
+                    conn, job, status, country_code=country_code,
+                    batch_id=report.batch_id, error=error,
+                )
+                if status == "done":
+                    emit(
+                        conn, job["tenant_id"], "batch.finished",
+                        country_code=country_code,
+                        payload={
+                            "batch_id": report.batch_id,
+                            "kind": job["kind"],
+                            "country_code": country_code,
+                        },
+                    )
         except Exception as exc:
             logger.exception("ingestion failed for job %s", job_id)
             self._fail(job_id, _human_error(exc))
@@ -238,12 +256,45 @@ class IngestQueue:
 
     def _fail(self, job_id: UUID, message: str) -> None:
         with connection(service=True) as conn:
-            execute(
+            job = fetch_one(
                 conn,
-                "UPDATE raw.upload_job SET status = 'failed', error = %s, finished_at = now() "
-                "WHERE id = %s",
+                """
+                UPDATE raw.upload_job SET status = 'failed', error = %s, finished_at = now()
+                WHERE id = %s
+                RETURNING id, tenant_id, kind, filename
+                """,
                 (message[:2000], job_id),
             )
+            if job is not None:
+                _announce(conn, job, "failed", error=message[:2000])
+
+
+def _announce(
+    conn,
+    job: dict,
+    status: str,
+    *,
+    country_code: str | None = None,
+    batch_id: UUID | None = None,
+    error: str | None = None,
+) -> None:
+    """`upload_job.updated`, in the caller's transaction.
+
+    The error message travels in the payload because the ingest screen shows
+    it on the row - it is the parser's wording about the file, never customer
+    data. Everything else is identifiers and state.
+    """
+    payload: dict = {
+        "job_id": job["id"],
+        "status": status,
+        "kind": job["kind"],
+        "filename": job["filename"],
+    }
+    if batch_id is not None:
+        payload["batch_id"] = batch_id
+    if error:
+        payload["error"] = error
+    emit(conn, job["tenant_id"], "upload_job.updated", country_code=country_code, payload=payload)
 
 
 def _human_error(exc: Exception) -> str:

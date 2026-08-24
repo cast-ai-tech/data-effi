@@ -26,7 +26,6 @@ vi.mock("@/lib/hooks", () => ({
     error: null,
     reload: vi.fn(),
   })),
-  usePolling: vi.fn(() => ({ data: null, loading: true, error: null, reload: vi.fn() })),
   usePersistentState: vi.fn(() => [null, vi.fn()]),
 }));
 

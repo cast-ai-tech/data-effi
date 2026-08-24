@@ -22,9 +22,14 @@ import { useMemo, useState } from "react";
 
 import type { WidgetProps } from "@/components/widgets/types";
 import { Card, EmptyState, ErrorState, MicroBar, SkeletonRows, cx } from "@/components/ui";
+import { bestCarrierByZone } from "@/lib/carrier-zones";
 import { useRangedApi } from "@/lib/date-range";
 import { formatMoney, formatNumber, formatPercent } from "@/lib/format";
-import type { CarrierRow } from "@/lib/types";
+import { useApi } from "@/lib/hooks";
+import type { CarrierRow, CarrierZoneRow } from "@/lib/types";
+
+/** How many "best here" zones the footnote names before pointing at the widget. */
+const ZONE_NOTES = 3;
 
 /** Columns whose figures must line up on the right edge. */
 const RIGHT_ALIGNED = new Set([
@@ -154,6 +159,22 @@ export default function CarrierTable({ countryCode, country }: WidgetProps) {
   const rows = useMemo<CarrierRow[]>(() => data ?? [], [data]);
   const totals = useMemo(() => computeTotals(rows), [rows]);
   const shortSamples = useMemo(() => rows.filter(isShortSample).length, [rows]);
+
+  // The country average hides the decision. Under the table, the biggest
+  // zones where a DIFFERENT carrier from the country's leader delivers best -
+  // the only rows where "which carrier" has an answer other than "the same".
+  const { data: zoneRows } = useApi<CarrierZoneRow[]>(
+    `/kpis/carrier-by-zone?country=${countryCode}`,
+    [countryCode],
+  );
+  const zoneNotes = useMemo(() => {
+    const leader = [...rows].sort((a, b) => b.shipments - a.shipments)[0]?.carrier_name;
+    const best = bestCarrierByZone(zoneRows ?? []);
+    return [...best.entries()]
+      .filter(([, winner]) => winner.carrier_name !== leader)
+      .sort(([, a], [, b]) => b.shipments - a.shipments)
+      .slice(0, ZONE_NOTES);
+  }, [rows, zoneRows]);
 
   const columns = useMemo(() => {
     const column = createColumnHelper<CarrierRow>();
@@ -404,6 +425,20 @@ export default function CarrierTable({ countryCode, country }: WidgetProps) {
           {shortSamples === 1
             ? "Afecta a 1 transportadora."
             : `Afecta a ${shortSamples} transportadoras.`}
+        </p>
+      )}
+
+      {zoneNotes.length > 0 && (
+        <p className="border-t border-line-subtle px-3 py-2 text-[11px] leading-snug text-ink-muted">
+          Mejor transportadora aquí:{" "}
+          {zoneNotes.map(([zone, winner], index) => (
+            <span key={zone}>
+              {index > 0 && " · "}
+              {zone} → <span className="font-semibold text-accent">{winner.carrier_name}</span>{" "}
+              ({formatPercent(winner.delivery_rate_pct)})
+            </span>
+          ))}
+          . Medido en 90 días; el detalle por ciudad está en «Transportadora por zona».
         </p>
       )}
     </Card>

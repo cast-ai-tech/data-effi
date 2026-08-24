@@ -524,7 +524,12 @@ def collect_alerts(
     if country:
         query += " WHERE country_code = %s"
         params = (country.upper(),)
-    query += " ORDER BY severity DESC, impact_amount DESC NULLS LAST LIMIT 20"
+    # Severity is text, and 'warning' sorts after 'critical' alphabetically -
+    # ORDER BY severity DESC put the critical ones LAST. Spelled out instead.
+    query += (
+        " ORDER BY CASE severity WHEN 'critical' THEN 0 WHEN 'warning' THEN 1 ELSE 2 END,"
+        " impact_amount DESC NULLS LAST LIMIT 20"
+    )
 
     signals = fetch_all(conn, query, params)
     currencies = {

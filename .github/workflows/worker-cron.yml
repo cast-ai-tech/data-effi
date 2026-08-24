@@ -14,6 +14,10 @@
 #     sync_tier3            06:15 y 18:15
 #     calibrate_maturation  07:30
 #     refresh_fx            10:05
+#     daily_digest          10:50, 11:50, 12:50 y 13:50  (05:50-08:50 Bogota;
+#                                         cada pasada escribe el resumen de los
+#                                         paises que ya pasaron las 7 am locales
+#                                         y se salta los que ya lo tienen)
 #
 # Un job que no aplica todavia - sin conexiones tier-3, sin hojas publicadas -
 # devuelve 200 y no hace nada. Eso es correcto, no un error.
@@ -26,6 +30,7 @@ on:
     - cron: '15 6,18 * * *'
     - cron: '30 7 * * *'
     - cron: '5 10 * * *'
+    - cron: '50 10,11,12,13 * * *'
   workflow_dispatch:
     inputs:
       jobs:
@@ -56,6 +61,7 @@ jobs:
             '15 6,18 * * *')  JOBS='sync_tier3' ;;
             '30 7 * * *')     JOBS='calibrate_maturation' ;;
             '5 10 * * *')     JOBS='refresh_fx' ;;
+            '50 10,11,12,13 * * *') JOBS='daily_digest' ;;
             *)                JOBS="$MANUAL" ;;
           esac
           echo "jobs=$JOBS" >> "$GITHUB_OUTPUT"

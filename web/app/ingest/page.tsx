@@ -16,7 +16,21 @@ import { Button, Card, Chip, EmptyState, ErrorState, SkeletonRows, cx } from "@/
 import { ApiError, api } from "@/lib/api";
 import { countryFlag, formatBytes, formatRelative } from "@/lib/format";
 import { useApi } from "@/lib/hooks";
+import { useNotifications } from "@/lib/notifications";
 import type { BatchDetail, BatchSummary, Connection, UploadJob } from "@/lib/types";
+
+/**
+ * How long a row waits for a live event before asking the API itself. The
+ * events are the normal path; this is the net under them for an API that is
+ * asleep or an event that was emitted before the row subscribed.
+ */
+const JOB_FALLBACK_MS = 15_000;
+
+const TERMINAL_STATUSES: ReadonlySet<UploadJob["status"]> = new Set([
+  "done",
+  "failed",
+  "duplicate",
+]);
 
 // Same four the API accepts (pipeline.models.BatchKind). `ads` was missing
 // here, so a manual ad-spend file could only arrive through the webhook.
@@ -35,10 +49,6 @@ export default function IngestPage() {
   const { data: connections, loading: loadingConnections, error: connectionsError, reload: reloadConnections } = useApi<Connection[]>(
     "/config/connections",
   );
-  // Bumped when a load finishes, so the history below refreshes on its own
-  // instead of waiting for the operator to find the "Actualizar" button.
-  const [historyNonce, setHistoryNonce] = useState(0);
-
   const [connectionId, setConnectionId] = useState<string>("");
   const [kind, setKind] = useState<string>("shipments");
   const [jobs, setJobs] = useState<UploadJob[]>([]);
@@ -217,7 +227,6 @@ export default function IngestPage() {
               <JobRow
                 key={job.id}
                 job={job}
-                onFinished={() => setHistoryNonce((n) => n + 1)}
                 onReprocess={
                   lastFiles.length > 0 ? () => void upload(lastFiles, true) : undefined
                 }
@@ -227,51 +236,69 @@ export default function IngestPage() {
         </Card>
       )}
 
-      <BatchHistory nonce={historyNonce} />
+      <BatchHistory />
     </AppShell>
   );
 }
 
 function JobRow({
   job: initial,
-  onFinished,
   onReprocess,
 }: {
   job: UploadJob;
-  /** Called once, when the job reaches a terminal state. */
-  onFinished?: () => void;
   onReprocess?: () => void;
 }) {
   const [job, setJob] = useState(initial);
-  const finished = ["done", "failed", "duplicate"].includes(job.status);
+  const finished = TERMINAL_STATUSES.has(job.status);
+  const { subscribe } = useNotifications();
 
+  // The row moves when the API says so: `upload_job.updated` carries the new
+  // status, the batch id and the error text, which is everything the row
+  // shows. No polling loop per file.
+  useEffect(() => {
+    if (finished) return;
+    return subscribe("upload_job.updated", (event) => {
+      if (event.payload.job_id !== job.id) return;
+      const status = event.payload.status as UploadJob["status"] | undefined;
+      if (!status) return;
+      setJob((current) => ({
+        ...current,
+        status,
+        batch_id:
+          typeof event.payload.batch_id === "string" ? event.payload.batch_id : current.batch_id,
+        error: typeof event.payload.error === "string" ? event.payload.error : current.error,
+        finished_at: TERMINAL_STATUSES.has(status)
+          ? (current.finished_at ?? event.created_at)
+          : current.finished_at,
+      }));
+    });
+  }, [subscribe, job.id, finished]);
+
+  // The net: if no event has moved this row in fifteen seconds, ask directly,
+  // and keep asking at the same pace until it lands somewhere terminal.
+  const [fallbackTick, setFallbackTick] = useState(0);
   useEffect(() => {
     if (finished) return;
     let cancelled = false;
-    let timer: ReturnType<typeof setTimeout>;
-
-    const poll = async () => {
+    const timer = setTimeout(async () => {
       try {
         const next = await api.get<UploadJob>(`/ingest/jobs/${job.id}`);
         if (cancelled) return;
         setJob(next);
-        if (!["done", "failed", "duplicate"].includes(next.status)) {
-          timer = setTimeout(poll, 900);
-        } else {
-          onFinished?.();
-        }
+        // Still running: arm the clock again. A status that did not change
+        // would not restart it through the deps on its own.
+        if (!TERMINAL_STATUSES.has(next.status)) setFallbackTick((n) => n + 1);
       } catch {
         // Give up quietly; the history table below is the durable record.
       }
-    };
-
-    timer = setTimeout(poll, 600);
+    }, JOB_FALLBACK_MS);
     return () => {
       cancelled = true;
       clearTimeout(timer);
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [job.id, finished]);
+    // `job.status` is in the deps on purpose: every change restarts the
+    // fifteen-second clock, so the fallback only fires when nothing happened.
+  }, [job.id, job.status, finished, fallbackTick]);
 
   const tone =
     job.status === "done"
@@ -396,10 +423,14 @@ function BatchResult({ batchId }: { batchId: string }) {
   );
 }
 
-function BatchHistory({ nonce }: { nonce: number }) {
+/**
+ * Refreshes on its own: `useApi` watches the revision, which the provider
+ * bumps on `batch.finished`. The button stays for an API whose events are
+ * not flowing.
+ */
+function BatchHistory() {
   const { data, loading, error, reload } = useApi<{ items: BatchSummary[]; total: number }>(
     "/ingest/batches?page=1&page_size=20",
-    [nonce],
   );
 
   return (

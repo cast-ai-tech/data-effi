@@ -32,6 +32,9 @@ from api.schemas import (
     ConversationDetail,
     ConversationsResponse,
     ConversationSummary,
+    DecisionItem,
+    DecisionScope,
+    DecisionsResponse,
     FeedbackRequest,
     FeedbackResponse,
     RecommendationResponse,
@@ -238,6 +241,60 @@ async def recommendations(
     return RecommendationsResponse(
         country_code=country_code,
         recommendations=[RecommendationResponse(**item) for item in found],
+        narrative=paragraph,
+        degraded=degraded,
+        degraded_reason=degraded_reason,
+    )
+
+
+@router.get(
+    "/decisions",
+    response_model=DecisionsResponse,
+    summary="Qué hacer con cada producto, zona, oficina y la caja",
+)
+async def decisions(
+    conn: DbDep,
+    user: CurrentUserDep,
+    settings: SettingsDep,
+    country: CountryQuery,
+    scope: Annotated[DecisionScope, Query()] = "products",
+    narrative: Annotated[
+        bool, Query(description="Agrega un párrafo del modelo sobre los veredictos.")
+    ] = False,
+) -> DecisionsResponse:
+    """Verdicts are arithmetic over the mart views; the paragraph is optional.
+
+    Same contract as `/ai/recommendations`: with `narrative=false` nothing here
+    touches the network, and with `narrative=true` the paragraph degrades on
+    its own while the verdicts below it stay.
+    """
+    from ai.client import AiUnavailable
+    from ai.decisions import as_findings, build_decisions
+    from ai.recommendations import narrate
+
+    country_code = country.upper()
+    tenant_id = tenant_of(user)
+    result = await asyncio.to_thread(build_decisions, conn, tenant_id, country_code, scope)
+    items = result["items"]
+
+    paragraph: str | None = None
+    degraded = False
+    degraded_reason: str | None = None
+    if narrative and items:
+        try:
+            paragraph = await asyncio.to_thread(
+                narrate, conn, settings, tenant_id, country_code, as_findings(scope, items[:8])
+            )
+        except AiUnavailable as exc:
+            degraded = True
+            degraded_reason = exc.reason
+            logger.info("decision narrative degraded: %s", exc.reason)
+
+    return DecisionsResponse(
+        scope=scope,
+        country_code=country_code,
+        items=[DecisionItem(**item) for item in items],
+        thresholds=result["thresholds"],
         narrative=paragraph,
         degraded=degraded,
         degraded_reason=degraded_reason,

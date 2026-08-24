@@ -24,6 +24,7 @@ from api.settings import get_settings
 from pipeline.dbconn import connect as db_connect
 from worker.jobs import (
     job_calibrate_maturation,
+    job_daily_digest,
     job_refresh_fx,
     job_relink_orphans,
     job_sync_sheets,
@@ -65,6 +66,7 @@ def run_named_job(job_name: str) -> dict[str, Any]:
             enabled=settings.tier3_fetch_enabled,
         ),
         "sync_sheets": lambda conn: job_sync_sheets(conn, pii_salt=settings.pii_hash_salt),
+        "daily_digest": lambda conn: job_daily_digest(conn, settings=settings),
     }
 
     body = bodies.get(job_name)
@@ -116,6 +118,16 @@ def build_scheduler() -> BlockingScheduler:
         lambda: run_named_job("calibrate_maturation"),
         CronTrigger(hour=7, minute=30),
         id="calibrate_maturation",
+        max_instances=1,
+        coalesce=True,
+    )
+    # The 7 am digest, once per country per LOCAL day. Four UTC slots cover
+    # every timezone the platform serves; the job itself skips a country whose
+    # morning has not started and a country already written today.
+    scheduler.add_job(
+        lambda: run_named_job("daily_digest"),
+        CronTrigger(hour="10,11,12,13", minute=50),
+        id="daily_digest",
         max_instances=1,
         coalesce=True,
     )

@@ -9,12 +9,11 @@
  * figure you cannot audit is a figure you should not act on.
  */
 
-import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
 
-import { Button, Chip, Skeleton, cx } from "@/components/ui";
+import { AlertCard } from "@/components/AlertCard";
+import { Button, Chip, Skeleton } from "@/components/ui";
 import { ApiError, api } from "@/lib/api";
-import { formatMoney, FALLBACK_COUNTRY } from "@/lib/format";
 import { useApi } from "@/lib/hooks";
 import type { Alert, AskResult, Brief } from "@/lib/types";
 
@@ -166,46 +165,11 @@ function AlertsBlock({
 
       <div className="space-y-2.5">
         {alerts.map((alert) => (
-          <article
+          <AlertCard
             key={`${alert.code}-${alert.title}`}
-            className={cx(
-              "rounded-[10px] border bg-surface p-3.5",
-              alert.severity === "critical"
-                ? "border-negative/30"
-                : alert.severity === "warning"
-                  ? "border-warning/30"
-                  : "border-line",
-            )}
-          >
-            <div className="mb-1.5 flex items-center gap-2">
-              <Chip tone={alert.severity === "critical" ? "negative" : "warning"}>
-                {alert.severity === "critical" ? "CRÍTICA" : "ATENCIÓN"}
-              </Chip>
-              {alert.impact_amount !== null && (
-                <span className="text-[11px] font-semibold text-negative">
-                  {formatMoney(alert.impact_amount, {
-                    ...FALLBACK_COUNTRY,
-                    currency_symbol: "",
-                    currency_code: alert.impact_currency ?? "",
-                    decimal_places: 0,
-                  })}{" "}
-                  {alert.impact_currency}
-                </span>
-              )}
-            </div>
-
-            <h4 className="text-[12.5px] font-semibold text-ink">{alert.title}</h4>
-            <p className="mt-1 text-[12px] leading-[1.55] text-ink-2">{alert.finding}</p>
-            <p className="mt-2 text-[12px] leading-[1.5] text-ink-muted">{alert.action}</p>
-
-            <Link
-              href={alert.deep_link}
-              onClick={onNavigate}
-              className="mt-2.5 inline-block text-[11.5px] font-semibold no-underline"
-            >
-              Ver detalle →
-            </Link>
-          </article>
+            alert={alert}
+            onNavigate={onNavigate}
+          />
         ))}
       </div>
     </section>

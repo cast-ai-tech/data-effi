@@ -42,6 +42,7 @@ from api.schemas import (
     DATE_FIELDS,
     AgingRow,
     CarrierRow,
+    CarrierZoneRow,
     CashCycleRow,
     CohortRow,
     ContributionSplitRow,
@@ -583,6 +584,31 @@ def office_rescue(
         date_field=date_field,
         order_by="value_waiting DESC NULLS LAST",
     )
+
+
+@router.get(
+    "/carrier-by-zone",
+    response_model=list[CarrierZoneRow],
+    summary="Efectividad por transportadora en cada ciudad",
+)
+def carrier_by_zone(
+    conn: DbDep,
+    country: CountryQuery,
+    level1: Annotated[str | None, Query(max_length=120, description="Departamento / estado")] = None,
+) -> list[CarrierZoneRow]:
+    """Last 90 days, fixed: the view carries its own window (migration 039).
+
+    No date range on purpose - "who delivers best here" is a question about
+    now, and a carrier's coverage a year ago is not an answer to it.
+    """
+    where, params = _filters(country, {"level1_name": level1})
+    rows = fetch_all(
+        conn,
+        f"SELECT * FROM mart.v_carrier_by_zone {where} "
+        "ORDER BY level1_name, city_name, shipments DESC",
+        params,
+    )
+    return [CarrierZoneRow(**row) for row in rows]
 
 
 @router.get("/freight", response_model=KpiResponse[FreightRow], summary="Análisis de flete")
