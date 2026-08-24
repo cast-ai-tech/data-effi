@@ -43,13 +43,13 @@ function deliveryTone(pct: number | null): "positive" | "warning" | "negative" {
 }
 
 export default function CarrierByZone({ countryCode, country }: WidgetProps) {
-  const { data, error, loading, reload } = useApi<CarrierZoneRow[]>(
+  const { data, error, loading, reload } = useApi<{ rows: CarrierZoneRow[] }>(
     `/kpis/carrier-by-zone?country=${countryCode}`,
     [countryCode],
   );
   const [level1, setLevel1] = useState<string>("");
 
-  const rows = useMemo(() => data ?? EMPTY, [data]);
+  const rows = useMemo(() => data?.rows ?? EMPTY, [data]);
 
   const zones = useMemo(() => {
     const names = new Set(rows.map((row) => row.level1_name));

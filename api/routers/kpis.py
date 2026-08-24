@@ -588,14 +588,14 @@ def office_rescue(
 
 @router.get(
     "/carrier-by-zone",
-    response_model=list[CarrierZoneRow],
+    response_model=KpiResponse[CarrierZoneRow],
     summary="Efectividad por transportadora en cada ciudad",
 )
 def carrier_by_zone(
     conn: DbDep,
     country: CountryQuery,
     level1: Annotated[str | None, Query(max_length=120, description="Departamento / estado")] = None,
-) -> list[CarrierZoneRow]:
+) -> KpiResponse[CarrierZoneRow]:
     """Last 90 days, fixed: the view carries its own window (migration 039).
 
     No date range on purpose - "who delivers best here" is a question about
@@ -608,7 +608,11 @@ def carrier_by_zone(
         "ORDER BY level1_name, city_name, shipments DESC",
         params,
     )
-    return [CarrierZoneRow(**row) for row in rows]
+    # `date_basis` null says "no range applies here", the same way /kpis/layout
+    # does, so the picker can grey itself out instead of pretending to cut.
+    return KpiResponse[CarrierZoneRow](
+        rows=[CarrierZoneRow(**row) for row in rows], date_basis=None
+    )
 
 
 @router.get("/freight", response_model=KpiResponse[FreightRow], summary="Análisis de flete")

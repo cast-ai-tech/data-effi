@@ -163,18 +163,18 @@ export default function CarrierTable({ countryCode, country }: WidgetProps) {
   // The country average hides the decision. Under the table, the biggest
   // zones where a DIFFERENT carrier from the country's leader delivers best -
   // the only rows where "which carrier" has an answer other than "the same".
-  const { data: zoneRows } = useApi<CarrierZoneRow[]>(
+  const { data: zones } = useApi<{ rows: CarrierZoneRow[] }>(
     `/kpis/carrier-by-zone?country=${countryCode}`,
     [countryCode],
   );
   const zoneNotes = useMemo(() => {
     const leader = [...rows].sort((a, b) => b.shipments - a.shipments)[0]?.carrier_name;
-    const best = bestCarrierByZone(zoneRows ?? []);
+    const best = bestCarrierByZone(zones?.rows ?? []);
     return [...best.entries()]
       .filter(([, winner]) => winner.carrier_name !== leader)
       .sort(([, a], [, b]) => b.shipments - a.shipments)
       .slice(0, ZONE_NOTES);
-  }, [rows, zoneRows]);
+  }, [rows, zones]);
 
   const columns = useMemo(() => {
     const column = createColumnHelper<CarrierRow>();

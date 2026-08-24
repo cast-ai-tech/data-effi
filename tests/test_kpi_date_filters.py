@@ -377,7 +377,11 @@ RANGED_ENDPOINTS: list[tuple[str, dict[str, str], str]] = [
 ]
 
 # The one that does not, and says so.
-UNRANGED_ENDPOINTS = [("/kpis/layout", {"country": COUNTRY})]
+UNRANGED_ENDPOINTS = [
+    ("/kpis/layout", {"country": COUNTRY}),
+    # Fixed 90-day window inside the view: "who delivers best here" is about now.
+    ("/kpis/carrier-by-zone", {"country": COUNTRY}),
+]
 
 
 def get(client, token, path, params=None, **extra):

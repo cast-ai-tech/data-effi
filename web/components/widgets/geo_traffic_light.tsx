@@ -123,11 +123,11 @@ export default function GeoTrafficLight({ countryCode, country }: WidgetProps) {
   // A red department is only half the finding; the other half is who could
   // deliver there instead. Measured over 90 days, not over the range, so the
   // note does not vanish the moment the reader narrows to last week.
-  const { data: zoneRows } = useApi<CarrierZoneRow[]>(
+  const { data: zones } = useApi<{ rows: CarrierZoneRow[] }>(
     `/kpis/carrier-by-zone?country=${countryCode}`,
     [countryCode],
   );
-  const bestByLevel1 = useMemo(() => bestCarrierByZone(zoneRows ?? []), [zoneRows]);
+  const bestByLevel1 = useMemo(() => bestCarrierByZone(zones?.rows ?? []), [zones]);
 
   const level1Label = country.geo_level1_label || "Zona";
   const subtitle = `Entrega por ${level1Label.toLowerCase()}; abra uno para ver sus ciudades`;
