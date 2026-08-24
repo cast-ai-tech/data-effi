@@ -24,6 +24,7 @@ from starlette.datastructures import UploadFile as StarletteUploadFile
 
 from api.db import check_rate_limit, connection, execute, fetch_all, fetch_one, fetch_required
 from api.deps import (
+    CurrentUser,
     CurrentUserDep,
     DbDep,
     SettingsDep,
@@ -81,6 +82,153 @@ def _safe_filename(name: str) -> str:
     return cleaned[:200]
 
 
+def _file_connection_for(
+    conn, user: CurrentUser, country_code: str, platform_code: str
+) -> dict[str, Any]:
+    """The file-mode connection for (country, platform), created on first use.
+
+    One per country and platform, named after both, so the operator never has
+    to open the connections screen to upload a Dropi export for Ecuador. The
+    same rules the connections screen enforces apply here: the platform must
+    exist and work today, it must operate in that country, the country must be
+    active in the workspace, and the caller must be allowed to write there.
+
+    A file-mode connection needs no consent even for a tier-3 platform: nobody's
+    session is used to fetch anything (migration 042).
+    """
+    country = country_code.upper()
+    code = platform_code.lower()
+
+    if user.countries is not None and country not in user.countries:
+        raise ApiError(
+            "forbidden",
+            f"Tu usuario no puede cargar datos de {country}. Tiene acceso a: "
+            f"{', '.join(user.countries)}.",
+            status_code=status.HTTP_403_FORBIDDEN,
+        )
+
+    platform = fetch_one(
+        conn,
+        "SELECT code, name, scope, availability FROM core.platform WHERE code = %s AND is_active",
+        (code,),
+    )
+    if platform is None:
+        known = fetch_all(
+            conn,
+            "SELECT code FROM core.platform WHERE is_active AND availability <> 'planned' "
+            "AND 'shipments' = ANY(data_domains) ORDER BY sort_order, code",
+        )
+        raise ApiError(
+            "invalid_platform",
+            f"'{platform_code}' no es una plataforma del catálogo. Usa una de estas: "
+            f"{', '.join(r['code'] for r in known)}.",
+            status_code=422,
+        )
+    if platform["availability"] == "planned":
+        raise ApiError(
+            "platform_planned",
+            f"{platform['name']} todavía no está disponible para cargar datos.",
+        )
+
+    active = fetch_one(
+        conn,
+        "SELECT 1 FROM core.workspace_country WHERE tenant_id = %s AND country_code = %s AND is_active",
+        (user.tenant_id, country),
+    )
+    if active is None:
+        raise ApiError("country_inactive", f"Primero activa {country} en tu workspace.")
+
+    # A global platform (the manual upload) has ONE connection with no country;
+    # the file says which country each load is about (migration 012).
+    if platform["scope"] == "global":
+        existing = fetch_one(
+            conn,
+            "SELECT id, country_code, platform_code FROM core.connection "
+            "WHERE tenant_id = %s AND platform_code = %s AND country_code IS NULL "
+            "AND status = 'active' ORDER BY created_at LIMIT 1",
+            (user.tenant_id, code),
+        )
+        target_country = None
+    else:
+        available = fetch_one(
+            conn,
+            "SELECT 1 FROM core.platform_country WHERE platform_code = %s AND country_code = %s",
+            (code, country),
+        )
+        if available is None:
+            raise ApiError("platform_unavailable", f"{platform['name']} no opera en {country}.")
+        existing = fetch_one(
+            conn,
+            "SELECT id, country_code, platform_code FROM core.connection "
+            "WHERE tenant_id = %s AND country_code = %s AND platform_code = %s "
+            "AND source_mode = 'file' AND status = 'active' ORDER BY created_at LIMIT 1",
+            (user.tenant_id, country, code),
+        )
+        target_country = country
+
+    if existing is not None:
+        return existing
+
+    created = fetch_required(
+        conn,
+        """
+        INSERT INTO core.connection
+            (tenant_id, country_code, platform_code, name, status, source_mode)
+        VALUES (%s, %s, %s, %s, 'active', 'file')
+        RETURNING id, country_code, platform_code
+        """,
+        (
+            user.tenant_id, target_country, code,
+            f"{platform['name']} · {target_country or 'global'} · archivo",
+        ),
+    )
+    logger.info(
+        "file connection created tenant=%s country=%s platform=%s",
+        user.tenant_id, target_country or "-", code,
+    )
+    return created
+
+
+def _refuse_platform_mismatch(
+    filename: str, payload: bytes, kind: BatchKind, target_platform: str | None
+) -> None:
+    """A recognised report must land on its own platform.
+
+    Only shapes Data Effi knows by name carry a platform (the profiles in
+    pipeline/profiles.py). A generic CSV says nothing about where it came from
+    and is let through; that is what `manual_xlsx` is for. A file that cannot
+    be read is not refused HERE - the ingestion job reports that with its own
+    message, and a preview must not fail a file the upload would then explain.
+    """
+    if kind not in (BatchKind.SHIPMENTS, BatchKind.MOVEMENTS) or not target_platform:
+        return
+    try:
+        headers, _rows = read_tabular(payload, filename)
+    except (UnsupportedFileError, EmptyFileError):
+        return
+    profile = detect_profile(headers, kind)
+    if profile is None or profile.platform_code == target_platform:
+        return
+    raise ApiError(
+        "platform_mismatch",
+        f"'{filename}' es un reporte de {profile.label}, y lo estás cargando como "
+        f"'{target_platform}'. Elige la plataforma {profile.platform_code} para este "
+        "archivo, o sube el archivo correcto.",
+        status_code=422,
+        detail={
+            "filename": filename,
+            "detected_platform_code": profile.platform_code,
+            "target_platform_code": target_platform,
+        },
+    )
+
+
+def _platform_name(conn, platform_code: str) -> str:
+    """The catalogue's name for a platform, or the code when it is unlisted."""
+    row = fetch_one(conn, "SELECT name FROM core.platform WHERE code = %s", (platform_code,))
+    return row["name"] if row else platform_code
+
+
 async def _read_within_limits(upload_file: UploadFile, settings) -> tuple[str, bytes]:
     """Safe name and bytes, or the Spanish reason why not.
 
@@ -135,8 +283,27 @@ async def upload(
     conn: DbDep,
     user: CurrentUserDep,
     settings: SettingsDep,
-    connection_id: Annotated[UUID, Form(description="Conexión a la que pertenecen los archivos")],
     files: Annotated[list[UploadFile], File()],
+    connection_id: Annotated[
+        UUID | None,
+        Form(description="Conexión a la que pertenecen los archivos (camino clásico)."),
+    ] = None,
+    platform_code: Annotated[
+        str | None,
+        Form(
+            max_length=40,
+            pattern=r"^[a-z0-9_]+$",
+            description=(
+                "Camino por país (migración 042): la plataforma de la que es el archivo "
+                "(effi, dropi, manual_xlsx...). Va con country_code y reemplaza a "
+                "connection_id: la conexión por archivo se busca o se crea sola."
+            ),
+        ),
+    ] = None,
+    country_code: Annotated[
+        str | None,
+        Form(min_length=2, max_length=2, description="País de la carga, con platform_code."),
+    ] = None,
     kind: Annotated[str, Form(description="shipments | movements | ads | cs")] = "shipments",
     reprocess: Annotated[
         bool,
@@ -148,6 +315,22 @@ async def upload(
         ),
     ] = False,
 ) -> UploadAcceptedResponse:
+    """Two ways to say where the files go, and one check on what they are.
+
+    CLASSIC: `connection_id`. The connection decides country and platform.
+
+    BY COUNTRY (migration 042): `platform_code` + `country_code`. The operator
+    says which platform's export this is; the file-mode connection for that
+    (country, platform) is found or created. This is what lets the dashboard
+    tell Effi from Dropi - a guide belongs to the platform of the connection
+    that loaded it, and "Carga manual" is a platform called manual_xlsx.
+
+    THE CHECK: when a file is a report shape Data Effi recognises (Effi's
+    guide export, say) and that shape belongs to a different platform than the
+    one it is being loaded into, the upload is refused with `platform_mismatch`
+    naming both. Loading Effi's export as Dropi would not fail - it would count
+    every one of those guides under the wrong platform, silently, forever.
+    """
     # Who may upload is decided by `ingest_guard` on the route, not by seniority
     # here: `uploader` outranks nobody and must still be let through. Keeping a
     # second `at_least("analyst")` check was what silently refused that role.
@@ -162,13 +345,25 @@ async def upload(
             f"Máximo {MAX_FILES_PER_UPLOAD} archivos por carga. Enviaste {len(files)}.",
         )
 
-    owner = fetch_one(
-        conn,
-        "SELECT id, country_code FROM core.connection WHERE id = %s AND tenant_id = %s",
-        (connection_id, user.tenant_id),
-    )
-    if owner is None:
-        raise NotFound("Esa conexión no existe en tu workspace")
+    if connection_id is None and not (platform_code and country_code):
+        raise ApiError(
+            "target_required",
+            "Di a dónde va la carga: una conexión (connection_id) o la plataforma "
+            "y el país del archivo (platform_code + country_code).",
+        )
+
+    if connection_id is not None:
+        owner = fetch_one(
+            conn,
+            "SELECT id, country_code, platform_code FROM core.connection "
+            "WHERE id = %s AND tenant_id = %s",
+            (connection_id, user.tenant_id),
+        )
+        if owner is None:
+            raise NotFound("Esa conexión no existe en tu workspace")
+    else:
+        owner = _file_connection_for(conn, user, country_code or "", platform_code or "")
+        connection_id = owner["id"]
 
     # Subir por una conexión de otro país es escribir en un país que no puedes
     # leer, y el archivo cargado ya no se puede "desver": queda en los totales
@@ -197,6 +392,9 @@ async def upload(
     jobs: list[UploadJobResponse] = []
     for upload_file in files:
         filename, payload = await _read_within_limits(upload_file, settings)
+        # Before anything is written: a recognised report going into the wrong
+        # platform is refused here, by name, not discovered on the dashboard.
+        _refuse_platform_mismatch(filename, payload, batch_kind, owner["platform_code"])
 
         stored_path = upload_dir / f"{uuid.uuid4()}_{filename}"
         stored_path.write_bytes(payload)
@@ -578,6 +776,7 @@ def _record_webhook_run(
     summary="Analizar un archivo sin guardarlo ni cargarlo",
 )
 async def detect(
+    conn: DbDep,
     user: CurrentUserDep,
     settings: SettingsDep,
     file: Annotated[UploadFile, File(description="Un solo archivo. No se almacena.")],
@@ -625,6 +824,8 @@ async def detect(
         format=file_format,
         profile_code=profile.code,
         profile_label=profile.label,
+        detected_platform_code=profile.platform_code,
+        detected_platform_name=_platform_name(conn, profile.platform_code),
         detected_country_code=country_code,
         detected_country_raw=country_raw,
         row_count=len(rows),

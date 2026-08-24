@@ -300,13 +300,27 @@ En un reporte real de 1.649 guías, **278 estaban ahí** — ni entregadas ni de
 esperando que el cliente pasara a recogerlas. Es la plata más fácil de recuperar que
 tienes, y por eso Data Effi no la mete en el montón de "novedad".
 
-### Si usas Effi Y Dropi: cada uno en su conexión
+### Si usas Effi Y Dropi: carga desde el país y di de cuál es
 
-Si despachas por dos plataformas (por ejemplo Effi y Dropi), no las mezcles en una
-sola carga. Crea **una conexión para cada una** (Configuración → Conexiones → elige
-"Effi" o "Dropi") y sube el reporte de cada plataforma a su propia conexión.
+Cada país tiene su propia pantalla de carga. En el menú de la izquierda, abre el
+país (por ejemplo 🇪🇨 Ecuador) y entra a **Cargar datos**. Ahí:
 
-¿Por qué? Porque así el tablero puede separarlas. En la parte de arriba de cada
+1. **Elige de qué plataforma es el archivo**: Effi, Dropi, Carga manual… Solo
+   aparecen las plataformas que operan en ese país. Cada país puede tener las suyas.
+2. Elige el tipo de reporte (guías, movimientos de dinero…).
+3. Arrastra el archivo.
+
+No tienes que crear conexiones: la primera vez que cargas un archivo como "Dropi"
+para Ecuador, Data Effi crea sola la conexión "Dropi · EC · archivo" y las siguientes
+cargas van a la misma.
+
+**El check que evita mezclar.** Data Effi reconoce el reporte de Effi por sus columnas.
+Si subes un reporte de Effi y elegiste Dropi, **no se carga**: te dice "este archivo es
+de Effi, elige Effi". Y si no elegiste nada y el archivo es de Effi, lo elige por ti y
+te lo avisa. Un archivo genérico (un CSV tuyo) no dice de dónde viene, así que se carga
+en la plataforma que elijas; para eso existe "Carga manual".
+
+¿Por qué importa? Porque así el tablero puede separarlas. En la parte de arriba de cada
 pantalla aparece un botón **Todas / Effi / Dropi**: al elegir una, todas las tarjetas
 muestran solo las guías de esa plataforma. Y en la pestaña **Logística** verás:
 

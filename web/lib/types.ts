@@ -19,6 +19,23 @@ export type TrafficLight = "verde" | "amarillo" | "rojo" | "sin_datos";
 /** Fewer than ten closed guides behind a percentage: an estimate, not a measure. */
 export type SampleQuality = "suficiente" | "muestra_corta";
 
+/** `/ingest/detect`: what Data Effi understood about a file before storing it. */
+export interface DetectResult {
+  filename: string;
+  format: string;
+  profile_code: string | null;
+  profile_label: string | null;
+  /** Migration 042: which platform the recognised report belongs to. */
+  detected_platform_code: string | null;
+  detected_platform_name: string | null;
+  detected_country_code: string | null;
+  detected_country_raw: string | null;
+  row_count: number;
+  column_count: number;
+  mapped_columns: Record<string, string>;
+  unmapped_columns: string[];
+}
+
 /**
  * `mart.f_daily_status` (migration 040): one day, one platform, the guides
  * by screen group. Two return percentages on purpose - `pct_devolucion_total`

@@ -608,6 +608,11 @@ class DetectResponse(BaseModel):
     format: str = Field(description="xlsx | html | csv | xls_binary")
     profile_code: str | None
     profile_label: str | None
+    # Migration 042: the platform the recognised report belongs to, so the
+    # upload screen can pre-select it and refuse a mismatch before anything
+    # is stored. Null when the shape is not recognised.
+    detected_platform_code: str | None = None
+    detected_platform_name: str | None = None
     detected_country_code: str | None
     detected_country_raw: str | None
     row_count: int

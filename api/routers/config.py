@@ -357,14 +357,18 @@ def create_connection(
             INSERT INTO core.connection
                 (tenant_id, country_code, platform_code, store_id, name, secret_ref,
                  source_url, default_kind, consent_granted_at, consent_granted_by,
-                 sync_interval_minutes, status)
-            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, 'active')
+                 sync_interval_minutes, status, source_mode)
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, 'active', %s)
             RETURNING id
             """,
             (
                 user.tenant_id, country_code, payload.platform_code, store_id, payload.name,
                 payload.secret_ref, source_url, payload.default_kind, consent_at,
                 user.id if consent_at else None, payload.sync_interval_minutes,
+                # Migration 042: HOW the data arrives. Consent means the worker
+                # will replay a session; a sheet URL means it reads a sheet;
+                # otherwise someone uploads files.
+                "session" if consent_at else ("sheet" if source_url else "file"),
             ),
         )
     except Exception as exc:

@@ -153,11 +153,53 @@ Ambas están en `ALLOWED_VIEWS` del copiloto (`ai/nl2sql.py`) con su descripció
 - **Formatos de fecha distintos por plataforma.** Dos parsers en el archivo, una fecha en
   la base. `readers.py` normaliza antes de que nada llegue a `core.shipment`.
 
-## 8. Lo que queda pendiente
+## 8. Cómo llega un archivo a su plataforma (migración 042)
 
-- **Conector Dropi por API.** Hoy Dropi entra por archivo (`auth_type = 'file'`). Un
-  conector con credenciales vive en `connectors/dropi/` cuando exista acceso a la API;
-  mientras tanto el catálogo lo dice en `setup_hint`.
+Antes de 042 la plataforma la decidía la **conexión** elegida en la pantalla de carga,
+y una conexión Effi no podía ni crearse sin consentimiento Tier 3, aunque nadie fuera a
+usar una sesión. Resultado real: el export de Effi de Distrilatam cargado como
+`manual_xlsx`.
+
+**`core.connection.source_mode`** separa *de quién* son los datos (plataforma) de
+*cómo llegan*: `file` (alguien sube el export), `session` (el worker replica la sesión
+del operador; exige consentimiento), `sheet`, `webhook`, `api`. El trigger
+`enforce_tier3_consent` exige consentimiento solo cuando `source_mode = 'session'`, y
+`job_sync_tier3` solo toca conexiones `session`. Las filas existentes se reclasifican
+por la evidencia que ya tenían (consentimiento → session, `source_url` → sheet, token →
+webhook, resto → file).
+
+**`POST /ingest/upload` por país.** Acepta `platform_code` + `country_code` en lugar de
+`connection_id`. Busca la conexión `file` activa de (tenant, país, plataforma) y, si no
+existe, la crea (`"Dropi · EC · archivo"`). Mismas reglas que la pantalla de conexiones:
+plataforma del catálogo y no `planned`, que opere en ese país, país activo, usuario con
+acceso al país. Una plataforma global (`manual_xlsx`) usa su única conexión sin país.
+
+**El check.** Para guías y movimientos, cada archivo pasa por `detect_profile` antes de
+escribirse. Si el perfil reconocido pertenece a otra plataforma → `422 platform_mismatch`
+con `detected_platform_code` y `target_platform_code`. Aplica también por el camino
+clásico con `connection_id`: un export de Effi en "Carga manual" ya no entra. Un archivo
+sin perfil reconocido no dice de dónde viene y pasa; para eso está `manual_xlsx`.
+`/ingest/detect` devuelve `detected_platform_code` / `detected_platform_name` para que
+la pantalla preseleccione.
+
+**Pantalla `/[país]/cargar`** (menú lateral → país → "Cargar datos"): paso 1 plataforma
+(radio con las que operan en ese país, `guidePlatforms` filtra el catálogo por país;
+"con datos" si ya tiene conexión activa), paso 2 tipo, paso 3 archivo. `judgeFile`
+(`web/lib/upload-platform.ts`) decide en el navegador: sugerir, aceptar o bloquear con
+ambos nombres. El historial se filtra por país. La pantalla global `/ingest` sigue para
+pauta, CS y quien prefiera nombrar la conexión.
+
+## 9. Lo que queda pendiente
+
+- **Guías ya cargadas como `manual_xlsx`.** Las 1.649 guías de EC entraron por la
+  conexión de carga manual antes de 042. Re-subir el mismo export como Effi crearía
+  duplicados (la clave natural es `(connection_id, tracking_number)`): hay que
+  **mover** `core.shipment`, `core.movement` y `raw.load_batch` de la conexión manual
+  a la conexión `effi · file`. Es un UPDATE de datos de producción; se hace con el OK
+  del operador.
+- **Conector Dropi por API.** Hoy Dropi entra por archivo. Un conector con credenciales
+  vive en `connectors/dropi/` cuando exista acceso a la API; mientras tanto el catálogo
+  lo dice en `setup_hint`.
 - **Perfil exacto de Dropi.** `pipeline/profiles.py` reconoce el export de Effi por sus
   encabezados. El de Dropi entra por el mapeo genérico de columnas (040 añade
   `total de la orden`, `precio flete`, `departamento destino`). Con un export real a la

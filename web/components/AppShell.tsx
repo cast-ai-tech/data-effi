@@ -530,6 +530,9 @@ function CountryNav({
     { match: `${base}/orders`, href: `${base}/orders`, label: "Órdenes", icon: <ReceiptIcon />, exact: false },
     { match: `${base}/customers`, href: `${base}/customers`, label: "Clientes", icon: <PersonIcon />, exact: false },
     { match: `${base}/products`, href: `${base}/products`, label: "Productos", icon: <TagIcon />, exact: false },
+    // Each country loads its own files and names the platform they come from
+    // (migration 042). The global "Cargar datos" above stays for the rest.
+    { match: `${base}/cargar`, href: `${base}/cargar`, label: "Cargar datos", icon: <UploadIcon />, exact: false },
   ];
 
   return (

@@ -421,6 +421,9 @@ def job_sync_tier3(
             JOIN core.platform p ON p.code = c.platform_code
             JOIN core.country co ON co.code = c.country_code
             WHERE p.tier = 3 AND c.status = 'active' AND c.consent_granted_at IS NOT NULL
+              -- Migration 042: an Effi connection fed by uploaded files has no
+              -- session to replay. Only the ones the operator wired as one.
+              AND c.source_mode = 'session'
             """
         )
         connections = cur.fetchall()
