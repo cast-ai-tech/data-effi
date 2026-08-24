@@ -25,17 +25,21 @@ código.
 
 Países precargados: **CO, MX, PE, EC, CL, PA, GT**.
 
-## 2. Las tres capas de alcance
+## 2. El organigrama: organización → empresa → país
 
 ```
-Tenant  ─── el negocio completo (multi-tenant: tenant_id en absolutamente todo)
-  └── Country  ─── un país donde opera (core.workspace_country)
-        └── Store  ─── una tienda/marca dentro de ese país (core.store)
-              └── Connection  ─── una fuente de datos concreta
+Org  ─── la organización (holding): un grupo de empresas bajo un operador (core.org)
+  └── Tenant  ─── una empresa (multi-tenant: tenant_id en absolutamente todo)
+        └── Country  ─── un país donde opera esa empresa (core.workspace_country)
+              └── Store  ─── una tienda/marca dentro de ese país (core.store)
+                    └── Connection  ─── una fuente de datos concreta
 ```
 
-Un tenant puede tener 3 países, 2 tiendas en uno de ellos, y 5 conexiones en total.
-Cada guía sabe a qué país y a qué tienda pertenece.
+Una organización puede tener muchas empresas y cada empresa puede operar en muchos
+países. Un tenant puede tener 3 países, 2 tiendas en uno de ellos, y 5 conexiones en
+total. Cada guía sabe a qué país y a qué tienda pertenece. No hay nivel de
+"sucursal": existió (migración 035) y se eliminó (043) porque no cambia ningún número.
+El organigrama se ve y se edita en la pantalla **Organización** (`/org/tenants`).
 
 **Aislamiento:** cada consulta filtra por el tenant del JWT. Además, todas las vistas
 `mart.*` filtran solas por `core.current_tenant_id()`, que lee la variable de sesión

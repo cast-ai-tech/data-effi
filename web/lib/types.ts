@@ -127,23 +127,6 @@ export interface Session {
   expires_at: string;
 }
 
-/** Un lugar físico desde donde opera una sociedad, dentro de un país. */
-export interface Branch {
-  id: string;
-  country_code: string;
-  name: string;
-  cost_center: string | null;
-  address: string | null;
-  city: string | null;
-  manager_name: string | null;
-  phone: string | null;
-  is_warehouse: boolean;
-  is_active: boolean;
-  notes: string | null;
-  created_at: string;
-  store_count: number;
-}
-
 /** Una moneda contra el dólar y contra el peso colombiano. */
 export interface FxRate {
   currency_code: string;
@@ -244,6 +227,13 @@ export interface OrgSummary {
   by_country: OrgCountryRow[];
   /** Companies that could not be read; their numbers are NOT in the totals. */
   unavailable: string[];
+}
+
+/** Un país que la plataforma sabe operar, para armar el organigrama. */
+export interface SupportedCountry {
+  code: string;
+  name: string;
+  currency_code: string;
 }
 
 export interface TenantRow {

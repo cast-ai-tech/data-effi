@@ -1,7 +1,8 @@
 "use client";
 
 /**
- * The holding, added up: every company the reader may see, in one currency.
+ * The holding: its org chart (organización → empresas → países) and, below it,
+ * every company the reader may see added up in one currency.
  *
  * WHY EVERY FIGURE SAYS USD
  * A company in Guatemala bills quetzales and one in Colombia bills pesos.
@@ -20,6 +21,7 @@ import Link from "next/link";
 import { useState } from "react";
 
 import { AppShell } from "@/components/AppShell";
+import { OrgStructure } from "@/components/OrgStructure";
 import { Card, Chip, EmptyState, SkeletonRows, cx } from "@/components/ui";
 import { api } from "@/lib/api";
 import { useRangedApi } from "@/lib/date-range";
@@ -49,18 +51,22 @@ export default function OrganizacionPage() {
         </h1>
         <p className="mt-1 text-[12px] text-ink-dim">
           {companies.length > 0
-            ? `${companies.length} ${companies.length === 1 ? "sociedad" : "sociedades"} · todo convertido a ${data?.base_currency ?? "USD"}`
-            : "Consolidado de todas tus sociedades"}
+            ? `${companies.length} ${companies.length === 1 ? "empresa" : "empresas"} · todo convertido a ${data?.base_currency ?? "USD"}`
+            : "Consolidado de todas tus empresas"}
         </p>
       </header>
+
+      <div className="mb-5">
+        <OrgStructure user={user ?? null} orgName={data?.org_name ?? user?.org_name ?? null} />
+      </div>
 
       {loading && <SkeletonRows rows={4} />}
 
       {!loading && companies.length === 0 && (
         <Card>
           <EmptyState
-            title="Todavía no hay sociedades que consolidar"
-            instruction="Crea una sociedad por cada operación o socio, y aquí verás la suma de todas."
+            title="Todavía no hay empresas que consolidar"
+            instruction="Crea una empresa por cada operación o socio en la estructura de arriba, y aquí verás la suma de todas."
           />
         </Card>
       )}
@@ -96,12 +102,12 @@ export default function OrganizacionPage() {
           </div>
 
           <div className="grid gap-4 xl:grid-cols-[1.35fr_1fr]">
-            <Card title="Por sociedad" subtitle="Entra a una sociedad para ver su detalle">
+            <Card title="Por empresa" subtitle="Entra a una empresa para ver su detalle">
               <div className="overflow-x-auto">
                 <table className="w-full min-w-[560px] border-collapse text-[12px]">
                   <thead>
                     <tr className="border-b border-line-subtle text-left text-[10.5px] uppercase tracking-[0.06em] text-ink-faint">
-                      <th className="py-2 pr-3 font-semibold">Sociedad</th>
+                      <th className="py-2 pr-3 font-semibold">Empresa</th>
                       <th className="py-2 pr-3 text-right font-semibold">Guías</th>
                       <th className="py-2 pr-3 text-right font-semibold">Entrega</th>
                       <th className="py-2 pr-3 text-right font-semibold">Contribución</th>
@@ -152,7 +158,7 @@ export default function OrganizacionPage() {
               </div>
             </Card>
 
-            <Card title="Por país" subtitle="El mismo país en dos sociedades se suma aquí">
+            <Card title="Por país" subtitle="El mismo país en dos empresas se suma aquí">
               {data.by_country.length === 0 && (
                 <p className="text-[12px] text-ink-dim">
                   Todavía no hay datos cargados en ningún país.
@@ -192,7 +198,7 @@ export default function OrganizacionPage() {
             <p className="mt-4 text-[11.5px] text-ink-dim">
               Eres el usuario maestro:{" "}
               <Link href="/usuarios" className="text-accent">
-                administra quién entra a cada sociedad
+                administra quién entra a cada empresa
               </Link>
               .
             </p>

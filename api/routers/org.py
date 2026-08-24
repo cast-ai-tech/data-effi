@@ -46,8 +46,10 @@ from api.schemas import (
     OrgTenantRow,
     OrgTotals,
     OrgUpdateRequest,
+    SupportedCountry,
     TenantCreateRequest,
     TenantRow,
+    TenantUpdateRequest,
 )
 
 logger = logging.getLogger(__name__)
@@ -699,6 +701,106 @@ def create_tenant(payload: TenantCreateRequest, conn: UnscopedDbDep, user: OrgAd
         notes=tenant["notes"],
         created_at=tenant["created_at"],
     )
+
+
+@router.patch("/tenants/{tenant_id}", response_model=TenantRow, summary="Editar una empresa")
+def update_tenant(
+    tenant_id: UUID, payload: TenantUpdateRequest, conn: UnscopedDbDep, user: OrgAdmin
+) -> TenantRow:
+    """Rename a company, change its notes, or change the countries it operates in.
+
+    Countries are set as a whole list, not toggled one by one: the org chart
+    shows "this company operates in CO and EC", and saving that picture is one
+    call. A country dropped from the list is DEACTIVATED, never deleted - its
+    shipments stay, its maturation window stays, and turning it back on brings
+    everything back exactly as it was.
+    """
+    _assert_tenant_in_org(conn, user, tenant_id)
+    fields = payload.model_dump(exclude_unset=True)
+
+    if "name" in fields:
+        execute(
+            conn, "UPDATE core.tenant SET name = %s WHERE id = %s", (fields["name"], tenant_id)
+        )
+    if "notes" in fields:
+        execute(
+            conn, "UPDATE core.tenant SET notes = %s WHERE id = %s", (fields["notes"], tenant_id)
+        )
+
+    if "countries" in fields:
+        wanted = sorted({c.upper() for c in payload.countries or []})
+        if wanted:
+            known = fetch_all(
+                conn,
+                "SELECT code FROM core.country WHERE code = ANY(%s) AND is_supported",
+                (wanted,),
+            )
+            missing = set(wanted) - {r["code"] for r in known}
+            if missing:
+                raise ApiError(
+                    "unknown_country", f"País no soportado: {', '.join(sorted(missing))}"
+                )
+
+        _scope_to(conn, tenant_id)
+        for code in wanted:
+            execute(
+                conn,
+                """
+                INSERT INTO core.workspace_country (tenant_id, country_code, is_active)
+                VALUES (%s, %s, true)
+                ON CONFLICT (tenant_id, country_code) DO UPDATE SET is_active = true
+                """,
+                (tenant_id, code),
+            )
+        execute(
+            conn,
+            "UPDATE core.workspace_country SET is_active = false "
+            "WHERE tenant_id = %s AND is_active AND NOT (country_code = ANY(%s))",
+            (tenant_id, wanted),
+        )
+        logger.info("tenant %s now operates in %s", tenant_id, wanted or "no country")
+
+    return _tenant_row(conn, tenant_id)
+
+
+def _tenant_row(conn, tenant_id: UUID) -> TenantRow:
+    row = fetch_required(
+        conn,
+        """
+        SELECT t.id, t.name, t.slug, t.notes, t.created_at,
+               (SELECT count(*) FROM core.membership m
+                 WHERE m.tenant_id = t.id AND m.is_active) AS member_count
+        FROM core.tenant t WHERE t.id = %s
+        """,
+        (tenant_id,),
+    )
+    return TenantRow(
+        tenant_id=row["id"],
+        name=row["name"],
+        slug=row["slug"],
+        countries=_active_countries(conn, tenant_id),
+        member_count=int(row["member_count"] or 0),
+        notes=row["notes"],
+        created_at=row["created_at"],
+    )
+
+
+@router.get(
+    "/countries",
+    response_model=list[SupportedCountry],
+    summary="Países en los que la plataforma puede operar",
+)
+def supported_countries(conn: UnscopedDbDep, user: OrgUser) -> list[SupportedCountry]:
+    """The catalogue, for choosing where a company operates.
+
+    Not `/config/countries`: that one answers for the company the caller is
+    standing in, and an org admin editing the chart may be standing in none.
+    """
+    rows = fetch_all(
+        conn,
+        "SELECT code, name, currency_code FROM core.country WHERE is_supported ORDER BY name",
+    )
+    return [SupportedCountry(**row) for row in rows]
 
 
 # -----------------------------------------------------------------------------

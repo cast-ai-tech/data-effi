@@ -240,54 +240,6 @@ class SessionRow(BaseModel):
     is_current: bool = False
 
 
-class BranchResponse(BaseModel):
-    id: UUID
-    country_code: str
-    name: str
-    cost_center: str | None = None
-    address: str | None = None
-    city: str | None = None
-    manager_name: str | None = None
-    phone: str | None = None
-    is_warehouse: bool = False
-    is_active: bool = True
-    notes: str | None = None
-    created_at: datetime
-    # How many stores ship from here. Shown so deactivating a branch that still
-    # has stores is a decision and not a surprise.
-    store_count: int = 0
-
-
-class BranchCreateRequest(BaseModel):
-    country_code: CountryCode
-    name: str = Field(min_length=1, max_length=120)
-    cost_center: str | None = Field(default=None, max_length=60)
-    address: str | None = Field(default=None, max_length=300)
-    city: str | None = Field(default=None, max_length=120)
-    manager_name: str | None = Field(default=None, max_length=120)
-    phone: str | None = Field(default=None, max_length=40)
-    is_warehouse: bool = False
-    notes: str | None = Field(default=None, max_length=1000)
-
-
-class BranchUpdateRequest(BaseModel):
-    """Every field optional: this is a patch, and omitted means unchanged.
-
-    `country_code` is absent on purpose. Moving a branch to another country would
-    silently move the stores hanging off it, so that is a new branch.
-    """
-
-    name: str | None = Field(default=None, min_length=1, max_length=120)
-    cost_center: str | None = Field(default=None, max_length=60)
-    address: str | None = Field(default=None, max_length=300)
-    city: str | None = Field(default=None, max_length=120)
-    manager_name: str | None = Field(default=None, max_length=120)
-    phone: str | None = Field(default=None, max_length=40)
-    is_warehouse: bool | None = None
-    is_active: bool | None = None
-    notes: str | None = Field(default=None, max_length=1000)
-
-
 class InviteRequest(BaseModel):
     email: EmailStr
     role: Role = "viewer"
@@ -412,6 +364,29 @@ class TenantRow(BaseModel):
     member_count: int = 0
     notes: str | None = None
     created_at: datetime
+
+
+class TenantUpdateRequest(BaseModel):
+    """Every field optional: this is a patch, and omitted means unchanged.
+
+    `countries` is the FULL list the company operates in after the call - a
+    country left out is deactivated, one added is activated. The slug never
+    changes: it is the company's identifier in every token and URL.
+    """
+
+    name: str | None = Field(default=None, min_length=2, max_length=120)
+    notes: str | None = Field(default=None, max_length=500)
+    countries: list[CountryCode] | None = Field(
+        default=None, description="Todos los países en los que opera la empresa"
+    )
+
+
+class SupportedCountry(BaseModel):
+    """A country the platform knows how to work in, for the org chart picker."""
+
+    code: str
+    name: str
+    currency_code: str
 
 
 class MemberRow(BaseModel):

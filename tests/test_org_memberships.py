@@ -456,3 +456,87 @@ def test_uploader_can_actually_upload(client, owner_in_guatemala, loader_token, 
         headers=auth(loader_token),
     )
     assert detected.status_code == 200, detected.text
+
+
+# -----------------------------------------------------------------------------
+# The org chart: org -> company -> countries. Branches are gone (migration 043).
+# -----------------------------------------------------------------------------
+
+
+def test_branches_no_longer_exist(api_dsn):
+    """Migration 043 removed the fourth level. Neither the table nor the link survives."""
+    with psycopg.connect(api_dsn) as conn:
+        table = conn.execute("SELECT to_regclass('core.branch')").fetchone()
+        assert table is not None and table[0] is None
+        column = conn.execute(
+            "SELECT 1 FROM information_schema.columns "
+            "WHERE table_schema = 'core' AND table_name = 'store' AND column_name = 'branch_id'"
+        ).fetchone()
+        assert column is None
+
+
+def test_the_org_chart_offers_every_supported_country(client, owner):
+    response = client.get("/org/countries", headers=auth(owner["access_token"]))
+    assert response.status_code == 200, response.text
+    codes = {row["code"] for row in response.json()}
+    assert {"CO", "EC", "GT", "HN"} <= codes
+    assert all(row["name"] and row["currency_code"] for row in response.json())
+
+
+def test_editing_a_company_sets_its_countries_as_a_whole(client, owner, guatemala):
+    headers = auth(owner["access_token"])
+    response = client.patch(
+        f"/org/tenants/{guatemala}",
+        headers=headers,
+        json={"name": "Sociedad Guatemala y Honduras", "countries": ["gt", "HN"]},
+    )
+    assert response.status_code == 200, response.text
+    body = response.json()
+    assert body["name"] == "Sociedad Guatemala y Honduras"
+    assert body["slug"] == "sociedad-guatemala"  # the identifier never moves
+    assert body["countries"] == ["GT", "HN"]  # EC was left out, so it is off
+
+    # The chart agrees with the edit.
+    listed = client.get("/org/tenants", headers=headers).json()
+    assert {t["tenant_id"]: t["countries"] for t in listed}[guatemala] == ["GT", "HN"]
+
+    # Deactivated, not deleted: EC comes back exactly as it was, and HN goes quiet.
+    response = client.patch(
+        f"/org/tenants/{guatemala}", headers=headers, json={"countries": ["GT", "EC"]}
+    )
+    assert response.status_code == 200, response.text
+    assert response.json()["countries"] == ["EC", "GT"]
+    assert response.json()["name"] == "Sociedad Guatemala y Honduras"
+
+    # Left as the other tests in this module expect it.
+    response = client.patch(
+        f"/org/tenants/{guatemala}", headers=headers, json={"name": "Sociedad Guatemala"}
+    )
+    assert response.status_code == 200, response.text
+    assert response.json()["countries"] == ["EC", "GT"]
+
+
+def test_a_company_cannot_operate_in_an_unsupported_country(client, owner, guatemala):
+    response = client.patch(
+        f"/org/tenants/{guatemala}",
+        headers=auth(owner["access_token"]),
+        json={"countries": ["GT", "ZZ"]},
+    )
+    assert response.status_code == 400, response.text
+    assert response.json()["error"]["code"] == "unknown_country"
+
+
+def test_only_the_org_admin_may_edit_a_company(client, partner_token, guatemala):
+    response = client.patch(
+        f"/org/tenants/{guatemala}", headers=auth(partner_token), json={"name": "Otra"}
+    )
+    assert response.status_code == 403
+
+
+def test_a_company_outside_the_org_cannot_be_edited(client, owner):
+    response = client.patch(
+        "/org/tenants/00000000-0000-0000-0000-000000000000",
+        headers=auth(owner["access_token"]),
+        json={"name": "Fantasma"},
+    )
+    assert response.status_code == 404
