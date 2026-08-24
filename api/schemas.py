@@ -717,6 +717,71 @@ class KpiResponse(BaseModel, Generic[RowT]):
             "todavía no la tienen. Null si no se aplicó rango o no aplica."
         ),
     )
+    # Migration 040/041. Same contract as `date_basis`: what was APPLIED, never
+    # what was asked for. Null = this answer mixes every platform, either
+    # because none was requested or because this endpoint cannot separate them.
+    platform: str | None = Field(
+        default=None,
+        description=(
+            "Plataforma (effi, dropi...) sobre la que se filtró. Null = todas: "
+            "no se pidió, o este endpoint no separa por plataforma."
+        ),
+    )
+
+
+class DailyStatusRow(BaseModel):
+    """mart.f_daily_status - one day, one platform, the guides by status group.
+
+    Two return percentages on purpose (see migration 040): `pct_devolucion_total`
+    is what the operator's hand-made report prints; `pct_devolucion_cerradas`
+    is the one that will still be true once the day's guides close.
+    """
+
+    country_code: str
+    platform_code: str
+    platform_name: str
+    day: date
+    shipments: int
+    entregada: int
+    devolucion: int
+    en_camino: int
+    novedad: int
+    muerta: int
+    cerradas: int
+    pct_entrega_cerradas: float | None
+    pct_devolucion_cerradas: float | None
+    pct_devolucion_total: float | None
+    sample_quality: SampleQuality
+    declared_value: float | None
+    revenue: float | None
+    contribution: float | None
+    currency_code: str | None
+
+
+class PlatformSummaryRow(BaseModel):
+    """mart.f_platform_summary - one row per platform, with its share of the guides."""
+
+    country_code: str
+    platform_code: str
+    platform_name: str
+    shipments: int
+    entregada: int
+    devolucion: int
+    en_camino: int
+    novedad: int
+    muerta: int
+    cerradas: int
+    pct_entrega_cerradas: float | None
+    pct_devolucion_cerradas: float | None
+    pct_devolucion_total: float | None
+    share_pct: float | None
+    sample_quality: SampleQuality
+    declared_value: float | None
+    revenue: float | None
+    contribution: float | None
+    currency_code: str | None
+    first_day: date | None
+    last_day: date | None
 
 
 class DailyContributionRow(BaseModel):

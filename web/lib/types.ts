@@ -16,6 +16,62 @@ export type Capability = "read" | "ingest" | "config" | "manage";
 export type WidgetState = "available" | "degraded" | "blocked";
 export type TrafficLight = "verde" | "amarillo" | "rojo" | "sin_datos";
 
+/** Fewer than ten closed guides behind a percentage: an estimate, not a measure. */
+export type SampleQuality = "suficiente" | "muestra_corta";
+
+/**
+ * `mart.f_daily_status` (migration 040): one day, one platform, the guides
+ * by screen group. Two return percentages on purpose - `pct_devolucion_total`
+ * is what the operator's hand-made report prints; `pct_devolucion_cerradas`
+ * is the one that stays true once the day's guides close.
+ */
+export interface DailyStatusRow {
+  country_code: string;
+  platform_code: string;
+  platform_name: string;
+  day: string;
+  shipments: number;
+  entregada: number;
+  devolucion: number;
+  en_camino: number;
+  novedad: number;
+  muerta: number;
+  cerradas: number;
+  pct_entrega_cerradas: number | null;
+  pct_devolucion_cerradas: number | null;
+  pct_devolucion_total: number | null;
+  sample_quality: SampleQuality;
+  declared_value: number | null;
+  revenue: number | null;
+  contribution: number | null;
+  currency_code: string | null;
+}
+
+/** `mart.f_platform_summary`: one row per platform, with its share of the guides. */
+export interface PlatformSummaryRow {
+  country_code: string;
+  platform_code: string;
+  platform_name: string;
+  shipments: number;
+  entregada: number;
+  devolucion: number;
+  en_camino: number;
+  novedad: number;
+  muerta: number;
+  cerradas: number;
+  pct_entrega_cerradas: number | null;
+  pct_devolucion_cerradas: number | null;
+  pct_devolucion_total: number | null;
+  share_pct: number | null;
+  sample_quality: SampleQuality;
+  declared_value: number | null;
+  revenue: number | null;
+  contribution: number | null;
+  currency_code: string | null;
+  first_day: string | null;
+  last_day: string | null;
+}
+
 /** One company the person may open, and the grant that applies inside it. */
 export interface Workspace {
   tenant_id: string;

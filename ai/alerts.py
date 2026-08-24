@@ -18,7 +18,7 @@ from __future__ import annotations
 
 import hashlib
 import logging
-from datetime import date
+from datetime import date, timedelta
 from typing import Any
 from uuid import UUID
 
@@ -167,6 +167,70 @@ def persist_digest(
         },
     )
     return notification_id
+
+
+# How many days the daily report covers, ending yesterday. Fourteen because that
+# is what the operator's hand-made report showed (1-14 de agosto) and because a
+# two-week table fits on one printed page.
+REPORT_WINDOW_DAYS = 14
+
+
+def persist_report_ready(
+    conn: psycopg.Connection,
+    tenant_id: UUID,
+    country_code: str,
+    *,
+    local_date: date,
+) -> int | None:
+    """One "informe diario listo" per country per local day. Returns id or None.
+
+    The report itself is not stored: it is a screen (`/{cc}/informe`) that reads
+    the same KPI functions the dashboard does, so it can never disagree with
+    it. What is stored is the invitation to open it, with the range already in
+    the link - the last fourteen days up to yesterday, because today is a
+    partial day and folding it in drags every percentage down.
+    """
+    country = country_code.upper()
+    digest = fingerprint("report", country, local_date.isoformat())
+
+    already = fetch_one(
+        conn,
+        "SELECT id FROM raw.notification WHERE tenant_id = %s AND fingerprint = %s LIMIT 1",
+        (tenant_id, digest),
+    )
+    if already:
+        return None
+
+    date_to = local_date - timedelta(days=1)
+    date_from = date_to - timedelta(days=REPORT_WINDOW_DAYS - 1)
+
+    return _insert(
+        conn,
+        tenant_id=tenant_id,
+        country_code=country,
+        # `system`, not `digest`: the bell treats today's digest as THE summary
+        # of the day and there must be exactly one of those. This is a link to
+        # a document, which is what the system kind is for.
+        kind="system",
+        code="daily_report",
+        severity="info",
+        title=f"Informe diario consolidado · {country}",
+        finding=(
+            f"Guías por día y por plataforma del {date_from.strftime('%d/%m')} al "
+            f"{date_to.strftime('%d/%m')}: entregadas, devueltas, en camino y con novedad, "
+            "con el consolidado de Effi, Dropi y carga manual."
+        ),
+        action="Ábrelo, revísalo y guárdalo en PDF desde el mismo informe para compartirlo.",
+        impact_amount=None,
+        impact_currency=None,
+        deep_link=f"/{country.lower()}/informe?from={date_from.isoformat()}&to={date_to.isoformat()}",
+        digest=digest,
+        payload={
+            "date": local_date.isoformat(),
+            "date_from": date_from.isoformat(),
+            "date_to": date_to.isoformat(),
+        },
+    )
 
 
 def _insert(

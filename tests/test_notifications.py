@@ -399,6 +399,24 @@ def test_daily_digest_job_is_idempotent_and_respects_the_local_hour(notification
         TENANT,
     ) == 1
 
+    # The printable daily report (migration 040) rides along: one link per
+    # country per local day, never a second digest, and idempotent too.
+    assert _count(
+        conn,
+        "SELECT count(*) FROM raw.notification "
+        "WHERE tenant_id = %s AND code = 'daily_report' AND kind = 'system'",
+        TENANT,
+    ) == 1
+    with conn.cursor() as cur:
+        cur.execute(
+            "SELECT deep_link FROM raw.notification "
+            "WHERE tenant_id = %s AND code = 'daily_report'",
+            (TENANT,),
+        )
+        (deep_link,) = cur.fetchone()
+    # Fourteen days ending YESTERDAY (the 23rd is a partial day in Bogotá).
+    assert deep_link.startswith("/co/informe?from=2026-08-09&to=2026-08-22"), deep_link
+
     # 08:00 UTC is 03:00 in Bogotá: nobody's digest yet.
     service = psycopg.connect(notifications_dsn, autocommit=False)
     try:

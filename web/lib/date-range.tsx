@@ -211,6 +211,7 @@ export function withRange(
   path: string,
   range: DateRange,
   field: DateField = DEFAULT_FIELD,
+  platform: string | null = null,
 ): string {
   const params = new URLSearchParams();
   if (range.from) params.set("date_from", range.from);
@@ -218,6 +219,8 @@ export function withRange(
   // The default is the server's default too, so saying it adds nothing to the
   // URL a reader has to scan.
   if (field !== DEFAULT_FIELD) params.set("date_field", field);
+  // Migrations 040/041. Absent means "todas", which is also the server's default.
+  if (platform) params.set("platform", platform);
 
   const query = params.toString();
   return query ? `${path}${path.includes("?") ? "&" : "?"}${query}` : path;
@@ -352,6 +355,12 @@ export interface RangePayload<T> {
    * not say.
    */
   excludedNoDate: number | null;
+  /**
+   * Which platform the server actually narrowed to (migrations 040/041).
+   * `null` = it mixed every platform, whether because none was asked for or
+   * because that endpoint cannot separate them. `undefined` = it did not say.
+   */
+  platformApplied: string | null | undefined;
 }
 
 /** A count only counts if it is a real, non-negative number. */
@@ -361,28 +370,38 @@ function readExcluded(value: unknown): number | null {
     : null;
 }
 
+function readPlatformApplied(payload: Record<string, unknown>): string | null | undefined {
+  if (!("platform" in payload)) return undefined;
+  const value = payload.platform;
+  if (value === null) return null;
+  return typeof value === "string" && value !== "" ? value : undefined;
+}
+
 export function unwrapRangePayload<T>(payload: unknown): RangePayload<T> {
   if (payload === null || payload === undefined) {
-    return { data: null, dateBasis: undefined, excludedNoDate: null };
+    return { data: null, dateBasis: undefined, excludedNoDate: null, platformApplied: undefined };
   }
 
   if (Array.isArray(payload)) {
     const first: unknown = payload[0];
     const dateBasis =
       isRecord(first) && "date_basis" in first ? readBasis(first.date_basis) : undefined;
-    return { data: payload as T, dateBasis, excludedNoDate: null };
+    return { data: payload as T, dateBasis, excludedNoDate: null, platformApplied: undefined };
   }
 
   if (isRecord(payload) && "date_basis" in payload) {
     const dateBasis = readBasis(payload.date_basis);
     const excludedNoDate = readExcluded(payload.excluded_no_date);
+    const platformApplied = readPlatformApplied(payload);
     for (const key of ["rows", "data", "items"]) {
-      if (key in payload) return { data: payload[key] as T, dateBasis, excludedNoDate };
+      if (key in payload) {
+        return { data: payload[key] as T, dateBasis, excludedNoDate, platformApplied };
+      }
     }
-    return { data: payload as T, dateBasis, excludedNoDate };
+    return { data: payload as T, dateBasis, excludedNoDate, platformApplied };
   }
 
-  return { data: payload as T, dateBasis: undefined, excludedNoDate: null };
+  return { data: payload as T, dateBasis: undefined, excludedNoDate: null, platformApplied: undefined };
 }
 
 // ---------------------------------------------------------------------------
@@ -408,6 +427,14 @@ export interface DateRangeContextValue {
    */
   excludedNoDate: number | null;
   reportExcluded: (count: number | null) => void;
+  /**
+   * Which platform's guides the dashboard is narrowed to (`effi`, `dropi`,
+   * `manual_xlsx`...). `null` = todas. Lives in the URL like the range, for
+   * the same reason: a link that says "Dropi, última semana" has to open as
+   * Dropi, última semana.
+   */
+  platform: string | null;
+  setPlatform: (platform: string | null) => void;
 }
 
 const DateRangeContext = createContext<DateRangeContextValue | null>(null);
@@ -420,6 +447,11 @@ function readParam(value: string | null): string | null {
 /** A `field` we do not recognise is not forwarded: the API answers 422 for it. */
 function readField(value: string | null): DateField {
   return DATE_FIELDS.includes(value as DateField) ? (value as DateField) : DEFAULT_FIELD;
+}
+
+/** Catalogue codes are lower-case slugs; anything else is not forwarded. */
+export function readPlatform(value: string | null): string | null {
+  return value && /^[a-z0-9_]{1,40}$/.test(value) ? value : null;
 }
 
 export function DateRangeProvider({ children }: { children: ReactNode }) {
@@ -437,13 +469,14 @@ export function DateRangeProvider({ children }: { children: ReactNode }) {
   const from = readParam(search.get("from"));
   const to = readParam(search.get("to"));
   const field = readField(search.get("field"));
+  const platform = readPlatform(search.get("platform"));
 
   const range = useMemo<DateRange>(() => ({ from, to }), [from, to]);
   const mode = useMemo(() => inferMode(range, today), [range, today]);
 
   // Everything the excluded count depends on. When any of it changes the old
   // count is about a question nobody is asking any more.
-  const scope = `${pathname}|${field}|${from ?? ""}|${to ?? ""}`;
+  const scope = `${pathname}|${field}|${from ?? ""}|${to ?? ""}|${platform ?? ""}`;
 
   const [excluded, setExcluded] = useState<{ scope: string; count: number } | null>(null);
 
@@ -502,6 +535,16 @@ export function DateRangeProvider({ children }: { children: ReactNode }) {
     [writeParams],
   );
 
+  const setPlatform = useCallback(
+    (next: string | null) =>
+      writeParams((params) => {
+        const clean = readPlatform(next);
+        if (clean) params.set("platform", clean);
+        else params.delete("platform");
+      }),
+    [writeParams],
+  );
+
   const value = useMemo<DateRangeContextValue>(
     () => ({
       range,
@@ -513,6 +556,8 @@ export function DateRangeProvider({ children }: { children: ReactNode }) {
       setField,
       excludedNoDate,
       reportExcluded,
+      platform,
+      setPlatform,
     }),
     [
       range,
@@ -524,6 +569,8 @@ export function DateRangeProvider({ children }: { children: ReactNode }) {
       setField,
       excludedNoDate,
       reportExcluded,
+      platform,
+      setPlatform,
     ],
   );
 
@@ -540,6 +587,8 @@ const INERT_RANGE: DateRangeContextValue = {
   setField: () => {},
   excludedNoDate: null,
   reportExcluded: () => {},
+  platform: null,
+  setPlatform: () => {},
 };
 
 /**
@@ -558,24 +607,32 @@ export function useDateRange(): DateRangeContextValue {
 // ---------------------------------------------------------------------------
 
 type BasisReporter = (basis: DateBasis | undefined) => void;
+type PlatformReporter = (platform: string | null | undefined) => void;
 
 const ReportBasisContext = createContext<BasisReporter | null>(null);
+const ReportPlatformContext = createContext<PlatformReporter | null>(null);
 
 /**
  * Lets the widget frame label a card without every widget having to thread a
  * badge through its own header.
  *
- * `onBasis` must be stable - it is an effect dependency.
+ * `onBasis` and `onPlatform` must be stable - they are effect dependencies.
+ * `onPlatform` is optional so a frame that only cares about dates keeps
+ * working; the platform report is then simply dropped.
  */
 export function DateBasisScope({
   onBasis,
+  onPlatform = null,
   children,
 }: {
   onBasis: BasisReporter;
+  onPlatform?: PlatformReporter | null;
   children: ReactNode;
 }) {
   return (
-    <ReportBasisContext.Provider value={onBasis}>{children}</ReportBasisContext.Provider>
+    <ReportBasisContext.Provider value={onBasis}>
+      <ReportPlatformContext.Provider value={onPlatform}>{children}</ReportPlatformContext.Provider>
+    </ReportBasisContext.Provider>
   );
 }
 
@@ -586,23 +643,26 @@ export function DateBasisScope({
 export interface RangedState<T> extends AsyncState<T> {
   dateBasis: DateBasis | undefined;
   excludedNoDate: number | null;
+  /** See `RangePayload.platformApplied`. */
+  platformApplied: string | null | undefined;
 }
 
 /**
- * `useApi`, with the active range and date field spliced into the URL.
+ * `useApi`, with the active range, date field and platform spliced into the URL.
  *
  * Pass the path exactly as before; the parameters are appended here and the
- * response is unwrapped here. Refetching is automatic: both are part of the
- * path, so moving either changes the key `useApi` already watches.
+ * response is unwrapped here. Refetching is automatic: all three are part of
+ * the path, so moving any of them changes the key `useApi` already watches.
  */
 export function useRangedApi<T>(path: string | null, deps: unknown[] = []): RangedState<T> {
-  const { range, field, reportExcluded } = useDateRange();
+  const { range, field, platform, reportExcluded } = useDateRange();
   const report = useContext(ReportBasisContext);
+  const reportPlatform = useContext(ReportPlatformContext);
 
-  const fullPath = path === null ? null : withRange(path, range, field);
+  const fullPath = path === null ? null : withRange(path, range, field, platform);
   const { data: payload, error, loading, reload } = useApi<unknown>(fullPath, deps);
 
-  const { data, dateBasis, excludedNoDate } = useMemo(
+  const { data, dateBasis, excludedNoDate, platformApplied } = useMemo(
     () => unwrapRangePayload<T>(payload),
     [payload],
   );
@@ -617,5 +677,9 @@ export function useRangedApi<T>(path: string | null, deps: unknown[] = []): Rang
     report?.(loading ? undefined : dateBasis);
   }, [report, dateBasis, loading]);
 
-  return { data, error, loading, reload, dateBasis, excludedNoDate };
+  useEffect(() => {
+    reportPlatform?.(loading ? undefined : platformApplied);
+  }, [reportPlatform, platformApplied, loading]);
+
+  return { data, error, loading, reload, dateBasis, excludedNoDate, platformApplied };
 }

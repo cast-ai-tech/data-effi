@@ -123,7 +123,7 @@ export function ErrorState({ message, onRetry }: { message: string; onRetry?: ()
 // Chips, badges, pills
 // ---------------------------------------------------------------------------
 
-type Tone = "neutral" | "accent" | "positive" | "warning" | "negative";
+export type Tone = "neutral" | "accent" | "positive" | "warning" | "negative";
 
 const TONE_CLASSES: Record<Tone, string> = {
   neutral: "bg-white/[0.06] text-ink-muted",

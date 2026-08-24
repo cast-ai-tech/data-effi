@@ -300,6 +300,43 @@ En un reporte real de 1.649 guías, **278 estaban ahí** — ni entregadas ni de
 esperando que el cliente pasara a recogerlas. Es la plata más fácil de recuperar que
 tienes, y por eso Data Effi no la mete en el montón de "novedad".
 
+### Si usas Effi Y Dropi: cada uno en su conexión
+
+Si despachas por dos plataformas (por ejemplo Effi y Dropi), no las mezcles en una
+sola carga. Crea **una conexión para cada una** (Configuración → Conexiones → elige
+"Effi" o "Dropi") y sube el reporte de cada plataforma a su propia conexión.
+
+¿Por qué? Porque así el tablero puede separarlas. En la parte de arriba de cada
+pantalla aparece un botón **Todas / Effi / Dropi**: al elegir una, todas las tarjetas
+muestran solo las guías de esa plataforma. Y en la pestaña **Logística** verás:
+
+- **Plataformas**: cuántas guías lleva cada una, qué porcentaje del total es, y cómo
+  le va en entregas y devoluciones.
+- **Resumen diario por estados**: día por día, cuántas guías se entregaron, cuántas
+  se devolvieron, cuántas siguen en camino y cuántas tienen novedad. Un bloque por
+  plataforma, con su fila de TOTAL GENERAL.
+
+Si una tarjeta no puede separar por plataforma (por ejemplo la de pauta, porque los
+anuncios no son de Effi ni de Dropi), te lo dice con una franja encima: "Todas las
+plataformas". Nunca te va a mostrar un número mezclado como si fuera de una sola.
+
+**El informe para compartir.** Arriba a la derecha del tablero de cada país está el
+botón **Informe diario**. Abre una página lista para imprimir con el bloque de cada
+plataforma, la tabla diaria y el consolidado. Clic en **Guardar en PDF** y te lo
+descarga (o te abre la ventana de imprimir de tu navegador, donde eliges "Guardar
+como PDF"). Cada mañana también te llega un aviso en la campanita 🔔 con el informe
+de los últimos 14 días ya listo para abrir.
+
+Dos detalles que el informe hecho a mano no tiene y este sí:
+
+1. **Dos porcentajes de devolución.** "% devol." divide las devoluciones por todas las
+   guías del día, como en el informe manual. "% devol. cerradas" divide solo por las
+   guías que ya terminaron (entregadas o devueltas): es el número que se cumple cuando
+   el día termina de madurar. Un día reciente con 4 guías y 2 en camino puede decir
+   "50 %" en el primero y no significar nada; el segundo lleva una **~** para avisarte
+   que hay menos de 10 guías cerradas y es un estimado.
+2. **Los días sin guías aparecen en cero**, no desaparecen de la tabla.
+
 ### Qué columnas necesita tu archivo (si NO viene de Effi)
 
 Para un Excel armado a mano o de otra plataforma, no tienes que renombrar nada. Data Effi ya conoce las formas más
@@ -518,3 +555,4 @@ Con `AI_ENABLED=false` Data Effi arranca sin llave y sin copiloto; nada más se 
 | [docs/estructura-analisis-ecommerce.md](docs/estructura-analisis-ecommerce.md) | Qué mide Data Effi y por qué. La definición exacta detrás de cada número: las dos tasas de entrega, la escalera de estados, la maduración de cohortes, la cascada de contribución. |
 | [docs/arquitectura-multipais-conectores.md](docs/arquitectura-multipais-conectores.md) | Cómo el país es dato y no código, las capas tenant → país → tienda → conexión, los tiers de conector, la degradación honesta y la idempotencia. |
 | [docs/tier3-politica.md](docs/tier3-politica.md) | Las cinco reglas de las conexiones por sesión, qué asumes al activarlas y cómo revocarlas de verdad. |
+| [docs/plataformas-effi-dropi.md](docs/plataformas-effi-dropi.md) | Effi y Dropi lado a lado: la plataforma como filtro y como dimensión (migraciones 040/041), los cinco grupos de estado, los dos porcentajes de devolución y el informe diario imprimible. |

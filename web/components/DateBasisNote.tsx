@@ -94,6 +94,55 @@ export function useDateBasisNote(basis: DateBasis | undefined): BasisNote | null
 }
 
 /**
+ * What this card must disclose about the PLATFORM filter (migrations 040/041).
+ *
+ * Only when one is selected: with "Todas" there is nothing a card could have
+ * ignored. Then three cases, mirroring the date basis:
+ *   - applied and equal -> a caption naming the platform
+ *   - `null`            -> a band: this number mixes every platform
+ *   - unknown           -> a band saying we do not know
+ */
+export function usePlatformNote(applied: string | null | undefined): BasisNote | null {
+  const { platform } = useDateRange();
+
+  return useMemo(() => {
+    if (!platform) return null;
+
+    if (applied === undefined) {
+      return {
+        kind: "band",
+        short: "Sin confirmar",
+        detail:
+          "El servidor no informó si esta cifra es solo de la plataforma elegida. No la compare con las tarjetas que sí lo confirman.",
+      };
+    }
+
+    if (applied === null) {
+      return {
+        kind: "band",
+        short: "Todas las plataformas",
+        detail:
+          "Este widget no separa por plataforma: su cifra mezcla Effi, Dropi y carga manual aunque arriba hayas elegido una.",
+      };
+    }
+
+    if (applied !== platform) {
+      return {
+        kind: "band",
+        short: "Otra plataforma",
+        detail: `Este widget respondió con ${applied}, no con ${platform} que elegiste arriba.`,
+      };
+    }
+
+    return {
+      kind: "caption",
+      short: "Plataforma",
+      detail: applied,
+    };
+  }, [applied, platform]);
+}
+
+/**
  * Deliberately NOT the warning colour.
  *
  * Amber in this product means "degradado, mira esto", and it already sits above
@@ -157,20 +206,32 @@ export function BasisCaption({ note }: { note: BasisNote }) {
  */
 export function BasisDisclosure({
   note,
+  platformNote = null,
   rounded = true,
   children,
 }: {
   note: BasisNote | null;
+  /** The platform disclosure, when one platform is selected. Same shape. */
+  platformNote?: BasisNote | null;
   rounded?: boolean;
   children: ReactNode;
 }) {
-  const band = note?.kind === "band" ? note : null;
+  const bands = [note, platformNote].filter(
+    (item): item is BasisNote => item?.kind === "band",
+  );
+  const captions = [note, platformNote].filter(
+    (item): item is BasisNote => item?.kind === "caption",
+  );
 
   return (
     <>
-      {band && <BasisBand note={band} rounded={rounded} />}
-      <div className={cx(band && "[&>section]:rounded-t-none")}>{children}</div>
-      {note?.kind === "caption" && <BasisCaption note={note} />}
+      {bands.map((band, index) => (
+        <BasisBand key={band.short} note={band} rounded={rounded && index === 0} />
+      ))}
+      <div className={cx(bands.length > 0 && "[&>section]:rounded-t-none")}>{children}</div>
+      {captions.map((caption) => (
+        <BasisCaption key={caption.short} note={caption} />
+      ))}
     </>
   );
 }
@@ -178,26 +239,38 @@ export function BasisDisclosure({
 /**
  * Collects whatever the widget inside reports.
  *
- * `onBasis` is memoised because `useRangedApi` fires it from an effect; an
- * unstable callback would re-run that effect on every render.
+ * `onBasis` and `onPlatform` are memoised because `useRangedApi` fires them
+ * from effects; an unstable callback would re-run those effects on every
+ * render.
  */
 export function useBasisReport(): {
   note: BasisNote | null;
+  platformNote: BasisNote | null;
   onBasis: (basis: DateBasis | undefined) => void;
+  onPlatform: (platform: string | null | undefined) => void;
 } {
   const [basis, setBasis] = useState<DateBasis | undefined>(undefined);
+  const [platform, setPlatform] = useState<string | null | undefined>(undefined);
   const onBasis = useCallback((next: DateBasis | undefined) => setBasis(next), []);
-  return { note: useDateBasisNote(basis), onBasis };
+  const onPlatform = useCallback((next: string | null | undefined) => setPlatform(next), []);
+  return {
+    note: useDateBasisNote(basis),
+    platformNote: usePlatformNote(platform),
+    onBasis,
+    onPlatform,
+  };
 }
 
 /** Standalone frame, for widgets rendered outside `WidgetRenderer`. */
 export function DateBasisFrame({ children }: { children: ReactNode }) {
-  const { note, onBasis } = useBasisReport();
+  const { note, platformNote, onBasis, onPlatform } = useBasisReport();
 
   return (
     <div className="relative">
-      <BasisDisclosure note={note}>
-        <DateBasisScope onBasis={onBasis}>{children}</DateBasisScope>
+      <BasisDisclosure note={note} platformNote={platformNote}>
+        <DateBasisScope onBasis={onBasis} onPlatform={onPlatform}>
+          {children}
+        </DateBasisScope>
       </BasisDisclosure>
     </div>
   );

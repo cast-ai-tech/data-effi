@@ -167,3 +167,26 @@ vista marca `ad_spend_missing = true` y el widget lo dice en voz alta.
 
 Sirve para contar clientes recurrentes y detectar rechazadores seriales. No sirve —a
 propósito— para contactar a nadie.
+
+## 12. La plataforma como dimensión (Effi, Dropi, carga manual)
+
+Una guía sabe por qué conexión entró y una conexión sabe de qué plataforma es. Desde
+la migración 040 esa relación es una dimensión: `stg.v_shipment_economics` expone
+`platform_code`, las funciones de rango aceptan `p_platform` (041) y dos respuestas
+nuevas la usan como eje:
+
+- `mart.v_daily_status_by_platform` / `f_daily_status`: día × plataforma × **grupo de
+  estado**. Cinco grupos de pantalla (`entregada`, `devolucion`, `en_camino`,
+  `novedad`, `muerta`) que agrupan los doce estados canónicos sin reemplazarlos.
+- `mart.v_platform_summary` / `f_platform_summary`: una fila por plataforma con su
+  participación en las guías del país (`share_pct`).
+
+**Dos tasas de devolución, a propósito.** `pct_devolucion_total` divide por todas las
+guías del día (lo que imprime el informe manual y subestima los días recientes);
+`pct_devolucion_cerradas` divide por las ya resueltas y es la que se cumple al madurar.
+Menos de 10 cerradas → `sample_quality = 'muestra_corta'`.
+
+**Lo que el filtro no puede hacer, dicho.** Bajo `platform`, `f_global_summary` no
+resta pauta (`ad_spend = 0`): los anuncios no son de Effi ni de Dropi. Y las cuatro
+vistas sin plataforma en su grano responden `platform: null` para que la tarjeta lo
+muestre. Detalle completo en [plataformas-effi-dropi.md](plataformas-effi-dropi.md).

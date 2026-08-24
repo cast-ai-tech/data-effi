@@ -25,6 +25,15 @@ accepting the parameters and quietly ignoring them, which is the bug this whole
 change exists to remove. `excluded_no_date` is the other half of that honesty:
 `delivered_at` is null on 989 of Ecuador's 1,649 guides, so filtering by
 `entrega` drops them, and the number says how many.
+
+WHICH PLATFORM, AND SAYING SO
+`platform` (migrations 040/041) narrows every range-aware function to the
+guides one platform loaded - Effi, Dropi, the manual upload - and `platform`
+on the response reports the one that was APPLIED. The four view-backed
+endpoints and the two that carry their own window cannot separate platforms;
+they accept the parameter for uniformity and answer `platform: null`, so the
+card can say "mezcla todas" instead of letting the reader assume. `/platforms`
+ignores it on purpose: it IS the comparison between platforms.
 """
 
 from __future__ import annotations
@@ -37,7 +46,7 @@ from pydantic import BaseModel
 
 from api.db import fetch_all, fetch_one
 from api.deps import CurrentUserDep, DbDep
-from api.errors import InvalidDateField, InvalidDateRange
+from api.errors import InvalidDateField, InvalidDateRange, InvalidPlatform
 from api.schemas import (
     DATE_FIELDS,
     AgingRow,
@@ -49,6 +58,7 @@ from api.schemas import (
     CpaRow,
     CsRow,
     DailyContributionRow,
+    DailyStatusRow,
     DateField,
     DropshippingMarginRow,
     FreightRow,
@@ -59,6 +69,7 @@ from api.schemas import (
     LayoutResponse,
     LayoutWidget,
     OfficeRescueRow,
+    PlatformSummaryRow,
     ProblemRateRow,
     ProductRow,
 )
@@ -88,6 +99,34 @@ DateFieldQuery = Annotated[
 ]
 
 
+# Lower-case catalogue codes: `effi`, `dropi`, `manual_xlsx`. The shape is
+# checked here; whether the code exists is checked against core.platform, so a
+# typo is refused instead of quietly widening to "todas".
+PlatformQuery = Annotated[
+    str | None,
+    Query(
+        max_length=40,
+        pattern=r"^[a-z0-9_]+$",
+        description="Plataforma que cargó las guías: effi, dropi, manual_xlsx... Vacío = todas.",
+    ),
+]
+
+
+def _check_platform(conn: DbDep, platform: str | None) -> str | None:
+    """Reject a platform the catalogue does not know, by name."""
+    if platform is None:
+        return None
+    code = platform.lower()
+    row = fetch_one(conn, "SELECT 1 FROM core.platform WHERE code = %(code)s", {"code": code})
+    if row is None:
+        known = fetch_all(conn, "SELECT code FROM core.platform ORDER BY sort_order, code")
+        raise InvalidPlatform(
+            f"'{platform}' no es una plataforma del catálogo. "
+            f"Usa una de estas: {', '.join(r['code'] for r in known)}."
+        )
+    return code
+
+
 def _check_field(date_field: str) -> DateField:
     """Reject a date this platform does not have, by name."""
     if date_field not in DATE_FIELDS:
@@ -101,6 +140,7 @@ def _check_field(date_field: str) -> DateField:
 def _excluded_no_date(
     conn: DbDep, country: str | None, date_field: DateField,
     date_from: date | None, date_to: date | None,
+    platform: str | None = None,
 ) -> int | None:
     """How many guides the chosen date leaves out of every possible range.
 
@@ -113,8 +153,12 @@ def _excluded_no_date(
 
     row = fetch_one(
         conn,
-        "SELECT mart.f_excluded_no_date(%(country)s, %(date_field)s) AS excluded",
-        {"country": country.upper() if country else None, "date_field": date_field},
+        "SELECT mart.f_excluded_no_date(%(country)s, %(date_field)s, %(platform)s) AS excluded",
+        {
+            "country": country.upper() if country else None,
+            "date_field": date_field,
+            "platform": platform,
+        },
     )
     return int(row["excluded"]) if row else None
 
@@ -186,25 +230,28 @@ def _ranged(
     date_field: str,
     order_by: str,
     extra: dict[str, Any] | None = None,
+    platform: str | None = None,
 ) -> KpiResponse[RowT]:
-    """Read one of the range-aware functions from migrations 018 and 020.
+    """Read one of the range-aware functions from migrations 018, 020 and 041.
 
-    The range and the chosen date go to the function, which recomputes from the
-    base rows; the country and any other dimension filter stays a plain WHERE
-    over its result.
+    The range, the chosen date and the platform go to the function, which
+    recomputes from the base rows; the country and any other dimension filter
+    stays a plain WHERE over its result.
     """
     basis = _check_field(date_field)
     _check_range(date_from, date_to)
+    applied_platform = _check_platform(conn, platform)
 
     where, params = _filters(country, extra)
     params["date_from"] = date_from
     params["date_to"] = date_to
     params["date_field"] = basis
+    params["platform"] = applied_platform
 
     rows = fetch_all(
         conn,
         f"SELECT * FROM mart.{function}"
-        "(%(date_from)s, %(date_to)s, %(date_field)s) "
+        "(%(date_from)s, %(date_to)s, %(date_field)s, %(platform)s) "
         f"{where} ORDER BY {order_by}",
         params,
     )
@@ -213,7 +260,10 @@ def _ranged(
         date_basis=basis,
         date_from=date_from,
         date_to=date_to,
-        excluded_no_date=_excluded_no_date(conn, country, basis, date_from, date_to),
+        excluded_no_date=_excluded_no_date(
+            conn, country, basis, date_from, date_to, applied_platform
+        ),
+        platform=applied_platform,
     )
 
 
@@ -228,6 +278,7 @@ def daily_contribution(
     date_from: OptionalDate = None,
     date_to: OptionalDate = None,
     date_field: DateFieldQuery = BY_CREATION,
+    platform: PlatformQuery = None,
     store_id: Annotated[str | None, Query()] = None,
 ) -> KpiResponse[DailyContributionRow]:
     """`date_field` is accepted and NOT honoured here, and the response says so.
@@ -241,6 +292,9 @@ def daily_contribution(
     """
     _check_field(date_field)
     _check_range(date_from, date_to)
+    # Validated and NOT applied: the view has no platform in its grain, and
+    # the response says `platform: null` rather than pretending.
+    _check_platform(conn, platform)
     where, params = _range_filter(
         "day", country, date_from, date_to, extra={"store_id": store_id}
     )
@@ -271,6 +325,7 @@ def contribution_split(
     date_from: OptionalDate = None,
     date_to: OptionalDate = None,
     date_field: DateFieldQuery = BY_CREATION,
+    platform: PlatformQuery = None,
 ) -> KpiResponse[ContributionSplitRow]:
     """The headline number, taken apart.
 
@@ -288,6 +343,7 @@ def contribution_split(
         date_from=date_from,
         date_to=date_to,
         date_field=date_field,
+        platform=platform,
         order_by="country_code",
     )
 
@@ -303,6 +359,7 @@ def carriers(
     date_from: OptionalDate = None,
     date_to: OptionalDate = None,
     date_field: DateFieldQuery = BY_CREATION,
+    platform: PlatformQuery = None,
 ) -> KpiResponse[CarrierRow]:
     return _ranged(
         conn,
@@ -312,6 +369,7 @@ def carriers(
         date_from=date_from,
         date_to=date_to,
         date_field=date_field,
+        platform=platform,
         order_by="shipments DESC",
     )
 
@@ -323,6 +381,7 @@ def geo(
     date_from: OptionalDate = None,
     date_to: OptionalDate = None,
     date_field: DateFieldQuery = BY_CREATION,
+    platform: PlatformQuery = None,
     level1: Annotated[str | None, Query(description="Filtrar por departamento/estado")] = None,
     min_shipments: Annotated[int, Query(ge=0)] = 0,
 ) -> KpiResponse[GeoRow]:
@@ -334,6 +393,7 @@ def geo(
     """
     basis = _check_field(date_field)
     _check_range(date_from, date_to)
+    applied_platform = _check_platform(conn, platform)
 
     where, params = _filters(country, extra={"level1_name": level1})
     where += (" AND " if where else "WHERE ") + "shipments >= %(min_shipments)s"
@@ -341,11 +401,12 @@ def geo(
     params["date_from"] = date_from
     params["date_to"] = date_to
     params["date_field"] = basis
+    params["platform"] = applied_platform
 
     rows = fetch_all(
         conn,
         "SELECT * FROM mart.f_geo_performance"
-        "(%(date_from)s, %(date_to)s, %(date_field)s) "
+        "(%(date_from)s, %(date_to)s, %(date_field)s, %(platform)s) "
         f"{where} ORDER BY shipments DESC",
         params,
     )
@@ -354,7 +415,10 @@ def geo(
         date_basis=basis,
         date_from=date_from,
         date_to=date_to,
-        excluded_no_date=_excluded_no_date(conn, country, basis, date_from, date_to),
+        excluded_no_date=_excluded_no_date(
+            conn, country, basis, date_from, date_to, applied_platform
+        ),
+        platform=applied_platform,
     )
 
 
@@ -367,6 +431,7 @@ def products(
     date_from: OptionalDate = None,
     date_to: OptionalDate = None,
     date_field: DateFieldQuery = BY_CREATION,
+    platform: PlatformQuery = None,
 ) -> KpiResponse[ProductRow]:
     return _ranged(
         conn,
@@ -376,6 +441,7 @@ def products(
         date_from=date_from,
         date_to=date_to,
         date_field=date_field,
+        platform=platform,
         order_by="contribution DESC NULLS LAST",
     )
 
@@ -389,6 +455,7 @@ def cohorts(
     date_from: OptionalDate = None,
     date_to: OptionalDate = None,
     date_field: DateFieldQuery = BY_CREATION,
+    platform: PlatformQuery = None,
     only_observable: Annotated[bool, Query()] = True,
 ) -> KpiResponse[CohortRow]:
     """A cohort IS the creation cohort, so `date_field` cannot apply here.
@@ -401,6 +468,7 @@ def cohorts(
     """
     _check_field(date_field)
     _check_range(date_from, date_to)
+    _check_platform(conn, platform)  # validated, not applied: see the docstring
     where, params = _range_filter("cohort_date", country, date_from, date_to)
     if only_observable:
         where += (" AND " if where else "WHERE ") + "is_observable"
@@ -430,6 +498,7 @@ def aging(
     date_from: OptionalDate = None,
     date_to: OptionalDate = None,
     date_field: DateFieldQuery = BY_CREATION,
+    platform: PlatformQuery = None,
 ) -> KpiResponse[AgingRow]:
     """The range picks which open guides; the age is still measured against today.
 
@@ -444,6 +513,7 @@ def aging(
         date_from=date_from,
         date_to=date_to,
         date_field=date_field,
+        platform=platform,
         order_by="bucket_order",
     )
 
@@ -457,6 +527,7 @@ def customer_service(
     date_from: OptionalDate = None,
     date_to: OptionalDate = None,
     date_field: DateFieldQuery = BY_CREATION,
+    platform: PlatformQuery = None,
 ) -> KpiResponse[CsRow]:
     """Filters by the day customer service worked, not by the guide's cohort.
 
@@ -470,6 +541,7 @@ def customer_service(
     """
     _check_field(date_field)
     _check_range(date_from, date_to)
+    _check_platform(conn, platform)  # a CS sheet is not Effi nor Dropi
     where, params = _range_filter("day", country, date_from, date_to)
     rows = fetch_all(conn, f"SELECT * FROM mart.v_cs_confirmation {where} ORDER BY day", params)
     return KpiResponse[CsRow](
@@ -491,6 +563,7 @@ def cpa(
     date_from: OptionalDate = None,
     date_to: OptionalDate = None,
     date_field: DateFieldQuery = BY_CREATION,
+    platform: PlatformQuery = None,
 ) -> KpiResponse[CpaRow]:
     """Filters by the day the money was spent on ads.
 
@@ -503,6 +576,7 @@ def cpa(
     """
     _check_field(date_field)
     _check_range(date_from, date_to)
+    _check_platform(conn, platform)  # ad spend has no fulfilment platform
     where, params = _range_filter("day", country, date_from, date_to)
     rows = fetch_all(conn, f"SELECT * FROM mart.v_cpa_roas {where} ORDER BY day", params)
     return KpiResponse[CpaRow](
@@ -524,6 +598,7 @@ def dropshipping_margin(
     date_from: OptionalDate = None,
     date_to: OptionalDate = None,
     date_field: DateFieldQuery = BY_CREATION,
+    platform: PlatformQuery = None,
 ) -> KpiResponse[DropshippingMarginRow]:
     return _ranged(
         conn,
@@ -533,6 +608,7 @@ def dropshipping_margin(
         date_from=date_from,
         date_to=date_to,
         date_field=date_field,
+        platform=platform,
         order_by="net_contribution DESC NULLS LAST",
     )
 
@@ -548,6 +624,7 @@ def fulfillment(
     date_from: OptionalDate = None,
     date_to: OptionalDate = None,
     date_field: DateFieldQuery = BY_CREATION,
+    platform: PlatformQuery = None,
 ) -> KpiResponse[FulfillmentRow]:
     return _ranged(
         conn,
@@ -557,6 +634,7 @@ def fulfillment(
         date_from=date_from,
         date_to=date_to,
         date_field=date_field,
+        platform=platform,
         order_by="shipments DESC",
     )
 
@@ -572,6 +650,7 @@ def office_rescue(
     date_from: OptionalDate = None,
     date_to: OptionalDate = None,
     date_field: DateFieldQuery = BY_CREATION,
+    platform: PlatformQuery = None,
 ) -> KpiResponse[OfficeRescueRow]:
     """Same reading as `/aging`: guides waiting TODAY, created inside the range."""
     return _ranged(
@@ -582,6 +661,7 @@ def office_rescue(
         date_from=date_from,
         date_to=date_to,
         date_field=date_field,
+        platform=platform,
         order_by="value_waiting DESC NULLS LAST",
     )
 
@@ -622,6 +702,7 @@ def freight(
     date_from: OptionalDate = None,
     date_to: OptionalDate = None,
     date_field: DateFieldQuery = BY_CREATION,
+    platform: PlatformQuery = None,
 ) -> KpiResponse[FreightRow]:
     return _ranged(
         conn,
@@ -631,6 +712,7 @@ def freight(
         date_from=date_from,
         date_to=date_to,
         date_field=date_field,
+        platform=platform,
         order_by="shipments DESC",
     )
 
@@ -644,6 +726,7 @@ def cash_cycle(
     date_from: OptionalDate = None,
     date_to: OptionalDate = None,
     date_field: DateFieldQuery = BY_CREATION,
+    platform: PlatformQuery = None,
 ) -> KpiResponse[CashCycleRow]:
     """Filters by creation date, NOT by settlement date.
 
@@ -659,6 +742,7 @@ def cash_cycle(
         date_from=date_from,
         date_to=date_to,
         date_field=date_field,
+        platform=platform,
         order_by="country_code",
     )
 
@@ -674,6 +758,7 @@ def problem_rate(
     date_from: OptionalDate = None,
     date_to: OptionalDate = None,
     date_field: DateFieldQuery = BY_CREATION,
+    platform: PlatformQuery = None,
 ) -> KpiResponse[ProblemRateRow]:
     return _ranged(
         conn,
@@ -683,6 +768,7 @@ def problem_rate(
         date_from=date_from,
         date_to=date_to,
         date_field=date_field,
+        platform=platform,
         order_by="problem_rate_pct DESC NULLS LAST",
     )
 
@@ -696,6 +782,7 @@ def global_summary(
     date_from: OptionalDate = None,
     date_to: OptionalDate = None,
     date_field: DateFieldQuery = BY_CREATION,
+    platform: PlatformQuery = None,
 ) -> KpiResponse[GlobalRow]:
     """No country filter: this endpoint IS the comparison between countries.
 
@@ -705,6 +792,10 @@ def global_summary(
 
     The FX rate is not filtered by the range. It stays the latest one known,
     because "what is this worth to me" is a question about today.
+
+    Under a `platform` filter `ad_spend` is 0 and `contribution` is contribution
+    BEFORE media: ad spend belongs to an ads connection, never to Effi or Dropi,
+    so there is no honest share of it to subtract (migration 041).
     """
     response = _ranged(
         conn,
@@ -714,6 +805,7 @@ def global_summary(
         date_from=date_from,
         date_to=date_to,
         date_field=date_field,
+        platform=platform,
         order_by="contribution DESC NULLS LAST",
     )
     if user.countries is not None:
@@ -721,6 +813,71 @@ def global_summary(
             row for row in response.rows if row.country_code.upper() in user.countries
         ]
     return response
+
+
+@router.get(
+    "/daily-status",
+    response_model=KpiResponse[DailyStatusRow],
+    summary="Resumen diario por estados y plataforma",
+)
+def daily_status(
+    conn: DbDep,
+    country: CountryQuery,
+    date_from: OptionalDate = None,
+    date_to: OptionalDate = None,
+    date_field: DateFieldQuery = BY_CREATION,
+    platform: PlatformQuery = None,
+) -> KpiResponse[DailyStatusRow]:
+    """The table in the operator's hand-made report: day x platform x status.
+
+    `day` IS the chosen date. With `entrega` the table reads "entregadas por
+    día de entrega", which is a different report and a valid one; the basis
+    on the response says which it was.
+    """
+    return _ranged(
+        conn,
+        "f_daily_status",
+        DailyStatusRow,
+        country=country,
+        date_from=date_from,
+        date_to=date_to,
+        date_field=date_field,
+        platform=platform,
+        order_by="day, platform_code",
+    )
+
+
+@router.get(
+    "/platforms",
+    response_model=KpiResponse[PlatformSummaryRow],
+    summary="Consolidado por plataforma (Effi, Dropi, carga manual)",
+)
+def platforms(
+    conn: DbDep,
+    country: CountryQuery,
+    date_from: OptionalDate = None,
+    date_to: OptionalDate = None,
+    date_field: DateFieldQuery = BY_CREATION,
+    platform: PlatformQuery = None,
+) -> KpiResponse[PlatformSummaryRow]:
+    """No platform filter: this endpoint IS the comparison between platforms.
+
+    `share_pct` only means something against every platform of the country,
+    so `platform` is validated, ignored, and reported as null - the same way
+    `/global` treats `country`.
+    """
+    _check_platform(conn, platform)
+    return _ranged(
+        conn,
+        "f_platform_summary",
+        PlatformSummaryRow,
+        country=country,
+        date_from=date_from,
+        date_to=date_to,
+        date_field=date_field,
+        platform=None,
+        order_by="shipments DESC, platform_code",
+    )
 
 
 @router.get(

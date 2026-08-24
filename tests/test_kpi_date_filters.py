@@ -374,6 +374,9 @@ RANGED_ENDPOINTS: list[tuple[str, dict[str, str], str]] = [
     ("/kpis/cash-cycle", {"country": COUNTRY}, "creacion"),
     ("/kpis/problem-rate", {"country": COUNTRY}, "creacion"),
     ("/kpis/global", {}, "creacion"),
+    # Migration 040: day x platform x status group, and one row per platform.
+    ("/kpis/daily-status", {"country": COUNTRY}, "creacion"),
+    ("/kpis/platforms", {"country": COUNTRY}, "creacion"),
 ]
 
 # The one that does not, and says so.

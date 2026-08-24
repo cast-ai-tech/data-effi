@@ -9,6 +9,7 @@
  * a card should be.
  */
 
+import Link from "next/link";
 import { useParams, useRouter, useSearchParams } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
 
@@ -40,6 +41,8 @@ const FULL_WIDTH = new Set([
   "product_table",
   "geo_traffic_light",
   "cs_confirmation",
+  // One block per platform, nine columns each: needs the whole row.
+  "daily_status_table",
 ]);
 
 export default function CountryDashboard() {
@@ -111,6 +114,20 @@ export default function CountryDashboard() {
               : "Cargando…"}
           </p>
         </div>
+
+        {/* The printable version of the logistics tab: one block per platform,
+            the daily table, the consolidated strip. Keeps the range and the
+            platform from the URL so it opens on the same question. */}
+        {country && (
+          <Link
+            href={`/${countryCode.toLowerCase()}/informe${
+              search.toString() ? `?${search.toString()}` : ""
+            }`}
+            className="shrink-0 rounded-[8px] border border-line-strong bg-surface px-3 py-1.5 text-[12px] font-medium text-ink-2 no-underline hover:text-ink"
+          >
+            Informe diario
+          </Link>
+        )}
       </header>
 
       <div className="mb-5 flex gap-1 border-b border-line-strong">

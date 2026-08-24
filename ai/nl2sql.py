@@ -75,6 +75,9 @@ ALLOWED_VIEWS: frozenset[str] = frozenset(
         "v_product_catalogue",
         # Migration 039: which carrier delivers best in each city
         "v_carrier_by_zone",
+        # Migration 040: Effi next to Dropi - the daily table and the strip
+        "v_daily_status_by_platform",
+        "v_platform_summary",
     }
 )
 
@@ -341,6 +344,23 @@ mart.v_carrier_by_zone(country_code, level1_name, city_name, carrier_name, shipm
     -- Efectividad por transportadora POR CIUDAD, últimos 90 días. Responde "¿quién
     -- entrega mejor en esta zona?". terminal son las guías ya resueltas (entregadas o
     -- devueltas); con menos de 30 la tasa es ruido.
+
+mart.v_daily_status_by_platform(country_code, platform_code, platform_name, day, shipments,
+    entregada, devolucion, en_camino, novedad, muerta, cerradas, pct_entrega_cerradas,
+    pct_devolucion_cerradas, pct_devolucion_total, sample_quality, declared_value, revenue,
+    contribution, currency_code)
+    -- Guías por DÍA y por PLATAFORMA (effi, dropi, manual_xlsx...) agrupadas en cinco
+    -- estados de pantalla. pct_devolucion_total divide por todas las guías del día;
+    -- pct_devolucion_cerradas solo por las ya resueltas y es la cifra que se cumple.
+    -- sample_quality = 'muestra_corta' con menos de 10 cerradas: es un estimado.
+
+mart.v_platform_summary(country_code, platform_code, platform_name, shipments, entregada,
+    devolucion, en_camino, novedad, muerta, cerradas, pct_entrega_cerradas,
+    pct_devolucion_cerradas, pct_devolucion_total, share_pct, sample_quality,
+    declared_value, revenue, contribution, currency_code, first_day, last_day)
+    -- Una fila por plataforma: qué parte de las guías del país entró por cada una
+    -- (share_pct) y cómo le va a cada una. Úsala para "¿cuál plataforma vende más?" o
+    -- "¿Dropi devuelve más que Effi?".
 
 mart.v_freight_analysis(country_code, carrier_name, service_level, shipments,
     avg_weight_kg, total_weight_kg, freight_total, avg_freight, freight_per_kg,

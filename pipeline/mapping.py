@@ -104,9 +104,52 @@ STATUS_ALIASES: dict[str, str] = {
     "anulada por transportadora": "cancelled",
     "siniestro": "lost",
     "extravio": "lost",
+    # --- Dropi vocabulary, from the operator's export (mirrors migration 040) ---
+    # "Incidencia en ruta" is Dropi's word for a delivery issue. Before 040 it
+    # matched nothing and fell to `created` with a warning - a guide with a
+    # problem counted as one that had just been generated.
+    "incidencia en ruta": "delivery_issue",
+    "incidencia": "delivery_issue",
 }
 
 DEFAULT_STATUS = "created"
+
+# Mirror of core.status_canon.display_group (migration 040).
+#
+# Five words for the screen. Twelve canonical statuses are right for merging
+# files and wrong for a daily table with room for four columns: Effi's
+# "Entregada a destino" and Dropi's "Entregado" have to land in the same column,
+# and "en oficina" has to count somewhere the reader can see it. The canonical
+# code is never replaced - a guide's own row still says "En oficina" - it is
+# only GROUPED here.
+DISPLAY_GROUPS: dict[str, str] = {
+    "created": "en_camino",
+    "confirmed": "en_camino",
+    "picked_up": "en_camino",
+    "in_transit": "en_camino",
+    "out_for_delivery": "en_camino",
+    "in_office": "novedad",
+    "delivery_issue": "novedad",
+    "delivered": "entregada",
+    "returning": "devolucion",
+    "returned": "devolucion",
+    "cancelled": "muerta",
+    "lost": "muerta",
+}
+
+DISPLAY_GROUP_LABELS: dict[str, str] = {
+    "entregada": "Entregada",
+    "devolucion": "Devolución",
+    "en_camino": "En camino",
+    "novedad": "Novedad",
+    "muerta": "Muerta",
+}
+
+
+def display_group(status_code: str) -> str:
+    """The screen group of a canonical status. Unknown codes read as en camino:
+    a guide we cannot place is still moving, not delivered and not lost."""
+    return DISPLAY_GROUPS.get(status_code, "en_camino")
 
 
 def resolve_status(raw_value: object) -> tuple[str, bool]:
@@ -220,7 +263,11 @@ SHIPMENT_COLUMNS: dict[str, tuple[str, ...]] = {
     "status_raw": ("estado", "estatus", "status", "estado guia", "estado actual"),
     "carrier_name": ("transportadora", "transportador", "carrier", "operador logistico", "empresa envio"),
     "city_name": ("ciudad", "ciudad destino", "municipio", "ciudad de entrega"),
-    "geo_level1": ("departamento", "depto", "estado destino", "provincia", "region"),
+    "geo_level1": (
+        "departamento", "depto", "estado destino", "provincia", "region",
+        # Dropi's order export.
+        "departamento destino",
+    ),
     "product_name": ("producto", "nombre producto", "articulo", "item", "descripcion producto"),
     "supplier_name": ("proveedor", "supplier", "bodega"),
     "store_name": ("tienda", "store", "cuenta", "marca"),
@@ -232,9 +279,15 @@ SHIPMENT_COLUMNS: dict[str, tuple[str, ...]] = {
     "declared_value": (
         "valor", "valor recaudo", "valor a recaudar", "valor declarado",
         "total", "total pedido", "monto", "precio venta", "valor total",
+        # Dropi's order export.
+        "total de la orden",
     ),
     "cod_collected": ("recaudado", "valor recaudado", "monto recaudado", "cobrado"),
-    "freight_cost": ("flete", "costo flete", "valor flete", "envio", "costo envio"),
+    "freight_cost": (
+        "flete", "costo flete", "valor flete", "envio", "costo envio",
+        # Dropi's order export.
+        "precio flete",
+    ),
     "return_freight_cost": ("flete devolucion", "costo devolucion", "valor devolucion"),
     "product_cost": ("costo producto", "costo", "costo proveedor", "cogs"),
     "platform_fee": ("comision", "comision plataforma", "fee"),

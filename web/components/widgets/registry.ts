@@ -16,6 +16,7 @@ import CohortCurve from "@/components/widgets/cohort_curve";
 import ContributionSplitWidget from "@/components/widgets/contribution_split";
 import CpaRoas from "@/components/widgets/cpa_roas";
 import CsConfirmation from "@/components/widgets/cs_confirmation";
+import DailyStatusTableWidget from "@/components/widgets/daily_status_table";
 import DropshippingMargin from "@/components/widgets/dropshipping_margin";
 import FreightAnalysis from "@/components/widgets/freight_analysis";
 import FulfillmentSla from "@/components/widgets/fulfillment_sla";
@@ -24,6 +25,7 @@ import GlobalSummary from "@/components/widgets/global_summary";
 import KpiContribution from "@/components/widgets/kpi_contribution";
 import MarginDeliveryScatter from "@/components/widgets/margin_delivery_scatter";
 import OfficeRescue from "@/components/widgets/office_rescue";
+import PlatformSplit from "@/components/widgets/platform_split";
 import ProductTable from "@/components/widgets/product_table";
 import WaterfallPnl from "@/components/widgets/waterfall_pnl";
 import type { WidgetComponent } from "@/components/widgets/types";
@@ -54,6 +56,11 @@ export const WIDGET_REGISTRY: Record<string, WidgetComponent> = {
 
   // Carrier per zone (migration 039). Tab `logistica` in `core.widget_catalog`.
   carrier_by_zone: CarrierByZone,
+
+  // Effi next to Dropi (migration 040): the daily table by status group and
+  // the one-line-per-platform strip. Both on `logistica`, above the carriers.
+  platform_split: PlatformSplit,
+  daily_status_table: DailyStatusTableWidget,
 };
 
 /** Tabs of the country dashboard, in display order. */

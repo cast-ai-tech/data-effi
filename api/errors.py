@@ -85,6 +85,17 @@ class InvalidDateField(ApiError):
         super().__init__("invalid_date_field", message, status_code=422)
 
 
+class InvalidPlatform(ApiError):
+    """A `platform` that is not in the catalogue.
+
+    Its own code so the interface can say "esa plataforma no existe" instead of
+    "campos inválidos", and so a typo never silently widens to "todas".
+    """
+
+    def __init__(self, message: str) -> None:
+        super().__init__("invalid_platform", message, status_code=422)
+
+
 class RateLimited(ApiError):
     def __init__(
         self, message: str = "Demasiados intentos. Espera un minuto e inténtalo de nuevo."

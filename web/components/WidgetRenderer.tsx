@@ -45,7 +45,7 @@ export function WidgetRenderer({
   country: Country;
 }) {
   const Component = useMemo(() => WIDGET_REGISTRY[widget.widget_code], [widget.widget_code]);
-  const { note, onBasis } = useBasisReport();
+  const { note, platformNote, onBasis, onPlatform } = useBasisReport();
 
   if (widget.state === "blocked") {
     return <BlockedWidget widget={widget} />;
@@ -80,8 +80,8 @@ export function WidgetRenderer({
         </div>
       )}
       <div className={cx(degraded && "[&>section]:rounded-t-none")}>
-        <BasisDisclosure note={note} rounded={!degraded}>
-          <DateBasisScope onBasis={onBasis}>
+        <BasisDisclosure note={note} platformNote={platformNote} rounded={!degraded}>
+          <DateBasisScope onBasis={onBasis} onPlatform={onPlatform}>
             <Component
               countryCode={country.code}
               country={country}

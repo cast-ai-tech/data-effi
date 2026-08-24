@@ -13,6 +13,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { CopilotPanel } from "@/components/CopilotPanel";
 import { DateFieldPicker, ExcludedByFieldBand } from "@/components/DateFieldPicker";
 import { DateRangePicker } from "@/components/DateRangePicker";
+import { PlatformPicker } from "@/components/PlatformPicker";
 import { NotificationBell } from "@/components/NotificationBell";
 import { Chip, StatusDot, cx } from "@/components/ui";
 import { api, signOut as endSession } from "@/lib/api";
@@ -289,7 +290,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
       </aside>
 
       <div className="flex min-w-0 flex-1 flex-col">
-        <header className="flex h-14 shrink-0 items-center justify-between gap-4 border-b border-line-strong bg-page px-4 md:px-5">
+        <header className="app-header flex h-14 shrink-0 items-center justify-between gap-4 border-b border-line-strong bg-page px-4 md:px-5">
           <div className="flex min-w-0 items-center gap-2">
             <button
               type="button"
@@ -308,6 +309,9 @@ export function AppShell({ children }: { children: React.ReactNode }) {
                 fixed basis and cannot honour the choice. See `DateBasisNote`. */}
             {rangeApplies && (
               <>
+                {/* Effi, Dropi or all of them (migrations 040/041). Which
+                    cards obeyed is reported on each card, like the date. */}
+                <PlatformPicker countryCode={currentCountry} />
                 <DateFieldPicker />
                 <DateRangePicker country={formatCountry} />
               </>

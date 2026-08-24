@@ -672,7 +672,7 @@ def job_daily_digest(
     else dedups on its own fingerprint. Never raises for one tenant's failure -
     it is logged, counted and the loop goes on.
     """
-    from ai.alerts import persist_digest, persist_findings
+    from ai.alerts import persist_digest, persist_findings, persist_report_ready
     from ai.client import AiUnavailable
     from ai.features import collect_alerts, generate_brief
     from ai.memory import ensure_thresholds
@@ -727,6 +727,10 @@ def job_daily_digest(
                 brief=brief, recommendations=found, alerts=alerts,
                 local_date=local.date(),
             )
+            # The printable "informe diario consolidado" (migration 040), as a
+            # link with the range already set. Same fingerprint rule: once per
+            # country per local day.
+            persist_report_ready(conn, tenant_id, country_code, local_date=local.date())
             conn.commit()
         except Exception:
             conn.rollback()
