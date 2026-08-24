@@ -32,7 +32,7 @@ import { Card, Chip, EmptyState, ErrorState, SkeletonRows, cx } from "@/componen
 import { ApiError, api } from "@/lib/api";
 import { countryFlag } from "@/lib/format";
 import { useApi } from "@/lib/hooks";
-import { guidePlatforms, judgeFile, shortPlatformName } from "@/lib/upload-platform";
+import { judgeFile, platformsForKind, shortPlatformName } from "@/lib/upload-platform";
 import type { Country, CountryPlatform, DetectResult, UploadJob } from "@/lib/types";
 
 export default function CountryUploadPage() {
@@ -49,10 +49,15 @@ export default function CountryUploadPage() {
     countryCode ? `/config/platforms?country=${countryCode}` : null,
     [countryCode],
   );
-  const platforms = useMemo(() => guidePlatforms(platformsState.data), [platformsState.data]);
+  const [kind, setKind] = useState<string>("shipments");
+  // The platforms offered follow the report type: guides come from Effi, Dropi
+  // or a manual file; ad spend from the manual ad sheet; CS from its sheet.
+  const platforms = useMemo(
+    () => platformsForKind(platformsState.data, kind),
+    [platformsState.data, kind],
+  );
 
   const [platform, setPlatform] = useState<string | null>(null);
-  const [kind, setKind] = useState<string>("shipments");
   const [jobs, setJobs] = useState<UploadJob[]>([]);
   const [lastFiles, setLastFiles] = useState<File[]>([]);
   const [dragging, setDragging] = useState(false);
@@ -153,7 +158,7 @@ export default function CountryUploadPage() {
           <ErrorState message={platformsState.error.message} onRetry={platformsState.reload} />
         ) : platforms.length === 0 ? (
           <EmptyState
-            title={`Ninguna plataforma de guías opera en ${country?.name ?? countryCode}`}
+            title={`Ninguna plataforma opera en ${country?.name ?? countryCode}`}
             instruction="Revisa el catálogo en Configuración → Conexiones."
             action={
               <Link
@@ -166,9 +171,31 @@ export default function CountryUploadPage() {
           />
         ) : (
           <>
+            <label className="mb-4 block sm:w-1/2">
+              <span className="mb-1 block text-[11.5px] font-medium text-ink-muted">
+                1. Tipo de reporte
+              </span>
+              <select
+                value={kind}
+                onChange={(event) => {
+                  setKind(event.target.value);
+                  setPlatform(null);
+                  setError(null);
+                  setNotice(null);
+                }}
+                className="w-full rounded-[8px] border border-line-input bg-surface px-3 py-2 text-[13px] text-ink focus:border-accent focus:outline-none"
+              >
+                {KINDS.map((item) => (
+                  <option key={item.value} value={item.value}>
+                    {item.label}
+                  </option>
+                ))}
+              </select>
+            </label>
+
             <fieldset className="mb-4">
               <legend className="mb-1.5 block text-[11.5px] font-medium text-ink-muted">
-                1. ¿De qué plataforma es el archivo?
+                2. ¿De qué plataforma es el archivo?
               </legend>
               <div className="flex flex-wrap gap-2" role="radiogroup" aria-label="Plataforma del archivo">
                 {platforms.map((item) => {
@@ -212,23 +239,6 @@ export default function CountryUploadPage() {
                 Dropi. Si el archivo es un reporte conocido y no coincide, no se carga.
               </p>
             </fieldset>
-
-            <label className="mb-4 block sm:w-1/2">
-              <span className="mb-1 block text-[11.5px] font-medium text-ink-muted">
-                2. Tipo de reporte
-              </span>
-              <select
-                value={kind}
-                onChange={(event) => setKind(event.target.value)}
-                className="w-full rounded-[8px] border border-line-input bg-surface px-3 py-2 text-[13px] text-ink focus:border-accent focus:outline-none"
-              >
-                {KINDS.map((item) => (
-                  <option key={item.value} value={item.value}>
-                    {item.label}
-                  </option>
-                ))}
-              </select>
-            </label>
 
             <div
               onDragOver={(event) => {

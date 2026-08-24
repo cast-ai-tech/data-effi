@@ -20,11 +20,40 @@ const GUIDE_CATEGORIES = new Set(["fulfillment", "tienda", "archivos", "otros"])
  * only be a button that fails, so they are left out.
  */
 export function guidePlatforms<T extends Platform>(platforms: readonly T[] | null | undefined): T[] {
+  return platformsForKind(platforms, "shipments");
+}
+
+/** What each report type is called in the catalogue's `data_domains`. */
+const DOMAIN_OF_KIND: Record<string, string> = {
+  shipments: "shipments",
+  movements: "movements",
+  ads: "ads",
+  cs: "cs",
+};
+
+/** Ways a platform's data can arrive as a FILE someone uploads. */
+const FILE_AUTH_TYPES = new Set(["file", "session"]);
+
+/**
+ * The platforms whose export of THIS kind of report can be uploaded here.
+ *
+ * Guides and money: Effi, Dropi, the manual upload. Ad spend: the manual ad
+ * sheet - Meta, TikTok and Google connect by OAuth and are not a file. CS: the
+ * confirmation sheet. Effi is tier 3 with a session login, but its export is a
+ * file too, which is exactly the case migration 042 exists for.
+ */
+export function platformsForKind<T extends Platform>(
+  platforms: readonly T[] | null | undefined,
+  kind: string,
+): T[] {
+  const domain = DOMAIN_OF_KIND[kind];
+  if (!domain) return [];
   return (platforms ?? []).filter(
     (platform) =>
-      GUIDE_CATEGORIES.has(platform.category) &&
       platform.availability !== "planned" &&
-      platform.data_domains.includes("shipments"),
+      FILE_AUTH_TYPES.has(platform.auth_type) &&
+      platform.data_domains.includes(domain) &&
+      (domain !== "shipments" || GUIDE_CATEGORIES.has(platform.category)),
   );
 }
 

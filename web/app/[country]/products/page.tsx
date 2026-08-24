@@ -425,7 +425,7 @@ function ProductsScreen() {
               action={
                 <div className="flex flex-wrap items-center justify-center gap-2">
                   <Link
-                    href="/ingest"
+                    href={`/${countryCode.toLowerCase()}/cargar`}
                     className="rounded-[8px] bg-accent px-3.5 py-1.5 text-[12px] font-semibold text-on-accent no-underline hover:bg-accent-hover"
                   >
                     Cargar datos

@@ -206,20 +206,15 @@ export function AppShell({ children }: { children: React.ReactNode }) {
               collapsed={rail}
               pathname={pathname}
               rangeSuffix={rangeSuffix}
+              canIngest={can("ingest")}
             />
           ))}
 
           <div className="mt-3.5 border-t border-line-subtle pt-2.5" />
 
-          {can("ingest") && (
-            <NavItem
-              href="/ingest"
-              active={pathname.startsWith("/ingest")}
-              collapsed={rail}
-              icon={<UploadIcon />}
-              label="Cargar datos"
-            />
-          )}
+          {/* No global "Cargar datos" any more: every file belongs to a country
+              and names its platform, so the entry lives under each country
+              (CountryNav). `/ingest` still exists and forwards there. */}
           {can("read") && (
             <NavItem
               href="/connections"
@@ -513,6 +508,7 @@ function CountryNav({
   collapsed,
   pathname,
   rangeSuffix,
+  canIngest,
 }: {
   country: Country;
   open: boolean;
@@ -520,6 +516,8 @@ function CountryNav({
   pathname: string;
   /** Carried onto the dashboard links only - see `rangeSuffix` in AppShell. */
   rangeSuffix: string;
+  /** Whether this person may upload at all; a viewer gets no upload entry. */
+  canIngest: boolean;
 }) {
   const base = `/${country.code.toLowerCase()}`;
 
@@ -531,8 +529,10 @@ function CountryNav({
     { match: `${base}/customers`, href: `${base}/customers`, label: "Clientes", icon: <PersonIcon />, exact: false },
     { match: `${base}/products`, href: `${base}/products`, label: "Productos", icon: <TagIcon />, exact: false },
     // Each country loads its own files and names the platform they come from
-    // (migration 042). The global "Cargar datos" above stays for the rest.
-    { match: `${base}/cargar`, href: `${base}/cargar`, label: "Cargar datos", icon: <UploadIcon />, exact: false },
+    // (migration 042). There is no global upload entry any more.
+    ...(canIngest
+      ? [{ match: `${base}/cargar`, href: `${base}/cargar`, label: "Cargar datos", icon: <UploadIcon />, exact: false }]
+      : []),
   ];
 
   return (

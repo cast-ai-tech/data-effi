@@ -112,11 +112,14 @@ test.describe("critical path", () => {
     await expect(blocked.locator('a[href="/settings"]')).toBeVisible();
   });
 
-  test("shows the upload dropzone on /ingest", async ({ page }) => {
+  test("/ingest forwards to the country's upload screen with its dropzone", async ({ page }) => {
     await logIn(page);
 
+    // No global upload any more (migration 042): every file belongs to a
+    // country and names its platform, so the old address forwards there.
     await page.goto("/ingest");
-    await expect(page.getByText("Arrastra tus reportes aquí")).toBeVisible({
+    await expect(page).toHaveURL(/\/[a-z]{2}\/cargar/, { timeout: 15_000 });
+    await expect(page.getByText("Arrastra el reporte aquí")).toBeVisible({
       timeout: 15_000,
     });
   });

@@ -1,6 +1,11 @@
 import { describe, expect, it } from "vitest";
 
-import { guidePlatforms, judgeFile, shortPlatformName } from "@/lib/upload-platform";
+import {
+  guidePlatforms,
+  judgeFile,
+  platformsForKind,
+  shortPlatformName,
+} from "@/lib/upload-platform";
 import type { DetectResult, Platform } from "@/lib/types";
 
 /**
@@ -54,6 +59,38 @@ describe("guidePlatforms", () => {
       platform({ platform_code: "hoko", availability: "planned" }),
     ]);
     expect(list.map((p) => p.platform_code)).toEqual(["effi", "dropi", "manual_xlsx"]);
+  });
+});
+
+describe("platformsForKind", () => {
+  const catalogue = [
+    platform({ platform_code: "effi", auth_type: "session" }),
+    platform({ platform_code: "dropi", tier: 2, auth_type: "file" }),
+    platform({ platform_code: "manual_xlsx", category: "archivos", scope: "global", auth_type: "file" }),
+    platform({ platform_code: "ads_manual", category: "pauta", auth_type: "file", data_domains: ["ads"] }),
+    platform({ platform_code: "meta_ads", category: "pauta", auth_type: "oauth2", data_domains: ["ads"], availability: "planned" }),
+    platform({ platform_code: "cs_sheet", category: "archivos", auth_type: "file", data_domains: ["cs"], scope: "global" }),
+    platform({ platform_code: "webhook_generic", category: "automatizacion", auth_type: "webhook", data_domains: ["shipments", "ads", "cs"], scope: "global" }),
+  ];
+
+  it("offers Effi, Dropi and the manual upload for guides - Effi's export is a file too", () => {
+    expect(platformsForKind(catalogue, "shipments").map((p) => p.platform_code)).toEqual([
+      "effi",
+      "dropi",
+      "manual_xlsx",
+    ]);
+  });
+
+  it("offers only the manual ad sheet for ad spend: OAuth platforms are not a file", () => {
+    expect(platformsForKind(catalogue, "ads").map((p) => p.platform_code)).toEqual(["ads_manual"]);
+  });
+
+  it("offers the CS sheet for confirmations and never a webhook", () => {
+    expect(platformsForKind(catalogue, "cs").map((p) => p.platform_code)).toEqual(["cs_sheet"]);
+  });
+
+  it("offers nothing for a report type it does not know", () => {
+    expect(platformsForKind(catalogue, "inventario")).toEqual([]);
   });
 });
 

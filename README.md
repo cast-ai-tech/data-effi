@@ -232,28 +232,30 @@ tienen conexión de pauta a propósito, para que veas cómo se comporta.
 ## 4. Tu primer reporte real
 
 Cuando ya viste cómo funciona la demostración, es hora de meter tus propios datos.
-Son tres pasos.
+Son tres pasos. No tienes que crear ninguna "conexión" antes: Data Effi la crea sola
+la primera vez que cargas.
 
-### Paso 1. Crea una conexión de "Carga manual"
-
-Una **conexión** es el nombre que le pones a una fuente de datos: "de aquí vienen mis
-guías de Colombia".
+### Paso 1. Activa tu país
 
 1. En el menú de la izquierda, haz clic en **Configuración**.
-2. En la sección **Países**, activa el país donde operas.
-3. Baja hasta la sección **Conexiones** y haz clic en **Nueva conexión**.
-4. Elige tu país.
-5. En la lista de plataformas, elige **Carga manual Excel/CSV**.
-6. Ponle un nombre que reconozcas, por ejemplo `Guías Colombia`.
-7. Guarda.
+2. En la sección **Países**, activa el país donde operas (por ejemplo Ecuador).
 
-### Paso 2. Sube tu archivo
+Al activarlo, el país aparece en el menú de la izquierda con su bandera.
 
-1. En el menú de la izquierda, haz clic en **Cargar datos**.
-2. Arriba, elige la conexión que acabas de crear.
-3. Al lado, en **Tipo de reporte**, elige **Guías**.
+### Paso 2. Sube tu archivo desde el país
+
+1. En el menú de la izquierda, haz clic en tu país (la bandera) y luego en
+   **Cargar datos**.
+2. En **Tipo de reporte**, elige **Guías** (o movimientos de dinero, pauta, servicio).
+3. En **¿De qué plataforma es el archivo?**, elige de dónde lo exportaste: **Effi**,
+   **Dropi** o **Carga manual** si es un Excel tuyo. Solo aparecen las plataformas que
+   operan en ese país.
 4. Arrastra tu archivo de Excel o CSV hasta el recuadro punteado, o haz clic ahí para
    buscarlo en tu computador.
+
+Si el archivo es un reporte de Effi y elegiste otra plataforma, Data Effi **no lo
+carga** y te dice de cuál es: así ninguna guía queda contada en la plataforma
+equivocada.
 
 Data Effi acepta archivos `.csv`, `.xlsx`, `.xlsm`, `.txt` y `.tsv`, de hasta 25 MB cada
 uno, y hasta 20 archivos a la vez. El progreso aparece en esa misma pantalla.

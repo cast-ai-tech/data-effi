@@ -186,8 +186,15 @@ la pantalla preseleccione.
 (radio con las que operan en ese país, `guidePlatforms` filtra el catálogo por país;
 "con datos" si ya tiene conexión activa), paso 2 tipo, paso 3 archivo. `judgeFile`
 (`web/lib/upload-platform.ts`) decide en el navegador: sugerir, aceptar o bloquear con
-ambos nombres. El historial se filtra por país. La pantalla global `/ingest` sigue para
-pauta, CS y quien prefiera nombrar la conexión.
+ambos nombres. El historial se filtra por país. Las plataformas ofrecidas dependen del
+tipo de reporte (`platformsForKind`): guías y movimientos → Effi, Dropi, carga manual;
+pauta → `ads_manual`; CS → `cs_sheet`. Solo entran plataformas con `auth_type` `file` o
+`session` (el export de Effi es un archivo aunque su modo nativo sea sesión).
+
+**No hay "Cargar datos" global.** La entrada del menú se quitó: todo archivo es de un
+país y de una plataforma. `/ingest` sigue existiendo solo para reenviar — al país si hay
+uno, o a una lista de países si hay varios — para que los enlaces viejos y el botón del
+onboarding no se rompan.
 
 ## 9. Lo que queda pendiente
 
