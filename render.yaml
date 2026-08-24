@@ -58,8 +58,14 @@ services:
         value: "2"
       - key: UPLOAD_DIR
         value: /tmp/uploads
+      # Se activan desde el panel, no aqui: un valor fijo en el Blueprint pisa
+      # lo que se escriba en el dashboard en cada deploy.
       - key: AI_ENABLED
-        value: "false"
+        sync: false
+      - key: GEMINI_API_KEY
+        sync: false
+      - key: AI_MODEL
+        sync: false
       - key: TIER3_FETCH_ENABLED
         value: "false"
       - key: FX_PROVIDER_URL
