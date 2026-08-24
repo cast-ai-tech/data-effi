@@ -207,7 +207,8 @@ def test_logging_out_revokes_the_refresh_token_server_side(client, account):
     Regression: the frontend used to POST an empty refresh_token, so the real
     one stayed valid for fourteen days after "Cerrar sesión".
     """
-    fresh = client.post("/auth/login", json={"email": EMAIL, "password": PASSWORD})
+    # The password tests above already rotated the account to NEW_PASSWORD.
+    fresh = client.post("/auth/login", json={"email": EMAIL, "password": NEW_PASSWORD})
     assert fresh.status_code == 200, fresh.text
     refresh = fresh.json()["refresh_token"]
 

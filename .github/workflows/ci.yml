@@ -116,10 +116,11 @@ jobs:
         with:
           fetch-depth: 0
 
+      # The gitleaks GitHub Action now demands a paid licence for
+      # organisation repositories; the scanner itself is still free.
       - name: Scan for committed secrets
-        uses: gitleaks/gitleaks-action@v2
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          docker run --rm -v "$PWD:/repo" zricethezav/gitleaks:latest             detect --source /repo --no-banner --redact --exit-code 1
 
       - uses: actions/setup-python@v5
         with:

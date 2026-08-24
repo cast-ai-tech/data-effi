@@ -315,7 +315,7 @@ def _resolve_supplier(conn, tenant_id: UUID, name: str | None) -> UUID | None:
         return None
     cleaned = name.strip()
 
-    created = fetch_required(
+    created = fetch_one(
         conn,
         """
         INSERT INTO core.supplier (tenant_id, name, name_norm)
