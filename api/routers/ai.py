@@ -138,6 +138,7 @@ async def ask(
             payload.country_code.upper() if payload.country_code else None,
             conversation_id=payload.conversation_id,
             user_id=user.id,
+            allowed_countries=user.countries,
         )
     except AiUnavailable as exc:
         return AskResponse(
@@ -151,44 +152,8 @@ async def ask(
             suggestions=REJECTION_SUGGESTIONS,
         )
 
-    if user.countries is not None and result.get("rows"):
-        result = _cut_rows_to_scope(result, user.countries)
     return AskResponse(**result)
 
-
-def _cut_rows_to_scope(result: dict, countries: tuple[str, ...]) -> dict:
-    """Keep only the rows a limited membership may read.
-
-    A row that names its country is kept when the country is in scope. A
-    result with no country column at all cannot be attributed, so a limited
-    membership does not get it - the answer says why instead of showing
-    numbers that may include another country.
-    """
-    columns = [str(c) for c in result.get("columns", [])]
-    rows = result.get("rows", [])
-    if "country_code" not in columns:
-        return {
-            **result,
-            "rows": [],
-            "row_count": 0,
-            "answer": (
-                "Esa respuesta mezcla países y tu usuario solo tiene acceso a "
-                f"{', '.join(countries)}. Pregunta nombrando el país."
-            ),
-        }
-    index = columns.index("country_code")
-
-    def country_of(row: object) -> str | None:
-        if isinstance(row, dict):
-            value = row.get("country_code")
-        elif isinstance(row, list | tuple) and index < len(row):
-            value = row[index]
-        else:
-            value = None
-        return str(value).upper() if value is not None else None
-
-    kept = [row for row in rows if country_of(row) in countries]
-    return {**result, "rows": kept, "row_count": len(kept)}
 
 
 @router.get(

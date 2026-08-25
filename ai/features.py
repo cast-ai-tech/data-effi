@@ -603,6 +603,7 @@ def ask_data(
     *,
     conversation_id: UUID | None = None,
     user_id: UUID | None = None,
+    allowed_countries: tuple[str, ...] | None = None,
 ) -> dict[str, Any]:
     """question -> SQL -> validator -> read-only execution -> prose, with context.
 
@@ -610,6 +611,11 @@ def ask_data(
     this operation, and the last few turns of this thread. Neither widens what
     the generated SQL is allowed to touch - the validator does not know or care
     that memory exists.
+
+    `allowed_countries` is the caller's country scope (None = the whole
+    company). The rows are cut to it BEFORE the prose is written, so a limited
+    membership never has another country's numbers narrated back to it, even
+    if the generated SQL ignored the country hint.
     """
     conversation = ensure_conversation(
         conn, tenant_id,
@@ -685,6 +691,18 @@ def ask_data(
 
     try:
         rows, columns = _execute_readonly(validation.sql or "", tenant_id)
+        if allowed_countries is not None:
+            rows, columns, cut_note = cut_rows_to_countries(rows, columns, allowed_countries)
+            if cut_note:
+                return _finish(
+                    {
+                        "answer": cut_note, "sql": validation.sql, "columns": columns,
+                        "rows": [], "row_count": 0, "rejected": True,
+                        "rejection_reason": "fuera_de_alcance",
+                        "suggestions": REJECTION_SUGGESTIONS,
+                    },
+                    tokens=sql_response.input_tokens + sql_response.output_tokens,
+                )
     except AiUnavailable as exc:
         _finish(
             {
@@ -759,6 +777,30 @@ def ask_data(
             + prose.input_tokens + prose.output_tokens
         ),
     )
+
+
+def cut_rows_to_countries(
+    rows: list[dict[str, Any]], columns: list[str], countries: tuple[str, ...]
+) -> tuple[list[dict[str, Any]], list[str], str | None]:
+    """Keep only the rows a limited membership may read.
+
+    A row that names its country is kept when the country is in scope. A
+    result with no country column at all cannot be attributed, so it is not
+    handed over: the third value is the sentence to answer with instead.
+    """
+    if "country_code" not in columns:
+        return (
+            [],
+            columns,
+            "Esa respuesta mezcla países y tu usuario solo tiene acceso a "
+            f"{', '.join(countries)}. Pregunta nombrando el país.",
+        )
+    allowed = {c.upper() for c in countries}
+    kept = [
+        row for row in rows
+        if row.get("country_code") is not None and str(row["country_code"]).upper() in allowed
+    ]
+    return kept, columns, None
 
 
 def _execute_readonly(sql: str, tenant_id: UUID) -> tuple[list[dict[str, Any]], list[str]]:
