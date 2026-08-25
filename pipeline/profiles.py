@@ -279,7 +279,160 @@ EFFI_MOVEMENTS = SourceProfile(
 )
 
 
-PROFILES: tuple[SourceProfile, ...] = (EFFI_GUIDES, EFFI_MOVEMENTS)
+# =============================================================================
+# Dropi - orders export ("ordenes_YYYYMMDD_HHMMSS.xlsx")
+#
+# 63 columns, one row per order, read from a real Guatemalan export (658 rows,
+# 2026-08-24). The last twelve columns (FE ...) are electronic-invoicing
+# fields that were empty in every row; they are left unmapped and reported as
+# ignored.
+#
+# WHAT THE MONEY COLUMNS MEAN. `VALOR DE COMPRA EN PRODUCTOS` is what the
+# customer pays at the door; `TOTAL EN PRECIOS DE PROVEEDOR` is what Dropi
+# charges for the product; `PRECIO FLETE` and `COSTO DEVOLUCION FLETE` the
+# two freights; `COMISION` the platform's cut. `GANANCIA` is exactly VALOR -
+# PROVEEDOR - FLETE - COMISION - DEVOLUCION in 470 of 470 delivered rows, so it
+# is derived, never stored: the engine computes the same thing.
+#
+# NO DELIVERY DATE. The export carries the order date, the guide-generation
+# date and the date of the last movement, but not when the parcel was
+# delivered. Delivered guides therefore have no `delivered_at`; a filter by
+# delivery date leaves them out and `excluded_no_date` says how many.
+# =============================================================================
+
+DROPI_ORDERS_COLUMNS = _norm_keys(
+    {
+        # --- identity ---
+        "ID": "external_order_id",
+        "NÚMERO GUIA": "carrier_tracking_number",
+        "ID DE ORDEN DE TIENDA": "store_order_id",
+        "NUMERO DE PEDIDO DE TIENDA": "store_order_number",
+        # --- dates ---
+        "FECHA": "created_date",
+        "FECHA GENERACION DE GUIA": "guide_generated_date",
+        "FECHA DE ÚLTIMO MOVIMIENTO": "last_status_at",
+        "FECHA DE NOVEDAD": "issue_date",
+        # --- status ---
+        "ESTATUS": "status_raw",
+        "ÚLTIMO MOVIMIENTO": "status_detail",
+        "NOVEDAD": "issue_note",
+        "FUE SOLUCIONADA LA NOVEDAD": "issue_solved_raw",
+        # --- who and where ---
+        "TRANSPORTADORA": "carrier_name",
+        "DEPARTAMENTO DESTINO": "geo_level1",
+        "CIUDAD DESTINO": "city_name",
+        "TIENDA": "store_name",
+        "TIPO DE TIENDA": "store_type",
+        "CATEGORÍAS": "product_category",
+        # --- the customer, for the orders table (encrypted + hashed) ---
+        "NOMBRE CLIENTE": "customer_name",
+        "TELÉFONO": "customer_identifier",
+        "NRO DE IDENTIFICACION": "customer_document",
+        "DIRECCION": "customer_address",
+        # --- money ---
+        "VALOR DE COMPRA EN PRODUCTOS": "declared_value",
+        "PRECIO FLETE": "freight_cost",
+        "COSTO DEVOLUCION FLETE": "return_freight_cost",
+        "TOTAL EN PRECIOS DE PROVEEDOR": "product_cost",
+        "COMISION": "platform_fee",
+        "GANANCIA": "reported_profit",
+        "TIPO DE ENVIO": "shipping_kind",
+        # --- indemnity ---
+        "CONTADOR DE INDEMNIZACIONES": "compensation_count",
+        "CONCEPTO ÚLTIMA INDENMIZACIÓN": "compensation_concept",
+    }
+)
+
+DROPI_ORDERS_PII = (
+    "NOMBRE CLIENTE",
+    "TELÉFONO",
+    "EMAIL",
+    "NRO DE IDENTIFICACION",
+    "DIRECCION",
+    "VENDEDOR",
+    "USUARIO GENERACION DE GUIA",
+    "USUARIO QUE SOLUCIONA LA NOVEDAD",
+)
+
+DROPI_ORDERS = SourceProfile(
+    code="dropi_ordenes",
+    platform_code="dropi",
+    kind=BatchKind.SHIPMENTS,
+    label="Dropi · Reporte de órdenes",
+    signature=(
+        "numero guia",
+        "estatus",
+        "transportadora",
+        "valor de compra en productos",
+        "total en precios de proveedor",
+    ),
+    columns=DROPI_ORDERS_COLUMNS,
+    derived=("tracking_number",),
+    pii_columns=DROPI_ORDERS_PII,
+    # The export says nothing about its country: the upload declares it
+    # (migration 042). The department names are the only hint, and a hint is
+    # not a fact.
+    country_column=None,
+)
+
+
+# =============================================================================
+# Dropi - wallet history ("historial de cartera-DD-MM-YYYY HH_MM.xlsx")
+#
+# 9 columns. `TIPO` is ENTRADA or SALIDA and `MONTO` is always a positive
+# magnitude; what the money IS lives in the free text of `DESCRIPCIÓN`, whose
+# first words are one of five fixed phrases. See migration 047 for why the two
+# settlement phrases become `transfer` types that no KPI adds up.
+# =============================================================================
+
+DROPI_WALLET_COLUMNS = _norm_keys(
+    {
+        "ID": "external_ref",
+        "FECHA": "movement_date",
+        "TIPO": "direction_raw",
+        "MONTO": "amount",
+        "MONTO PREVIO": "balance_before",
+        "ORDEN ID": "order_ref",
+        "NUMERO DE GUIA": "tracking_number_raw",
+        "DESCRIPCIÓN": "description",
+        "CONCEPTO DE RETIRO": "withdrawal_concept",
+    }
+)
+
+DROPI_WALLET = SourceProfile(
+    code="dropi_cartera",
+    platform_code="dropi",
+    kind=BatchKind.MOVEMENTS,
+    label="Dropi · Historial de cartera",
+    signature=("monto previo", "numero de guia", "descripcion", "tipo"),
+    columns=DROPI_WALLET_COLUMNS,
+    country_column=None,
+)
+
+
+# The five phrases the wallet writes, by their first words. Mirrors migration
+# 047: the two settlements are `transfer` types, ignored by every KPI.
+DROPI_MOVEMENT_TYPES: dict[str, str] = {
+    "entrada por ganancia en la orden como dropshipper": "settlement_in",
+    "salida de cobro de devolucion por entrega no efectiva": "settlement_out",
+    "salida por nueva orden": "settlement_out",
+    "salida por peticion de retiro de saldo en cartera": "withdrawal",
+    "devolucion de dinero por garantia": "adjustment_in",
+}
+
+
+def resolve_dropi_movement_type(description: Any) -> tuple[str | None, bool]:
+    """Map a Dropi wallet description to a movement type. Returns (code, recognized)."""
+    key = normalize_text(description)
+    if not key:
+        return None, False
+    for phrase, code in DROPI_MOVEMENT_TYPES.items():
+        if key.startswith(phrase):
+            return code, True
+    return None, False
+
+
+PROFILES: tuple[SourceProfile, ...] = (EFFI_GUIDES, EFFI_MOVEMENTS, DROPI_ORDERS, DROPI_WALLET)
 
 
 def detect_profile(headers: list[str], kind: BatchKind | None = None) -> SourceProfile | None:
@@ -493,9 +646,59 @@ def transform_effi_movement(mapped: dict[str, Any]) -> dict[str, Any]:
     return out
 
 
+def transform_dropi_order(mapped: dict[str, Any]) -> dict[str, Any]:
+    """Turn a mapped Dropi order row into engine fields.
+
+    Returns a NEW dict; the caller keeps the original for the audit trail.
+    """
+    out = dict(mapped)
+
+    # --- identity -------------------------------------------------------
+    # The guide number is the carrier's own (Forza, Gintracom...) and is what
+    # the wallet cites, so it is the primary key. A cancelled order may never
+    # have received one: Dropi's order id stands in, prefixed so it can never
+    # collide with a carrier number.
+    carrier_number = clean_text(mapped.get("carrier_tracking_number"))
+    order_id = clean_text(mapped.get("external_order_id"))
+    out["tracking_number"] = carrier_number or (f"DROPI-{order_id}" if order_id else None)
+    out["carrier_tracking_number"] = carrier_number
+
+    # --- status ---------------------------------------------------------
+    # An order the carrier lost and paid back shows it only in the indemnity
+    # counter; ESTATUS keeps saying whatever it said before. The counter wins.
+    counter = mapped.get("compensation_count")
+    try:
+        compensated = counter is not None and int(counter) > 0
+    except (TypeError, ValueError):
+        compensated = False
+    if compensated:
+        out["status_raw"] = "Indemnizada"
+        out["status_detail"] = clean_text(mapped.get("compensation_concept")) or clean_text(
+            mapped.get("status_detail")
+        )
+    else:
+        out["status_raw"] = clean_text(mapped.get("status_raw"))
+        out["status_detail"] = clean_text(mapped.get("status_detail"))
+
+    # One product per order in this export, quantity unknown: one, not zero.
+    out.setdefault("quantity", 1)
+    return out
+
+
+def transform_dropi_movement(mapped: dict[str, Any]) -> dict[str, Any]:
+    """Turn a mapped Dropi wallet row into engine fields."""
+    out = dict(mapped)
+    code, recognized = resolve_dropi_movement_type(mapped.get("description"))
+    out["_movement_type_code"] = code
+    out["_movement_type_recognized"] = recognized
+    return out
+
+
 TRANSFORMS = {
     "effi_guias": transform_effi_guide,
     "effi_movimientos": transform_effi_movement,
+    "dropi_ordenes": transform_dropi_order,
+    "dropi_cartera": transform_dropi_movement,
 }
 
 
@@ -508,8 +711,15 @@ def apply_transform(profile: SourceProfile, mapped: dict[str, Any]) -> dict[str,
 # Raw retention and country detection
 # =============================================================================
 
-# Mirror of core.country_alias (migration 010), so a file can be inspected
-# without a database - which is what the upload screen does before uploading.
+# Mirror of core.country_alias (migrations 010, 033, 034, 038), so a file can be
+# inspected without a database - which is what the upload screen does before
+# uploading. Keys are already normalized (lowercase, no accents): the raw value
+# goes through normalize_text() first, so "Costa Rica", "COSTA RICA" and
+# "República de Costa Rica" all land here as one of these keys.
+#
+# tests/test_store_pg.py checks this dict against core.country_alias in BOTH
+# directions, so a country added by migration without a line here fails the
+# suite by name instead of silently going undetected on upload.
 COUNTRY_ALIASES: dict[str, str] = {
     "colombia": "CO", "co": "CO", "col": "CO", "republica de colombia": "CO",
     "ecuador": "EC", "ec": "EC", "ecu": "EC", "republica del ecuador": "EC",
@@ -518,6 +728,12 @@ COUNTRY_ALIASES: dict[str, str] = {
     "chile": "CL", "cl": "CL", "chl": "CL",
     "panama": "PA", "pa": "PA", "pan": "PA",
     "guatemala": "GT", "gt": "GT", "gtm": "GT",
+    "honduras": "HN", "hn": "HN", "hnd": "HN", "republica de honduras": "HN",
+    "costa rica": "CR", "cr": "CR", "cri": "CR", "republica de costa rica": "CR",
+    "republica dominicana": "DO", "dominicana": "DO", "santo domingo": "DO",
+    "do": "DO", "dom": "DO", "rd": "DO",
+    "venezuela": "VE", "ve": "VE", "ven": "VE",
+    "republica bolivariana de venezuela": "VE",
 }
 
 

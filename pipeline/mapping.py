@@ -117,6 +117,12 @@ STATUS_ALIASES: dict[str, str] = {
     # problem counted as one that had just been generated.
     "incidencia en ruta": "delivery_issue",
     "incidencia": "delivery_issue",
+    # --- The rest of Dropi's ESTATUS column, from a real Guatemalan export
+    # (mirrors migration 047). `guia_generada` keeps its underscore because
+    # normalize_text does not touch it and the file literally says so.
+    "recolectado": "picked_up",
+    "guia_generada": "created",
+    "preparado para transportadora": "confirmed",
     # --- Indemnización (mirrors migration 045). CANDIDATE spellings: no real
     # export with the word has been seen yet. `resolve_status` flags whatever
     # spelling the first real file carries, so it can be added here by name.
@@ -212,6 +218,10 @@ MOVEMENT_TYPE_SIGNS: dict[str, int] = {
     "tax_withholding": 1,
     "withdrawal": -1,
     "withdrawal_fee": -1,
+    # Dropi's net wallet (migration 047): money already counted on the order,
+    # kept for the trail and ignored by every KPI (category transfer).
+    "settlement_in": 1,
+    "settlement_out": -1,
 }
 
 

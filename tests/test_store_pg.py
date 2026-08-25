@@ -376,6 +376,62 @@ def test_status_aliases_match_the_python_mirror(pg_conn):
         )
 
 
+def test_supported_countries_match_the_python_mirror(pg_conn):
+    """Every supported country in core.country must be detectable from a file,
+    and every country Python detects must exist in the database.
+
+    Migrations 033/034/038 added HN, CR, DO and VE to SQL while the Python
+    mirror stayed at seven countries - and a Costa Rica export silently failed
+    to detect its country. A one-way check (SQL within Python) does not catch
+    that, so this one runs in both directions and names the country.
+    """
+    from pipeline.profiles import COUNTRY_ALIASES
+
+    rows = _rows(pg_conn, "SELECT code, name FROM core.country WHERE is_supported ORDER BY code")
+    sql_countries = {row["code"]: row["name"] for row in rows}
+    python_countries = set(COUNTRY_ALIASES.values())
+
+    missing_in_python = sorted(
+        f"{code} ({name})" for code, name in sql_countries.items() if code not in python_countries
+    )
+    assert not missing_in_python, (
+        "countries supported in core.country but absent from COUNTRY_ALIASES "
+        f"(pipeline/profiles.py): {', '.join(missing_in_python)}"
+    )
+
+    missing_in_sql = sorted(python_countries - sql_countries.keys())
+    assert not missing_in_sql, (
+        "countries in COUNTRY_ALIASES (pipeline/profiles.py) that core.country does not "
+        f"support: {', '.join(missing_in_sql)}"
+    )
+
+
+def test_country_aliases_match_the_python_mirror(pg_conn):
+    """core.country_alias and COUNTRY_ALIASES must be the same table, alias by alias."""
+    from pipeline.profiles import COUNTRY_ALIASES
+
+    rows = _rows(
+        pg_conn,
+        "SELECT a.alias_norm, a.country_code, c.name "
+        "FROM core.country_alias a JOIN core.country c ON c.code = a.country_code",
+    )
+    sql_aliases = {row["alias_norm"]: row["country_code"] for row in rows}
+    names = {row["country_code"]: row["name"] for row in rows}
+
+    for alias, code in sql_aliases.items():
+        mirrored = COUNTRY_ALIASES.get(alias)
+        assert mirrored is not None, (
+            f"SQL alias {alias!r} -> {code} ({names[code]}) missing from Python mirror"
+        )
+        assert mirrored == code, f"alias {alias!r}: SQL says {code}, Python says {mirrored}"
+
+    only_in_python = sorted(set(COUNTRY_ALIASES) - set(sql_aliases))
+    assert not only_in_python, (
+        "Python aliases missing from core.country_alias (add them by migration): "
+        + ", ".join(f"{alias!r} -> {COUNTRY_ALIASES[alias]}" for alias in only_in_python)
+    )
+
+
 def test_normalize_text_matches_between_python_and_sql(pg_conn):
     from pipeline.normalize import normalize_text
 

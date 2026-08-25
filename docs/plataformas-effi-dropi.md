@@ -105,6 +105,41 @@ Alias nuevos (040): `incidencia en ruta` e `incidencia` → `delivery_issue`, m�
 vocabulario que Effi ya tenía registrado bajo `dropi` para que una búsqueda por
 plataforma lo encuentre.
 
+## 4b. El perfil exacto de Dropi (migración 047, `pipeline/profiles.py`)
+
+Dos archivos reales de Guatemala (2026-08-24) definieron dos perfiles, al lado de los de
+Effi:
+
+| Perfil | Archivo | Firma (cabeceras normalizadas) |
+|---|---|---|
+| `dropi_ordenes` | `ordenes_YYYYMMDD_HHMMSS.xlsx`, 63 columnas | `numero guia`, `estatus`, `transportadora`, `valor de compra en productos`, `total en precios de proveedor` |
+| `dropi_cartera` | `historial de cartera-DD-MM-YYYY HH_MM.xlsx`, 9 columnas | `monto previo`, `numero de guia`, `descripcion`, `tipo` |
+
+Órdenes, columna → campo: `ID` → id de orden Dropi; `NÚMERO GUIA` → número del
+transportador y **clave de la guía** (una orden cancelada sin guía usa `DROPI-<ID>`);
+`FECHA` → fecha de creación; `ESTATUS` → estado; `ÚLTIMO MOVIMIENTO` → detalle;
+`TRANSPORTADORA`, `DEPARTAMENTO DESTINO`, `CIUDAD DESTINO`, `TIENDA`; `VALOR DE COMPRA
+EN PRODUCTOS` → valor a recaudar; `PRECIO FLETE`, `COSTO DEVOLUCION FLETE`, `TOTAL EN
+PRECIOS DE PROVEEDOR` → costo, `COMISION`. `GANANCIA` es derivada (valor − proveedor −
+flete − comisión − devolución en 470/470 filas) y no se guarda. Nombre, teléfono,
+documento y dirección van cifrados a `core.shipment` y como hash al archivo crudo.
+**No hay fecha de entrega en el export**: las entregadas quedan sin `delivered_at`.
+`CONTADOR DE INDEMNIZACIONES > 0` marca la guía como `compensated`.
+
+Estados crudos (8, todos reconocidos): ENTREGADO → delivered · DEVOLUCION → returning ·
+INCIDENCIA EN RUTA → delivery_issue · EN RUTA → in_transit · RECOLECTADO → picked_up ·
+GUIA_GENERADA → created · CANCELADO → cancelled · PREPARADO PARA TRANSPORTADORA →
+confirmed.
+
+Cartera: `TIPO` (ENTRADA/SALIDA) y `MONTO` siempre positivo; el concepto vive en las
+primeras palabras de `DESCRIPCIÓN`. Dropi liquida **neto**: la "ganancia" y el "cobro de
+devolución" ya están dentro de las columnas de la orden, así que van a tipos de
+categoría `transfer` (`settlement_in`, `settlement_out`) que ningún KPI suma; el retiro es
+`withdrawal` y la garantía `adjustment_in`. **A confirmar con el operador**: que
+"DEVOLUCION DE DINERO POR GARANTIA" sea plata nueva y no un reembolso ya contado.
+
+País: el export no lo dice; lo declara la carga (042). Los departamentos son la única pista.
+
 ## 5. Las dos respuestas nuevas
 
 ### `mart.f_daily_status(p_from, p_to, p_field, p_platform)` / `mart.v_daily_status_by_platform`

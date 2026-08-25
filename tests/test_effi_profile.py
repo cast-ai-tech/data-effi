@@ -488,6 +488,63 @@ def test_the_country_is_read_from_the_file(guides_bytes):
     assert raw_value == "Ecuador"
 
 
+@pytest.mark.parametrize(
+    ("raw", "expected"),
+    [
+        # Costa Rica - two active branches, so every spelling seen in an export.
+        ("Costa Rica", "CR"),
+        ("COSTA RICA", "CR"),
+        ("costa  rica", "CR"),
+        ("República de Costa Rica", "CR"),
+        ("CR", "CR"),
+        ("CRI", "CR"),
+        # Honduras
+        ("Honduras", "HN"),
+        ("HONDURAS", "HN"),
+        ("República de Honduras", "HN"),
+        ("HN", "HN"),
+        ("hnd", "HN"),
+        # República Dominicana
+        ("República Dominicana", "DO"),
+        ("REPUBLICA DOMINICANA", "DO"),
+        ("Dominicana", "DO"),
+        ("Santo Domingo", "DO"),
+        ("RD", "DO"),
+        ("DO", "DO"),
+        ("dom", "DO"),
+        # Venezuela
+        ("Venezuela", "VE"),
+        ("VENEZUELA", "VE"),
+        ("República Bolivariana de Venezuela", "VE"),
+        ("VE", "VE"),
+        ("ven", "VE"),
+    ],
+)
+def test_new_countries_resolve_from_every_spelling(raw, expected):
+    """Migrations 033/034/038 added these countries; the Python mirror must read
+    them the way an Effi export writes them - case, accents and padding aside."""
+    from pipeline.profiles import resolve_country
+
+    assert resolve_country(raw) == expected
+
+
+def test_a_costa_rica_export_detects_its_country():
+    """The `País destinatario` column of a Costa Rica export resolves to CR."""
+    from pipeline.profiles import EFFI_GUIDES, detect_country
+
+    headers = ["Número de guía", "País destinatario", "Ciudad destinatario"]
+    rows = [
+        ["CR-0001", "Costa Rica", "San José"],
+        ["CR-0002", "COSTA RICA", "Alajuela"],
+        ["CR-0003", "Costa Rica", "Cartago"],
+    ]
+
+    code, raw_value = detect_country(headers, rows, EFFI_GUIDES)
+
+    assert code == "CR"
+    assert raw_value == "Costa Rica"
+
+
 def test_uploading_a_file_to_the_wrong_country_is_refused(pii_salt, guides_bytes):
     """Loading Ecuadorian guides into a Colombian connection would price every
     one of them in COP, and the mistake is invisible once the data is in."""
