@@ -11,13 +11,15 @@ import { useRouter } from "next/navigation";
 import { useMemo, useState } from "react";
 
 import { BrandMark } from "@/components/BrandMark";
+import { HelpTip } from "@/components/HelpTip";
 import { Button, Card, Chip, SkeletonRows, cx } from "@/components/ui";
 import { ApiError, api } from "@/lib/api";
 import { countryFlag } from "@/lib/format";
+import { TIER_LABELS } from "@/lib/glossary";
 import { useApi } from "@/lib/hooks";
 import type { Country, CountryPlatform } from "@/lib/types";
 
-const STEPS = ["Países", "Conexiones", "Histórico", "Calibración"] as const;
+const STEPS = ["Países", "Fuentes de datos", "Histórico", "Días de espera"] as const;
 
 export default function OnboardingPage() {
   const router = useRouter();
@@ -137,9 +139,8 @@ export default function OnboardingPage() {
         <section>
           <h1 className="text-xl font-bold">Carga tu histórico</h1>
           <p className="mt-1.5 text-base text-ink-dim">
-            Con 90 días de reportes las curvas de maduración y las comparaciones tienen
-            de dónde salir. Puedes hacerlo después, pero los números iniciales serán
-            pobres.
+            Con 90 días de reportes las comparaciones tienen de dónde salir. Puedes
+            hacerlo después, pero los primeros números serán pobres.
           </p>
 
           <Card className="mt-6">
@@ -268,7 +269,7 @@ function CountryPlatforms({
             return (
               <div key={tier}>
                 <p className="mb-2 text-xs font-bold uppercase tracking-[0.08em] text-ink-faint">
-                  {tier === 1 ? "API oficial" : tier === 2 ? "Archivo" : "Sesión (Tier 3)"}
+                  {TIER_LABELS[tier]}
                 </p>
                 <div className="grid gap-2 sm:grid-cols-2">
                   {group.map((platform) => (
@@ -296,8 +297,12 @@ function CountryPlatforms({
                 </div>
                 {tier === 3 && (
                   <p className="mt-2 text-xs leading-relaxed text-warning-ink">
-                    Tier 3 usa tu sesión de usuario y puede ir contra los términos de la
-                    plataforma. Lee <code>docs/tier3-politica.md</code> antes de activarla.
+                    Esta conexión entra con tu usuario y contraseña. La plataforma podría
+                    suspender tu cuenta por eso. Siempre puedes exportar el reporte a mano y
+                    subirlo en Cargar datos.{" "}
+                    <Link href="/settings" className="font-semibold">
+                      Más sobre este riesgo
+                    </Link>
                   </p>
                 )}
               </div>
@@ -331,11 +336,13 @@ function CalibrationStep({
 
   return (
     <section>
-      <h1 className="text-xl font-bold">Calibración de maduración</h1>
-      <p className="mt-1.5 text-base leading-relaxed text-ink-dim">
-        Una cohorte de guías tarda días en estabilizar su porcentaje de entrega. Master Data
-        mide el p90 real de tu operación y te propone la ventana; no la cambia solo,
-        porque eso decide cómo se mide todo lo demás.
+      <h1 className="flex items-center gap-2 text-xl font-bold">
+        ¿Cuántos días esperar? <HelpTip term="maduracion" />
+      </h1>
+      <p className="mt-1.5 text-base leading-relaxed text-ink-muted">
+        Una guía tarda días en saberse si se entregó o se devolvió. Master Data mira tu
+        historial y te propone cuántos días esperar antes de dar un día por cerrado. No lo
+        cambia solo, porque ese número afecta todos los porcentajes.
       </p>
 
       {loading ? (
@@ -352,14 +359,14 @@ function CalibrationStep({
                   {countryFlag(country.code)} {country.name}
                 </p>
                 <p className="text-sm text-ink-dim">
-                  Ventana actual: {country.maturation_days ?? 21} días
+                  Hoy esperamos {country.maturation_days ?? 21} días
                 </p>
               </div>
 
               {country.maturation_days_suggested ? (
                 <div className="flex items-center gap-2.5">
                   <span className="text-sm text-ink-2">
-                    Medimos {country.maturation_days_suggested} días
+                    Tu historial dice {country.maturation_days_suggested} días
                   </span>
                   <Button size="sm" onClick={() => apply(country)}>
                     Aplicar

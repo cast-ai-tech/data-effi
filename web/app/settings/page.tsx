@@ -26,7 +26,7 @@ export default function SettingsPage() {
       <header className="mb-5">
         <h1 className="text-2xl font-bold tracking-tight">Configuración</h1>
         <p className="mt-1 text-sm text-ink-dim">
-          Países, personas y cómo se mide la maduración.
+          Países, personas y cuántos días esperar antes de dar una guía por cerrada.
         </p>
       </header>
 
@@ -183,11 +183,11 @@ function UsersSection() {
 
 function Tier3Notice() {
   return (
-    <Card title="Sobre las conexiones Tier 3">
+    <Card title="Conexiones con tu usuario y contraseña (riesgo alto)" help="tier">
       <div className="space-y-2 text-sm leading-relaxed text-ink-2">
         <p>
-          Una conexión Tier 3 entra con <b>tu sesión</b> a una plataforma que no publica
-          API. Master Data se identifica, espera entre peticiones y se detiene apenas la
+          Este tipo de conexión entra con <b>tu usuario y contraseña</b> a una plataforma que
+          no ofrece una conexión oficial. Master Data se identifica, espera entre peticiones y se detiene apenas la
           plataforma rechaza la sesión: nunca disfraza el tráfico.
         </p>
         <p>
@@ -196,7 +196,8 @@ function Tier3Notice() {
           alternativa: exportar el reporte a mano y subirlo.
         </p>
         <p className="text-ink-dim">
-          El detalle completo está en <code className="text-ink-muted">docs/tier3-politica.md</code>.
+          Si quieres el detalle técnico, pídele a quien instaló Master Data el documento
+          <code className="text-ink-muted"> docs/tier3-politica.md</code>.
         </p>
       </div>
     </Card>

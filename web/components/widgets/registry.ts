@@ -65,9 +65,9 @@ export const WIDGET_REGISTRY: Record<string, WidgetComponent> = {
 
 /** Tabs of the country dashboard, in display order. */
 export const TABS = [
-  { key: "finanzas", label: "Finanzas" },
-  { key: "logistica", label: "Logística" },
-  { key: "efectividad", label: "Efectividad" },
+  { key: "finanzas", label: "Dinero" },
+  { key: "logistica", label: "Entregas" },
+  { key: "efectividad", label: "Productos" },
   { key: "servicio", label: "Servicio" },
 ] as const;
 

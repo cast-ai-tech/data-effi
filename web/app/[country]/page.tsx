@@ -17,8 +17,10 @@ import { AppShell } from "@/components/AppShell";
 import { DecisionStrip } from "@/components/DecisionStrip";
 import { WidgetRenderer } from "@/components/WidgetRenderer";
 import { TABS, type TabKey } from "@/components/widgets/registry";
+import { HelpTip } from "@/components/HelpTip";
 import { Card, EmptyState, SkeletonRows, cx } from "@/components/ui";
 import { countryFlag } from "@/lib/format";
+import { TAB_HELP } from "@/lib/glossary";
 import { useApi } from "@/lib/hooks";
 import type { Country, DecisionScope, LayoutResponse } from "@/lib/types";
 
@@ -106,12 +108,18 @@ export default function CountryDashboard() {
             <span className="text-2xl leading-none">{countryFlag(countryCode)}</span>
             {country?.name ?? countryCode}
           </h1>
-          <p className="mt-1 text-sm text-ink-dim">
-            {country
-              ? `Moneda ${country.currency_code} · ventana de maduración ${
-                  country.maturation_days ?? 21
-                } días`
-              : "Cargando…"}
+          <p className="mt-1 flex flex-wrap items-center gap-x-1.5 gap-y-1 text-sm text-ink-muted">
+            {country ? (
+              <>
+                <span>
+                  Moneda {country.currency_code} · esperamos {country.maturation_days ?? 21} días
+                  para dar una guía por cerrada
+                </span>
+                <HelpTip term="maduracion" />
+              </>
+            ) : (
+              "Cargando…"
+            )}
           </p>
         </div>
 
@@ -157,6 +165,10 @@ export default function CountryDashboard() {
         ))}
       </div>
 
+      {/* One line that says what this tab is about, for whoever has never
+          opened it. Cheaper than a tooltip and it works on a phone. */}
+      <p className="-mt-2 mb-4 text-sm text-ink-muted">{TAB_HELP[tab]}</p>
+
       {/* The verdicts for this tab, before the numbers that justify them. Only
           once the country is known: a strip for a country you may not open
           would be a 403 dressed as a recommendation. */}
@@ -176,8 +188,8 @@ export default function CountryDashboard() {
       {country && widgets.length === 0 && !loadingLayout && (
         <Card>
           <EmptyState
-            title="Nada configurado en esta pestaña"
-            instruction="Conecta una fuente de datos para este país y los widgets aparecerán aquí."
+            title="Esta pestaña todavía no tiene datos"
+            instruction="Sube un reporte en Cargar datos o conecta una plataforma en Configuración → Conexiones."
           />
         </Card>
       )}

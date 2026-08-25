@@ -11,7 +11,9 @@
 import { useEffect, useState } from "react";
 import type { ReactNode } from "react";
 
+import { HelpTip } from "@/components/HelpTip";
 import { cx } from "@/components/ui/cx";
+import { GLOSSARY, type GlossaryKey } from "@/lib/glossary";
 
 export { cx } from "@/components/ui/cx";
 export { ThemeToggle, useTheme } from "@/components/ui/ThemeToggle";
@@ -24,6 +26,7 @@ export function Card({
   title,
   subtitle,
   actions,
+  help,
   children,
   className,
   bodyClassName,
@@ -31,6 +34,8 @@ export function Card({
   title?: ReactNode;
   subtitle?: ReactNode;
   actions?: ReactNode;
+  /** A glossary key or a sentence: renders a "?" next to the title. */
+  help?: GlossaryKey | string;
   children: ReactNode;
   className?: string;
   bodyClassName?: string;
@@ -46,8 +51,9 @@ export function Card({
         <header className="flex items-start justify-between gap-3 border-b border-line-subtle px-4 py-3.5 sm:px-5">
           <div className="min-w-0">
             {title && (
-              <h3 className="text-md font-semibold text-ink leading-tight truncate">
-                {title}
+              <h3 className="flex items-center gap-2 text-md font-semibold text-ink leading-tight">
+                <span className="truncate">{title}</span>
+                {help && <HelpTipFor help={help} />}
               </h3>
             )}
             {subtitle && (
@@ -279,15 +285,29 @@ export function Delta({
 // Section heading
 // ---------------------------------------------------------------------------
 
-export function SectionTitle({ children, hint }: { children: ReactNode; hint?: string }) {
+export function SectionTitle({
+  children,
+  hint,
+  help,
+}: {
+  children: ReactNode;
+  hint?: string;
+  help?: GlossaryKey | string;
+}) {
   return (
-    <div className="mb-3 flex items-baseline gap-2">
+    <div className="mb-3 flex items-center gap-2">
       <h2 className="text-xs font-bold uppercase tracking-[0.06em] text-ink-muted">
         {children}
       </h2>
+      {help && <HelpTipFor help={help} />}
       {hint && <span className="text-xs text-ink-dim">{hint}</span>}
     </div>
   );
+}
+
+/** `help` is either a glossary key or free text; pick the right prop. */
+export function HelpTipFor({ help }: { help: GlossaryKey | string }) {
+  return help in GLOSSARY ? <HelpTip term={help as GlossaryKey} /> : <HelpTip text={help} />;
 }
 
 // ---------------------------------------------------------------------------

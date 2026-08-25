@@ -25,6 +25,7 @@ import { Card, EmptyState, ErrorState, MicroBar, SkeletonRows, cx } from "@/comp
 import { bestCarrierByZone } from "@/lib/carrier-zones";
 import { useRangedApi } from "@/lib/date-range";
 import { formatMoney, formatNumber, formatPercent } from "@/lib/format";
+import { GLOSSARY } from "@/lib/glossary";
 import { useApi } from "@/lib/hooks";
 import type { CarrierRow, CarrierZoneRow } from "@/lib/types";
 
@@ -64,9 +65,7 @@ function isShortSample(row: CarrierRow): boolean {
   return row.sample_quality === "muestra_corta";
 }
 
-const SHORT_SAMPLE_HINT =
-  "Menos de 10 guías terminales en este rango: el porcentaje es un estimado, " +
-  "no una medición. Amplíe el rango para compararlo con las demás.";
+const SHORT_SAMPLE_HINT = GLOSSARY.muestra_corta.short;
 
 /** Deliberately quiet: a badge per row, not a banner. */
 function ShortSampleMark() {
@@ -236,7 +235,7 @@ export default function CarrierTable({ countryCode, country }: WidgetProps) {
         cell: (info) => formatNumber(info.getValue(), country, 1),
       }),
       column.accessor("p90_days_to_deliver", {
-        header: "p90 días",
+        header: "Días (90 %)",
         sortingFn: numericSort,
         cell: (info) => formatNumber(info.getValue(), country, 1),
       }),

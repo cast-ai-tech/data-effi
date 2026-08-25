@@ -28,6 +28,7 @@ import {
   StatusDot,
   cx,
 } from "@/components/ui";
+import { TIER_LABELS } from "@/lib/glossary";
 import { API_URL, ApiError, api } from "@/lib/api";
 import { countryFlag, formatRelative } from "@/lib/format";
 import { useApi } from "@/lib/hooks";
@@ -96,11 +97,6 @@ const WEBHOOK_KINDS: Array<{ value: WebhookKind; label: string }> = [
   { value: "cs", label: "Servicio al cliente" },
 ];
 
-const TIER_LABELS: Record<number, string> = {
-  1: "Tier 1 · API",
-  2: "Tier 2 · archivo",
-  3: "Tier 3 · sesión",
-};
 
 const HEALTH_LABELS: Record<Connection["health"], string> = {
   ok: "al día",
@@ -502,7 +498,7 @@ function PlatformCard({
 
       <div className="mt-2 flex flex-wrap items-center gap-1.5">
         <Chip tone={platform.tier === 3 ? "warning" : "neutral"}>
-          {TIER_LABELS[platform.tier] ?? `Tier ${platform.tier}`}
+          {TIER_LABELS[platform.tier] ?? `Tipo ${platform.tier}`}
         </Chip>
         {platform.scope === "global" && <Chip>Global</Chip>}
         {platform.availability === "beta" && <Chip tone="warning">Beta</Chip>}
@@ -978,10 +974,9 @@ function ConnectPanel({
                 className="mt-0.5"
               />
               <span className="text-sm leading-relaxed text-warning-ink">
-                Entiendo que esta es una conexión <b>Tier 3</b>: Master Data entrará con mi
-                sesión de usuario a {platform.platform_name}. Puede ir contra los términos
-                de esa plataforma y la responsabilidad es mía. Leí{" "}
-                <code>docs/tier3-politica.md</code>.
+                Entiendo que Master Data entrará a {platform.platform_name} <b>con mi usuario
+                y contraseña</b>, que esa plataforma podría suspender mi cuenta por eso, y que
+                la responsabilidad es mía.
               </span>
             </label>
           )}

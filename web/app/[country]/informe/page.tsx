@@ -241,12 +241,11 @@ export default function DailyReportPage() {
           </footer>
 
           <p className="text-[11px] text-ink-faint">
-            «Porcentaje devoluciones» divide las devoluciones por todas las
-            guías del día, como el informe manual. Un «~» marca días con menos
-            de 10 guías cerradas: estimado, no medición. Los días sin guías
-            aparecen en cero en vez de desaparecer. Una guía cuenta como
-            devolución cuando va de regreso, ya volvió o fue cancelada; como
-            indemnización cuando la transportadora la perdió.
+            «Porcentaje devoluciones» = devoluciones entre todas las guías del día,
+            igual que tu informe manual. Un «~» quiere decir menos de 10 guías
+            cerradas: es un estimado. Los días sin guías salen en cero.
+            Devolución = va de regreso, ya volvió o se canceló. Indemnización = la
+            transportadora perdió el paquete.
           </p>
         </div>
       )}

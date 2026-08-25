@@ -94,7 +94,7 @@ describe("carrier table - sample_quality", () => {
     renderTable([carrier({ sample_quality: "muestra_corta" })]);
 
     // Both percentages carry the mark, because both are the estimate.
-    const marks = screen.getAllByTitle(/Menos de 10 guías terminales/);
+    const marks = screen.getAllByTitle(/Menos de 10 guías cerradas/);
     expect(marks).toHaveLength(2);
     expect(marks[0]).toHaveTextContent("~");
   });
@@ -127,7 +127,7 @@ describe("carrier table - sample_quality", () => {
   it("leaves a well-measured carrier completely unmarked", () => {
     renderTable([carrier({ carrier_name: "URBANO", sample_quality: "suficiente" })]);
 
-    expect(screen.queryByTitle(/Menos de 10 guías terminales/)).not.toBeInTheDocument();
+    expect(screen.queryByTitle(/Menos de 10 guías cerradas/)).not.toBeInTheDocument();
     expect(screen.queryByText(/Afecta a/)).not.toBeInTheDocument();
   });
 
@@ -137,7 +137,7 @@ describe("carrier table - sample_quality", () => {
     // marking: the mark has to mean something.
     renderTable([carrier()]);
 
-    expect(screen.queryByTitle(/Menos de 10 guías terminales/)).not.toBeInTheDocument();
+    expect(screen.queryByTitle(/Menos de 10 guías cerradas/)).not.toBeInTheDocument();
     expect(screen.getByText("100,0%")).toBeInTheDocument();
   });
 });

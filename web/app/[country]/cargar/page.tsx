@@ -235,8 +235,8 @@ export default function CountryUploadPage() {
                 })}
               </div>
               <p className="mt-1.5 text-xs text-ink-dim">
-                Las guías quedan bajo la plataforma que elijas: así el tablero separa Effi de
-                Dropi. Si el archivo es un reporte conocido y no coincide, no se carga.
+                Elige de qué plataforma es el archivo. Así el tablero no mezcla Effi con Dropi.
+                Si el archivo es de otra plataforma, no se carga.
               </p>
             </fieldset>
 

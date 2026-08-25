@@ -27,6 +27,8 @@ import {
 
 import type { WidgetProps } from "@/components/widgets/types";
 import { Card, EmptyState, ErrorState, SkeletonRows } from "@/components/ui";
+
+const TITLE = "Cómo se van entregando las guías de cada semana";
 import { useRangedApi } from "@/lib/date-range";
 import { formatDate, formatPercent, parseIsoDate } from "@/lib/format";
 import type { CohortRow } from "@/lib/types";
@@ -137,7 +139,7 @@ export default function CohortCurve({ countryCode, country }: WidgetProps) {
 
   if (loading) {
     return (
-      <Card title="Curva de entrega por cohorte" subtitle="Días desde el despacho">
+      <Card title={TITLE} subtitle="Días desde el despacho" help="cohorte">
         <SkeletonRows rows={6} />
       </Card>
     );
@@ -145,7 +147,7 @@ export default function CohortCurve({ countryCode, country }: WidgetProps) {
 
   if (error) {
     return (
-      <Card title="Curva de entrega por cohorte" subtitle="Días desde el despacho">
+      <Card title={TITLE} subtitle="Días desde el despacho" help="cohorte">
         <ErrorState message={error.message} onRetry={reload} />
       </Card>
     );
@@ -153,9 +155,9 @@ export default function CohortCurve({ countryCode, country }: WidgetProps) {
 
   if (series.length === 0) {
     return (
-      <Card title="Curva de entrega por cohorte" subtitle="Días desde el despacho">
+      <Card title={TITLE} subtitle="Días desde el despacho" help="cohorte">
         <EmptyState
-          title="Todavía no hay cohortes maduras"
+          title="Ninguna semana ha cumplido los días de espera"
           instruction={
             maturationDays !== null
               ? `Ninguna semana de despachos cumple aún los ${maturationDays} días de maduración. Vuelve cuando el primer lote los complete, o ajusta los días de maduración del país en Configuración.`
@@ -168,8 +170,9 @@ export default function CohortCurve({ countryCode, country }: WidgetProps) {
 
   return (
     <Card
-      title="Curva de entrega por cohorte"
+      title={TITLE}
       subtitle="Cada línea es una semana de despachos, seguida día a día"
+      help="cohorte"
     >
       <ResponsiveContainer width="100%" height={260}>
         <LineChart data={chartData} margin={{ top: 12, right: 12, bottom: 4, left: -8 }}>
