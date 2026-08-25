@@ -571,6 +571,12 @@ export interface CarrierRow {
    * it does.
    */
   sample_quality?: "suficiente" | "muestra_corta" | null;
+  /** Migration 049: the dispatched basis and the realised contribution. */
+  closed_shipments?: number | null;
+  delivery_rate_dispatched_pct?: number | null;
+  return_rate_dispatched_pct?: number | null;
+  realised_contribution?: number | null;
+  capital_in_street?: number | null;
 }
 
 export interface GeoRow {

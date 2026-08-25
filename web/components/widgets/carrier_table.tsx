@@ -98,17 +98,33 @@ interface CarrierTotals {
   avgDays: number | null;
   avgFreight: number | null;
   contribution: number;
+  deliveryRateClosed: number | null;
+  returnRateClosed: number | null;
+  /** Contribution of the guides already closed (migration 049). */
+  realised: number;
+  /** Freight, product and fees already paid on guides still open. */
+  inStreet: number;
 }
 
 /**
  * Totals are WEIGHTED, never a mean of means: a carrier with 12 guides must not
  * move the country's delivery rate as much as one with 12.000.
  */
+/** Delivered (or returned) over everything dispatched: the server's column when
+ *  it is there, the same arithmetic otherwise. */
+function dispatchedRate(part: number, shipments: number, fromServer?: number | null): number | null {
+  if (fromServer !== undefined && fromServer !== null) return fromServer;
+  return shipments > 0 ? (part / shipments) * 100 : null;
+}
+
 function computeTotals(rows: CarrierRow[]): CarrierTotals {
   let shipments = 0;
   let delivered = 0;
   let returned = 0;
+  let closed = 0;
   let contribution = 0;
+  let realised = 0;
+  let inStreet = 0;
   let daysWeight = 0;
   let daysSum = 0;
   let freightTotal = 0;
@@ -118,7 +134,10 @@ function computeTotals(rows: CarrierRow[]): CarrierTotals {
     shipments += row.shipments;
     delivered += row.delivered;
     returned += row.returned;
+    closed += row.closed_shipments ?? row.shipments - row.in_transit;
     contribution += row.contribution ?? 0;
+    realised += row.realised_contribution ?? 0;
+    inStreet += row.capital_in_street ?? 0;
 
     if (row.avg_days_to_deliver !== null && row.delivered > 0) {
       daysSum += row.avg_days_to_deliver * row.delivered;
@@ -138,11 +157,17 @@ function computeTotals(rows: CarrierRow[]): CarrierTotals {
 
   return {
     shipments,
+    // Same basis as every row: delivered over everything dispatched...
     deliveryRate: shipments > 0 ? (delivered / shipments) * 100 : null,
     returnRate: shipments > 0 ? (returned / shipments) * 100 : null,
+    // ...and, beside it, over the guides already closed.
+    deliveryRateClosed: closed > 0 ? (delivered / closed) * 100 : null,
+    returnRateClosed: closed > 0 ? (returned / closed) * 100 : null,
     avgDays: daysWeight > 0 ? daysSum / daysWeight : null,
     avgFreight: freightShipments > 0 ? freightTotal / freightShipments : null,
     contribution,
+    realised,
+    inStreet,
   };
 }
 
@@ -193,21 +218,27 @@ export default function CarrierTable({ countryCode, country }: WidgetProps) {
         cell: (info) => formatNumber(info.getValue(), country, 0),
       }),
       column.accessor("delivery_rate_pct", {
-        header: "% entrega",
+        header: "% entregado",
         sortingFn: numericSort,
         cell: (info) => {
-          const value = info.getValue();
+          const row = info.row.original;
+          // Delivered over everything dispatched, like the headline tiles. The
+          // closed-only rate (what the row will settle at) sits beneath.
+          const dispatched = dispatchedRate(row.delivered, row.shipments, row.delivery_rate_dispatched_pct);
           return (
             <div className="flex items-center gap-1">
               <div className="min-w-0 flex-1">
                 <MicroBar
-                  value={value}
+                  value={dispatched}
                   max={100}
-                  tone={deliveryTone(value)}
-                  label={formatPercent(value)}
+                  tone={deliveryTone(info.getValue())}
+                  label={formatPercent(dispatched)}
                 />
+                <span className="mt-0.5 block text-xs text-ink-dim">
+                  cerradas {formatPercent(info.getValue())}
+                </span>
               </div>
-              {isShortSample(info.row.original) && <ShortSampleMark />}
+              {isShortSample(row) && <ShortSampleMark />}
             </div>
           );
         },
@@ -215,19 +246,26 @@ export default function CarrierTable({ countryCode, country }: WidgetProps) {
       column.accessor("return_rate_pct", {
         header: "% devolución",
         sortingFn: numericSort,
-        cell: (info) => (
-          <div className="flex items-center gap-1">
-            <div className="min-w-0 flex-1">
-              <MicroBar
-                value={info.getValue()}
-                max={100}
-                tone="negative"
-                label={formatPercent(info.getValue())}
-              />
+        cell: (info) => {
+          const row = info.row.original;
+          const dispatched = dispatchedRate(row.returned, row.shipments, row.return_rate_dispatched_pct);
+          return (
+            <div className="flex items-center gap-1">
+              <div className="min-w-0 flex-1">
+                <MicroBar
+                  value={dispatched}
+                  max={100}
+                  tone="negative"
+                  label={formatPercent(dispatched)}
+                />
+                <span className="mt-0.5 block text-xs text-ink-dim">
+                  cerradas {formatPercent(info.getValue())}
+                </span>
+              </div>
+              {isShortSample(row) && <ShortSampleMark />}
             </div>
-            {isShortSample(info.row.original) && <ShortSampleMark />}
-          </div>
-        ),
+          );
+        },
       }),
       column.accessor("avg_days_to_deliver", {
         header: "Días prom.",
@@ -245,10 +283,15 @@ export default function CarrierTable({ countryCode, country }: WidgetProps) {
         cell: (info) => formatMoney(info.getValue(), country),
       }),
       column.accessor("contribution", {
-        header: "Contribución",
+        header: "Contribución cerrada",
         sortingFn: numericSort,
         cell: (info) => {
-          const value = info.getValue();
+          const row = info.row.original;
+          // Only the guides already closed: an open guide has paid its freight
+          // and its product and collected nothing YET. That money is capital
+          // in the street, shown beneath, not a loss of this carrier.
+          const value = row.realised_contribution ?? info.getValue();
+          const street = row.capital_in_street ?? null;
           return (
             <span
               className={cx(
@@ -261,6 +304,11 @@ export default function CarrierTable({ countryCode, country }: WidgetProps) {
               )}
             >
               {formatMoney(value, country)}
+              {street !== null && street > 0 && (
+                <span className="mt-0.5 block text-xs font-normal text-ink-dim">
+                  en la calle {formatMoney(street, country)}
+                </span>
+              )}
             </span>
           );
         },
@@ -382,9 +430,12 @@ export default function CarrierTable({ countryCode, country }: WidgetProps) {
                 <MicroBar
                   value={totals.deliveryRate}
                   max={100}
-                  tone={deliveryTone(totals.deliveryRate)}
+                  tone={deliveryTone(totals.deliveryRateClosed)}
                   label={formatPercent(totals.deliveryRate)}
                 />
+                <span className="mt-0.5 block text-xs font-normal text-ink-dim">
+                  cerradas {formatPercent(totals.deliveryRateClosed)}
+                </span>
               </td>
               <td className="px-3 py-2">
                 <MicroBar
@@ -393,6 +444,9 @@ export default function CarrierTable({ countryCode, country }: WidgetProps) {
                   tone="negative"
                   label={formatPercent(totals.returnRate)}
                 />
+                <span className="mt-0.5 block text-xs font-normal text-ink-dim">
+                  cerradas {formatPercent(totals.returnRateClosed)}
+                </span>
               </td>
               <td className="px-3 py-2 text-right">
                 {formatNumber(totals.avgDays, country, 1)}
@@ -406,10 +460,15 @@ export default function CarrierTable({ countryCode, country }: WidgetProps) {
               <td
                 className={cx(
                   "px-3 py-2 text-right",
-                  totals.contribution < 0 ? "text-negative-ink" : "text-positive-ink",
+                  totals.realised < 0 ? "text-negative-ink" : "text-positive-ink",
                 )}
               >
-                {formatMoney(totals.contribution, country)}
+                {formatMoney(totals.realised, country)}
+                {totals.inStreet > 0 && (
+                  <span className="mt-0.5 block text-xs font-normal text-ink-dim">
+                    en la calle {formatMoney(totals.inStreet, country)}
+                  </span>
+                )}
               </td>
             </tr>
           </tfoot>
@@ -434,7 +493,7 @@ export default function CarrierTable({ countryCode, country }: WidgetProps) {
             <span key={zone}>
               {index > 0 && " · "}
               {zone} → <span className="font-semibold text-accent-ink">{winner.carrier_name}</span>{" "}
-              ({formatPercent(winner.delivery_rate_pct)})
+              ({formatPercent(winner.delivery_rate_pct)} de cerradas)
             </span>
           ))}
           . Medido en 90 días; el detalle por ciudad está en «Transportadora por zona».

@@ -268,7 +268,12 @@ mart.v_daily_contribution(country_code, store_name, day, shipments, delivered, r
 
 mart.v_carrier_effectiveness(country_code, carrier_name, shipments, delivered, returned,
     in_transit, delivery_rate_pct, return_rate_pct, avg_days_to_deliver, p90_days_to_deliver,
-    freight_total, avg_freight_per_shipment, revenue, contribution, currency_code)
+    freight_total, avg_freight_per_shipment, revenue, contribution, currency_code,
+    closed_shipments, delivery_rate_dispatched_pct, return_rate_dispatched_pct,
+    realised_contribution, capital_in_street)
+    -- delivery_rate_pct divide por guías cerradas; delivery_rate_dispatched_pct por todas
+    -- las despachadas. contribution incluye lo pagado en guías abiertas;
+    -- realised_contribution solo cerradas; capital_in_street = plata en la calle.
 
 mart.v_geo_performance(country_code, level1_name, city_name, shipments, delivered, returned,
     in_transit, delivery_rate_pct, revenue, contribution, avg_days_to_deliver,

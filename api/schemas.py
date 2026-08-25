@@ -867,6 +867,13 @@ class CarrierRow(BaseModel):
     # existed is still a valid CarrierRow, and because a missing flag must read
     # as "no sabemos" rather than as "suficiente".
     sample_quality: SampleQuality | None = None
+    # Migration 049: the dispatched basis and the realised contribution, so
+    # the screen can show both readings instead of mixing them.
+    closed_shipments: int | None = None
+    delivery_rate_dispatched_pct: float | None = None
+    return_rate_dispatched_pct: float | None = None
+    realised_contribution: float | None = None
+    capital_in_street: float | None = None
 
 
 class GeoRow(BaseModel):
