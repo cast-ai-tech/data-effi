@@ -30,9 +30,10 @@ from uuid import UUID
 
 from fastapi import APIRouter, Depends, Query, status
 
+from api.billing import subscription_state
 from api.db import connection, execute, fetch_all, fetch_one, fetch_required
 from api.deps import CurrentUser, CurrentUserDep, UnscopedDbDep
-from api.errors import ApiError, Conflict, Forbidden, NotFound
+from api.errors import ApiError, Conflict, Forbidden, NotFound, PaymentRequired
 from api.schemas import (
     DATE_FIELDS,
     MemberRow,
@@ -654,6 +655,18 @@ def create_tenant(payload: TenantCreateRequest, conn: UnscopedDbDep, user: OrgAd
 
     if fetch_one(conn, "SELECT 1 FROM core.tenant WHERE slug = %s", (slug,)):
         raise Conflict(f"Ya existe una sociedad con el identificador '{slug}'")
+
+    # The plan says how many companies the organisation may hold (048). The
+    # free month holds one; a requested plan counts only once it is active.
+    state = subscription_state(conn, _org_id(user))
+    if state.max_tenants is not None and state.tenants_used >= state.max_tenants:
+        raise PaymentRequired(
+            f"Tu plan permite {state.max_tenants} "
+            f"{'empresa' if state.max_tenants == 1 else 'empresas'} y ya tienes "
+            f"{state.tenants_used}. Elige un plan más grande para crear otra.",
+            code="plan_limit",
+            detail={"max_tenants": state.max_tenants, "tenants_used": state.tenants_used},
+        )
 
     if payload.countries:
         known = fetch_all(

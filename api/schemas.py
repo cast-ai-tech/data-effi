@@ -114,6 +114,42 @@ class SwitchWorkspaceRequest(BaseModel):
     tenant_id: UUID
 
 
+class PlanRow(BaseModel):
+    code: str
+    name: str
+    price_usd: float | None = Field(default=None, description="Null = negociado")
+    max_tenants: int | None = Field(default=None, description="Null = sin límite")
+    is_custom: bool = False
+
+
+class SubscriptionSummary(BaseModel):
+    """Where the organisation stands (migration 048). `blocked` = the API answers 402."""
+
+    status: Literal["trial", "pending", "active", "expired"]
+    plan_code: str | None = None
+    plan_name: str | None = None
+    requested_plan_code: str | None = None
+    requested_plan_name: str | None = None
+    trial_ends_at: datetime
+    current_period_end: datetime | None = None
+    days_left: int | None = None
+    max_tenants: int | None = None
+    tenants_used: int = 0
+    blocked: bool = False
+    message: str = ""
+
+
+class BillingResponse(BaseModel):
+    plans: list[PlanRow]
+    subscription: SubscriptionSummary
+    advisor_whatsapp_url: str | None = None
+    can_choose: bool = False
+
+
+class ChoosePlanRequest(BaseModel):
+    plan_code: str = Field(min_length=1, max_length=40)
+
+
 class UserResponse(BaseModel):
     id: UUID
     email: str
@@ -131,6 +167,9 @@ class UserResponse(BaseModel):
     countries: list[str] | None = None
     capabilities: list[Capability] = Field(default_factory=list)
     workspaces: list[WorkspaceSummary] = Field(default_factory=list)
+    # The free month / plan of the organisation, so the web can show the days
+    # left and send a blocked person to the plans screen.
+    subscription: SubscriptionSummary | None = None
 
 
 class FxRateRow(BaseModel):

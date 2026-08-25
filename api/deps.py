@@ -16,7 +16,7 @@ from fastapi import Depends, Request
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 
 from api.db import check_rate_limit, connection
-from api.errors import Forbidden, RateLimited, Unauthorized
+from api.errors import Forbidden, PaymentRequired, RateLimited, Unauthorized
 from api.security import TokenError, constant_time_equals, decode_access_token
 from api.settings import Settings, get_settings
 
@@ -214,7 +214,28 @@ def db_for_user(user: CurrentUserDep, request: Request) -> Iterator[psycopg.Conn
         )
     _guard_country(user, request)
     with connection(user.tenant_id) as conn:
+        _guard_subscription(conn, user)
         yield conn
+
+
+def _guard_subscription(conn: psycopg.Connection, user: CurrentUser) -> None:
+    """The free month ended, or the plan ran out: every data endpoint is closed.
+
+    Checked here because every data endpoint runs on `DbDep`; the unscoped
+    endpoints (login, /auth/me, /billing, the org chart) stay open so the
+    person can see what happened and choose a plan. One small query per
+    request, on a table outside row-level security.
+    """
+    if user.org_id is None:
+        return
+    from api.billing import subscription_state
+
+    state = subscription_state(conn, user.org_id)
+    if state.blocked:
+        raise PaymentRequired(
+            state.message,
+            detail={"status": state.status, "trial_ends_at": state.trial_ends_at.isoformat()},
+        )
 
 
 DbDep = Annotated[psycopg.Connection, Depends(db_for_user)]

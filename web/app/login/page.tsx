@@ -62,16 +62,16 @@ function LoginForm() {
     mode === "login"
       ? "Entra a tu operación"
       : mode === "register"
-        ? "Crea tu espacio de trabajo"
+        ? "Inicia gratis 1 mes"
         : "Te invitaron a Data Effi";
   const lead =
     mode === "login"
       ? "Analítica de contraentrega para tus países, tus transportadoras y tus productos."
       : mode === "register"
-        ? "Esto crea la cuenta dueña del despliegue. Las demás personas entran por invitación."
+        ? "Crea tu cuenta y tu empresa. Un mes gratis para 1 empresa, sin tarjeta. Después eliges un plan."
         : "Escribe tu nombre y elige una contraseña. El correo ya viene en la invitación.";
   const submitLabel =
-    mode === "login" ? "Entrar" : mode === "register" ? "Crear cuenta" : "Crear mi cuenta";
+    mode === "login" ? "Entrar" : mode === "register" ? "Iniciar gratis" : "Crear mi cuenta";
 
   return (
     <main className="flex min-h-screen items-center justify-center bg-page px-4">
@@ -99,7 +99,7 @@ function LoginForm() {
           )}
           {mode === "register" && (
             <Field
-              label="Nombre de la operación"
+              label="Nombre de tu empresa"
               value={tenantName}
               onChange={setTenantName}
               placeholder="Mi empresa"
@@ -166,7 +166,7 @@ function LoginForm() {
             className="mt-4 w-full text-center text-[12px] text-ink-muted hover:text-accent"
           >
             {mode === "login"
-              ? "¿Primera vez? Crear el espacio de trabajo"
+              ? "¿Primera vez? Inicia gratis 1 mes"
               : "Ya tengo cuenta, entrar"}
           </button>
         )}

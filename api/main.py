@@ -21,6 +21,7 @@ from api.ingest_queue import get_queue, init_queue
 from api.routers import (
     ai,
     auth,
+    billing,
     config,
     customers,
     events,
@@ -127,6 +128,7 @@ def create_app() -> FastAPI:
 
     app.include_router(auth.router)
     app.include_router(org.router)
+    app.include_router(billing.router)
     # Not read-only: picking a country and a connection is part of uploading a
     # file, so the one screen an `uploader` may use needs this router too.
     app.include_router(

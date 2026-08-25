@@ -92,6 +92,12 @@ class Settings(BaseSettings):
     # --- worker ---
     worker_enabled: bool = True
     fx_provider_url: str = "https://open.er-api.com/v6/latest"
+
+    # --- plans (migration 048) ---
+    # WhatsApp number of the advisor for the custom plan, digits with country
+    # code (e.g. 573001234567). None hides the button.
+    advisor_whatsapp: str | None = None
+    trial_days: int = 30
     fx_provider_api_key: str | None = None
     tier3_fetch_enabled: bool = False
 

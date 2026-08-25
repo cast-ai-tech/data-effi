@@ -11,6 +11,7 @@
  * it was.
  */
 
+import { PLANS_PATH, shouldRedirectToPlans } from "@/lib/billing";
 import type { ApiErrorBody } from "@/lib/types";
 
 /** Where the browser sends its calls: this origin, through the proxy. */
@@ -109,6 +110,16 @@ async function settle<T>(response: Response, auth: boolean): Promise<T> {
       errorBody = (await response.json()) as ApiErrorBody;
     } catch {
       errorBody = null;
+    }
+    // 402 = the free month ended or the plan does not allow this (migration
+    // 048). The plans screen is the only useful place to be; go there once,
+    // never from the plans screen itself.
+    if (
+      response.status === 402 &&
+      typeof window !== "undefined" &&
+      shouldRedirectToPlans(window.location.pathname)
+    ) {
+      window.location.assign(PLANS_PATH);
     }
     throw new ApiError(response.status, errorBody, `Error ${response.status}`);
   }

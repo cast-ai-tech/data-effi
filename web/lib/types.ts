@@ -173,6 +173,49 @@ export interface User {
   countries: string[] | null;
   capabilities: Capability[];
   workspaces: Workspace[];
+  /** The free month / plan of the organisation (migration 048). Absent only
+   *  in fixtures older than the field. */
+  subscription?: SubscriptionState | null;
+}
+
+// ---------------------------------------------------------------------------
+// Plans: a free month, then Master / Master Pro / Master Elite, or a custom
+// deal with an advisor. Billing is manual: `pending` until an advisor activates.
+// ---------------------------------------------------------------------------
+
+export interface Plan {
+  code: string;
+  name: string;
+  /** Null = negotiated (custom plan). */
+  price_usd: number | null;
+  /** Null = no limit (custom plan). */
+  max_tenants: number | null;
+  is_custom: boolean;
+}
+
+export type SubscriptionStatus = "trial" | "pending" | "active" | "expired";
+
+export interface SubscriptionState {
+  status: SubscriptionStatus;
+  plan_code: string | null;
+  plan_name: string | null;
+  requested_plan_code: string | null;
+  requested_plan_name: string | null;
+  trial_ends_at: string;
+  current_period_end: string | null;
+  days_left: number | null;
+  max_tenants: number | null;
+  tenants_used: number;
+  /** True = the API answers 402 to every data endpoint. */
+  blocked: boolean;
+  message: string;
+}
+
+export interface BillingResponse {
+  plans: Plan[];
+  subscription: SubscriptionState;
+  advisor_whatsapp_url: string | null;
+  can_choose: boolean;
 }
 
 // ---------------------------------------------------------------------------

@@ -1,8 +1,9 @@
-"""Authentication: register the first owner, log in, refresh, invite.
+"""Authentication: register, log in, refresh, invite.
 
-`/auth/register` only ever works once per deployment - it creates the tenant and
-its owner. After that the only way in is an invitation, so a public URL cannot be
-used to mint accounts on someone else's workspace.
+`/auth/register` creates an organisation, its first company and its owner, on
+a free month (migration 048). It is open: every registration is its own
+organisation, isolated by tenant like any other. Joining an EXISTING company
+is still only possible by invitation.
 """
 
 from __future__ import annotations
@@ -14,6 +15,7 @@ from uuid import UUID
 
 from fastapi import APIRouter, Depends, Request, Response, status
 
+from api.billing import start_trial, subscription_state
 from api.db import execute, fetch_all, fetch_one, fetch_required
 from api.deps import (
     CAPABILITIES,
@@ -39,6 +41,7 @@ from api.schemas import (
     RegisterRequest,
     Role,
     SessionRow,
+    SubscriptionSummary,
     SwitchWorkspaceRequest,
     TokenResponse,
     UserResponse,
@@ -95,6 +98,19 @@ def _assert_countries_active(conn, tenant_id: UUID, countries: list[str]) -> Non
             f"Esta sociedad no opera en: {', '.join(unknown)}. "
             f"Países activos: {', '.join(sorted(active)) or 'ninguno'}.",
         )
+
+
+def _unique_slug(conn, table: str, base: str) -> str:
+    """`base`, or `base-2`, `base-3`... - the first one nobody holds.
+
+    `table` is one of two literals in this file, never request input.
+    """
+    assert table in {"core.org", "core.tenant"}
+    candidate, n = base, 1
+    while fetch_one(conn, f"SELECT 1 FROM {table} WHERE slug = %s", (candidate,)):  # noqa: S608
+        n += 1
+        candidate = f"{base}-{n}"
+    return candidate
 
 
 def slugify(name: str) -> str:
@@ -243,28 +259,32 @@ def register(
     conn: UnscopedDbDep,
     settings: SettingsDep,
 ) -> TokenResponse:
-    existing = fetch_one(conn, "SELECT count(*) AS n FROM core.app_user")
-    if existing and existing["n"] > 0:
-        raise Forbidden(
-            "Este despliegue ya tiene usuarios. Pídele a la persona propietaria "
-            "que te envíe una invitación."
+    # Registration is open since migration 048: every registration is its own
+    # organisation on a free month. The same e-mail cannot register twice, and
+    # two operators may call their company the same thing - slugs get a suffix.
+    taken = fetch_one(
+        conn, "SELECT 1 FROM core.app_user WHERE lower(email) = lower(%s)", (payload.email,)
+    )
+    if taken:
+        raise Conflict(
+            "Ese correo ya tiene cuenta. Entra con tu contraseña, o pide que te inviten "
+            "a la sociedad."
         )
 
-    # The person registering runs the holding: their first company is one of
-    # possibly several, and everything else hangs off this org.
+    base_slug = slugify(payload.tenant_name) or "empresa"
     org = fetch_required(
         conn,
-        "INSERT INTO core.org (slug, name) VALUES (%s, %s) "
-        "ON CONFLICT (slug) DO UPDATE SET name = EXCLUDED.name RETURNING id",
-        (slugify(payload.tenant_name) or "principal", payload.tenant_name),
+        "INSERT INTO core.org (slug, name) VALUES (%s, %s) RETURNING id",
+        (_unique_slug(conn, "core.org", base_slug), payload.tenant_name),
     )
 
-    slug = slugify(payload.tenant_name) or "dataeffi"
     tenant = fetch_required(
         conn,
         "INSERT INTO core.tenant (slug, name, org_id) VALUES (%s, %s, %s) RETURNING id, name",
-        (slug, payload.tenant_name, org["id"]),
+        (_unique_slug(conn, "core.tenant", base_slug), payload.tenant_name, org["id"]),
     )
+    # The free month starts now: one company, thirty days (migration 048).
+    start_trial(conn, org["id"], days=settings.trial_days)
 
     try:
         password_hash = hash_password(payload.password)
@@ -432,8 +452,14 @@ def me(user: CurrentUserDep, conn: UnscopedDbDep) -> UserResponse:
     workspaces = _workspaces(conn, user.id)
     org_role = _org_role(conn, user.id)
     row["is_org_admin"] = bool(row.get("is_org_admin")) or org_role == "admin"
+    subscription = (
+        SubscriptionSummary(**subscription_state(conn, row["org_id"]).as_dict())
+        if row.get("org_id")
+        else None
+    )
     return UserResponse(
         **row,
+        subscription=subscription,
         org_role=org_role,
         # The role that applies WHERE THE CALLER IS STANDING, not a global one.
         # Both values were read from columns constrained to these Literals.

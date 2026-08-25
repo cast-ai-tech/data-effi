@@ -54,6 +54,13 @@ class Forbidden(ApiError):
         super().__init__("forbidden", message, status_code=status.HTTP_403_FORBIDDEN, **kwargs)
 
 
+class PaymentRequired(ApiError):
+    """The free month ended, or the plan does not allow this (migration 048)."""
+
+    def __init__(self, message: str, *, code: str = "subscription_required", **kwargs: Any) -> None:
+        super().__init__(code, message, status_code=status.HTTP_402_PAYMENT_REQUIRED, **kwargs)
+
+
 class Conflict(ApiError):
     def __init__(self, message: str = "El recurso ya existe", **kwargs: Any) -> None:
         super().__init__("conflict", message, status_code=status.HTTP_409_CONFLICT, **kwargs)

@@ -17,6 +17,7 @@ import { PlatformPicker } from "@/components/PlatformPicker";
 import { NotificationBell } from "@/components/NotificationBell";
 import { Chip, StatusDot, cx } from "@/components/ui";
 import { api, signOut as endSession } from "@/lib/api";
+import { PLANS_PATH, shouldRedirectToPlans, subscriptionBanner } from "@/lib/billing";
 import { DEFAULT_FIELD, useDateRange } from "@/lib/date-range";
 import { countryFlag, formatRelative } from "@/lib/format";
 import { useApi, usePersistentState } from "@/lib/hooks";
@@ -132,6 +133,17 @@ export function AppShell({ children }: { children: React.ReactNode }) {
     router.push("/login");
   }
 
+  // The free month ended (or the plan ran out): the API answers 402 to every
+  // data screen, so the only useful place to be is the plans screen. Sent
+  // there once; the plans screen itself never redirects (migration 048).
+  const subscription = user?.subscription ?? null;
+  const banner = useMemo(() => subscriptionBanner(subscription), [subscription]);
+  useEffect(() => {
+    if (subscription?.blocked && shouldRedirectToPlans(pathname)) {
+      router.replace(PLANS_PATH);
+    }
+  }, [subscription, pathname, router]);
+
   return (
     <div className="flex h-screen w-full overflow-hidden bg-page text-ink">
       {drawerOpen && (
@@ -242,6 +254,15 @@ export function AppShell({ children }: { children: React.ReactNode }) {
               label="Usuarios"
             />
           )}
+          {(can("manage") || user?.is_org_admin) && (
+            <NavItem
+              href={PLANS_PATH}
+              active={pathname.startsWith(PLANS_PATH)}
+              collapsed={rail}
+              icon={<GearIcon />}
+              label="Planes"
+            />
+          )}
           {/* Sin `can(...)`: TODO usuario administra su propia cuenta, y quien
               menos permisos tiene es justamente quien más necesita ver escrito
               a qué tiene acceso. Un `uploader` sin esta pantalla no distingue
@@ -335,6 +356,25 @@ export function AppShell({ children }: { children: React.ReactNode }) {
             number on the screen is. */}
         {rangeApplies && <ExcludedByFieldBand country={formatCountry} />}
 
+        {banner && (
+          <div
+            role="status"
+            className={cx(
+              "flex flex-wrap items-center justify-between gap-2 border-b px-4 py-2 text-[12px] md:px-5",
+              banner.tone === "negative" && "border-negative/30 bg-negative/[0.08] text-negative",
+              banner.tone === "warning" && "border-warning/30 bg-warning/[0.10] text-ink",
+              banner.tone === "accent" && "border-accent/30 bg-accent/[0.08] text-ink",
+              banner.tone === "neutral" && "border-line-subtle bg-sunken text-ink-2",
+            )}
+          >
+            <span>{banner.text}</span>
+            {banner.cta && !pathname.startsWith(PLANS_PATH) && (
+              <Link href={PLANS_PATH} className="font-semibold underline underline-offset-2">
+                Ver planes
+              </Link>
+            )}
+          </div>
+        )}
         <main className="flex-1 overflow-y-auto px-4 py-4 md:px-5 md:py-5">{children}</main>
       </div>
 
