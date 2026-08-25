@@ -102,7 +102,9 @@ describe("carrier table - sample_quality", () => {
   it("still shows the percentage rather than blanking the row", () => {
     // A blank cell explains nothing; a marked number explains itself.
     renderTable([carrier({ sample_quality: "muestra_corta" })]);
-    expect(screen.getByText("100,0%")).toBeInTheDocument();
+    // Headline over everything dispatched (2 of 48), closed basis beneath.
+    expect(screen.getAllByText("4,2%").length).toBeGreaterThan(0);
+    expect(screen.getAllByText(/cerradas 100,0%/).length).toBeGreaterThan(0);
   });
 
   it("explains the mark under the table, and counts who it affects", () => {
@@ -138,6 +140,8 @@ describe("carrier table - sample_quality", () => {
     renderTable([carrier()]);
 
     expect(screen.queryByTitle(/Menos de 10 guías cerradas/)).not.toBeInTheDocument();
-    expect(screen.getByText("100,0%")).toBeInTheDocument();
+    // Headline over everything dispatched (2 of 48), closed basis beneath.
+    expect(screen.getAllByText("4,2%").length).toBeGreaterThan(0);
+    expect(screen.getAllByText(/cerradas 100,0%/).length).toBeGreaterThan(0);
   });
 });
