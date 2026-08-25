@@ -151,7 +151,7 @@ export default function GlobalSummary({ country }: WidgetProps) {
         <span className="min-w-0 flex-1">País</span>
         <span className="w-[96px] shrink-0 text-right sm:w-[132px]">Contribución local</span>
         <span className="hidden w-[128px] shrink-0 text-right sm:block">En dólares</span>
-        <span className="w-[104px] shrink-0 pl-[52px] sm:w-[126px]">% entrega</span>
+        <span className="w-[104px] shrink-0 pl-[52px] sm:w-[126px]">% entrega (cerradas)</span>
         <span className="w-[76px] shrink-0 text-right">Guías</span>
       </div>
 

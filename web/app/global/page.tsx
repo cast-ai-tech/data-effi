@@ -111,11 +111,13 @@ export default function GlobalPage() {
             <StatTile
               label="% entregado"
               value={formatPercent(
+                totals.shipments > 0 ? (totals.delivered / totals.shipments) * 100 : null,
+              )}
+              hint={`De lo despachado · sobre las ya cerradas: ${formatPercent(
                 totals.delivered + totals.returned > 0
                   ? (totals.delivered / (totals.delivered + totals.returned)) * 100
                   : null,
-              )}
-              hint="De las guías que ya se cerraron"
+              )}`}
             />
             <StatTile
               label="En camino"

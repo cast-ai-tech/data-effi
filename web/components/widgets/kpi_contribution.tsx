@@ -87,6 +87,14 @@ function percentChange(recent: number, earlier: number): number | null {
 }
 
 /** Difference in percentage points, for metrics that are already percentages. */
+/** Delivered over everything dispatched: the number that is still rising while
+ *  guides are open, and the one the operator means by "¿cuánto se entregó?". */
+function dispatchedRate(rows: DailyContribution[]): number | null {
+  const shipments = sumBy(rows, (row) => row.shipments);
+  if (shipments <= 0) return null;
+  return (sumBy(rows, (row) => row.delivered) / shipments) * 100;
+}
+
 function pointChange(recent: number | null, earlier: number | null): number | null {
   if (recent === null || earlier === null) return null;
   return recent - earlier;
@@ -117,6 +125,7 @@ export default function KpiContribution({ countryCode, country }: WidgetProps) {
     const contribution = sumBy(rows, (row) => row.contribution);
     const shipments = sumBy(rows, (row) => row.shipments);
     const rate = deliveryRate(rows);
+    const dispatched = dispatchedRate(rows);
     const inTransit = capitalInTransit(rows);
 
     const adSpendMissing = rows.some((row) => row.ad_spend_missing);
@@ -162,18 +171,19 @@ export default function KpiContribution({ countryCode, country }: WidgetProps) {
       },
       {
         key: "delivery-rate",
-        label: "% de entrega",
-        figure: formatPercent(rate),
-        delta: comparable ? pointChange(deliveryRate(recent), deliveryRate(earlier)) : null,
+        label: "% entregado de lo despachado",
+        figure: formatPercent(dispatched),
+        delta: comparable ? pointChange(dispatchedRate(recent), dispatchedRate(earlier)) : null,
         deltaSuffix: " pp",
         invertDelta: false,
         figureClass: "text-ink",
         stroke: "var(--color-positive)",
-        points: trailing(rows, (row) => {
-          const terminal = row.delivered + row.returned + row.dead;
-          return terminal > 0 ? (row.delivered / terminal) * 100 : 0;
-        }),
-        note: null,
+        points: trailing(rows, (row) =>
+          row.shipments > 0 ? (row.delivered / row.shipments) * 100 : 0,
+        ),
+        // The closed-only rate stays visible: it is what the day will settle
+        // at, but it reads as "casi todo entregado" while most guides are open.
+        note: rate === null ? null : `Sobre las ya cerradas: ${formatPercent(rate)}`,
       },
       {
         key: "capital-in-transit",
