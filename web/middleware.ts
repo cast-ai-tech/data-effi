@@ -1,6 +1,8 @@
 import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
 
+import { apiOrigin } from "@/lib/upload-transport";
+
 /**
  * Two jobs, one pass.
  *
@@ -25,10 +27,16 @@ const PUBLIC_PATHS = ["/login", "/register"];
 const ACCESS_COOKIE = "dataeffi_access";
 const REFRESH_COOKIE = "dataeffi_refresh";
 
+// The one exception to "the browser only talks to this origin": file uploads
+// go straight to the API (lib/api.ts `upload`), because the proxy runs as a
+// serverless function with a 6 MB body cap. `connect-src` must name the API
+// origin or the browser refuses the request before it leaves.
+const API_ORIGIN = apiOrigin(process.env.NEXT_PUBLIC_API_URL);
+
 function contentSecurityPolicy(nonce: string): string {
   return [
     "default-src 'self'",
-    "connect-src 'self'",
+    API_ORIGIN ? `connect-src 'self' ${API_ORIGIN}` : "connect-src 'self'",
     `script-src 'self' 'nonce-${nonce}' 'strict-dynamic'`,
     "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
     "font-src 'self' https://fonts.gstatic.com data:",

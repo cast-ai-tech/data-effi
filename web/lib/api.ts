@@ -17,11 +17,11 @@ import type { ApiErrorBody } from "@/lib/types";
 const PROXY_BASE = "/api/backend";
 
 /**
- * The API's PUBLIC origin. Not used to make requests any more - only to
- * compare against URLs the API hands out (the webhook screen checks that the
- * address it shows is not an internal one).
+ * The API's PUBLIC origin. Used for exactly one kind of request - file
+ * uploads, see `upload` below - and to compare against URLs the API hands out
+ * (the webhook screen checks that the address it shows is not an internal one).
  */
-const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
+const API_URL = (process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000").replace(/\/$/, "");
 
 export class ApiError extends Error {
   readonly status: number;
@@ -90,6 +90,11 @@ export async function request<T>(path: string, options: RequestOptions = {}): Pr
     credentials: "same-origin",
   });
 
+  return settle<T>(response, auth);
+}
+
+/** Turn the API's answer into a value or an ApiError, the same way everywhere. */
+async function settle<T>(response: Response, auth: boolean): Promise<T> {
   if (response.status === 401 && auth) {
     sendToLogin();
   }
@@ -111,7 +116,52 @@ export async function request<T>(path: string, options: RequestOptions = {}): Pr
   return (await response.json()) as T;
 }
 
+// ---------------------------------------------------------------------------
+// File upload: the one request that does NOT go through the proxy
+// ---------------------------------------------------------------------------
+
+/**
+ * The proxy runs as a serverless function - 4.5 MB request body on Vercel,
+ * 6 MB on Netlify (about 4.5 MB once a multipart body is base64-encoded on
+ * the way in). A 5.8 MB wallet export died there with a 413 before the proxy
+ * saw a byte of it.
+ *
+ * So a file goes straight to the API. The proxy still guards the session: it
+ * hands out only the short-lived access token (POST /api/backend/auth/
+ * upload-credential), rotating it first if it is about to expire. The refresh
+ * token never leaves its HttpOnly cookie. A 401 from the API means the token
+ * died mid-flight; ask for a fresh one and retry exactly once.
+ */
+export async function upload<T>(path: string, form: FormData): Promise<T> {
+  let token = await uploadCredential();
+  let response = await postDirect(path, form, token);
+  if (response.status === 401) {
+    token = await uploadCredential();
+    response = await postDirect(path, form, token);
+  }
+  return settle<T>(response, true);
+}
+
+async function uploadCredential(): Promise<string> {
+  const response = await fetch(`${PROXY_BASE}/auth/upload-credential`, {
+    method: "POST",
+    credentials: "same-origin",
+  });
+  const body = await settle<{ access_token: string }>(response, true);
+  return body.access_token;
+}
+
+function postDirect(path: string, form: FormData, token: string): Promise<Response> {
+  return fetch(`${API_URL}${path}`, {
+    method: "POST",
+    headers: { Authorization: `Bearer ${token}` },
+    body: form,          // the browser sets the multipart boundary
+    credentials: "omit", // the API wants the bearer, and has no use for cookies
+  });
+}
+
 export const api = {
+  upload,
   get: <T>(path: string, options?: RequestOptions) =>
     request<T>(path, { ...options, method: "GET" }),
   post: <T>(path: string, body?: unknown, options?: RequestOptions) =>

@@ -8,7 +8,16 @@
 #
 # Sin disco persistente: el free no lo permite. Los archivos subidos viven solo
 # mientras se procesan; lo ya ingerido esta en Postgres y no se ve afectado.
-# Por eso MAX_UPLOAD_MB baja de 25 a 10, que es lo que aguantan 512 MB de RAM.
+# MAX_UPLOAD_MB va en 25: el upload lee por trozos y corta al pasar el limite,
+# asi que un archivo nunca ocupa mas que su propio tamano en RAM.
+#
+# Los archivos llegan DIRECTO del navegador a este servicio (no por el proxy de
+# la web, que corre como funcion serverless y corta el cuerpo: 4,5 MB en Vercel,
+# 6 MB en Netlify). Por eso CORS tiene que dejar pasar a la web:
+#   - CORS_ORIGINS (dashboard): la URL de produccion en Vercel y, mientras siga
+#     de respaldo, la de Netlify. Separadas por coma, sin barra final.
+#   - CORS_ORIGIN_REGEX (aqui): la produccion y los previews de Vercel del
+#     proyecto masterdataweb, que cambian de URL en cada rama.
 
 services:
   - type: web
@@ -38,6 +47,15 @@ services:
         sync: false
       - key: CORS_ORIGINS
         sync: false
+      # OJO: este patron acepta cualquier proyecto de Vercel cuyo nombre empiece
+      # por masterdataweb-. Cualquiera puede crear uno. La API no usa cookies
+      # (solo bearer), asi que un origen ajeno no hereda ninguna sesion, pero lo
+      # correcto es anclarlo al slug del equipo, que Vercel pone al final de
+      # cada preview. Cuando se confirme el slug (<team> abajo), reemplazar por:
+      #   '^https://masterdataweb(-git-[a-z0-9-]+|-[a-z0-9]+)-<team>\.vercel\.app$'
+      # y dejar la URL de produccion solo en CORS_ORIGINS.
+      - key: CORS_ORIGIN_REGEX
+        value: '^https://masterdataweb(-[a-z0-9-]+)?\.vercel\.app$'
       - key: PROXY_SHARED_SECRET
         sync: false
 
@@ -53,7 +71,7 @@ services:
       - key: WORKER_ENABLED
         value: "false"
       - key: MAX_UPLOAD_MB
-        value: "10"
+        value: "25"
       - key: INGEST_MAX_CONCURRENCY
         value: "2"
       - key: UPLOAD_DIR

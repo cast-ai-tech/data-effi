@@ -71,7 +71,7 @@ export default function CountryUploadPage() {
     const form = new FormData();
     form.append("file", file);
     try {
-      return await api.post<DetectResult>("/ingest/detect", form);
+      return await api.upload<DetectResult>("/ingest/detect", form);
     } catch {
       // A preview that fails must not block the upload: the job will explain
       // an unreadable file in its own words.
@@ -123,7 +123,7 @@ export default function CountryUploadPage() {
       for (const file of picked) form.append("files", file);
 
       try {
-        const response = await api.post<{ jobs: UploadJob[] }>("/ingest/upload", form);
+        const response = await api.upload<{ jobs: UploadJob[] }>("/ingest/upload", form);
         setJobs((previous) => [...response.jobs, ...previous]);
         platformsState.reload();
       } catch (err) {

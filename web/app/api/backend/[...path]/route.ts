@@ -1,8 +1,11 @@
 import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
 
+import { expiresWithin } from "@/lib/upload-transport";
+
 /**
- * The browser never talks to the API directly and never sees a token.
+ * The browser never talks to the API directly and never sees a token - with
+ * one exception, file uploads, explained at `auth/upload-credential` below.
  *
  * Every call from the client goes to `/api/backend/<path>` on this origin. This
  * handler adds the bearer token from an HttpOnly cookie, forwards the request,
@@ -21,7 +24,7 @@ import type { NextRequest } from "next/server";
  */
 
 // Server-side only. In Docker this is the internal service name
-// (`http://api:8000`); on Netlify it is the public Render URL. Falls back to
+// (`http://api:8000`); on Vercel it is the public Render URL. Falls back to
 // the public variable so a local `npm run dev` needs no extra setting.
 const API_URL = (
   process.env.API_URL ??
@@ -32,6 +35,8 @@ const API_URL = (
 const ACCESS_COOKIE = "dataeffi_access";
 const REFRESH_COOKIE = "dataeffi_refresh";
 const REFRESH_TTL_SECONDS = 60 * 60 * 24 * 14;
+// An upload credential must outlive the upload it is handed out for.
+const UPLOAD_CREDENTIAL_MIN_TTL_SECONDS = 120;
 
 // Endpoints whose 2xx body carries a token pair to be moved into cookies.
 const TOKEN_ENDPOINTS = new Set([
@@ -110,8 +115,8 @@ async function forward(
   //
   // WHICH address: never the first entry of X-Forwarded-For - the browser can
   // write that one itself and pick its own rate-limit bucket. The platform in
-  // front of us sets a header the client cannot forge (Netlify:
-  // x-nf-client-connection-ip; most reverse proxies: x-real-ip); failing
+  // front of us sets a header the client cannot forge (Vercel and most
+  // reverse proxies: x-real-ip; Netlify: x-nf-client-connection-ip); failing
   // those, the LAST hop of the chain is the one the nearest trusted proxy
   // appended, which is the same rule api/deps.py applies.
   const secret = process.env.PROXY_SHARED_SECRET;
@@ -199,6 +204,41 @@ async function handle(request: NextRequest, context: { params: Promise<{ path: s
       return response;
     }
     const response = NextResponse.json(stripTokens(tokens));
+    setSessionCookies(response, request, tokens);
+    return response;
+  }
+
+  // File uploads do NOT go through this proxy. On Vercel this handler is a
+  // serverless function whose request body is capped at 4.5 MB (Netlify:
+  // 6 MB, about 4.5 MB for multipart, which travels base64-encoded), so
+  // anything bigger dies with a 413 before a line of this code runs. The
+  // page posts the file straight to the API instead and asks here for the
+  // credential to do it:
+  // the short-lived ACCESS token, never the refresh one. The refresh token is
+  // the one an XSS could turn into a fortnight of access, and it stays in
+  // its HttpOnly cookie.
+  if (path === "auth/upload-credential") {
+    if (request.method !== "POST") {
+      return new NextResponse(null, { status: 405 });
+    }
+    // A token about to expire would only earn the upload a 401 halfway through
+    // sending 20 MB; rotate it first, once, and hand out the fresh one.
+    if (accessToken && !expiresWithin(accessToken, UPLOAD_CREDENTIAL_MIN_TTL_SECONDS)) {
+      return NextResponse.json({ access_token: accessToken }, { headers: { "cache-control": "no-store" } });
+    }
+    const tokens = refreshToken ? await refresh(request, refreshToken) : null;
+    if (!tokens?.access_token) {
+      const response = NextResponse.json(
+        { error: { code: "unauthorized", message: "Sesión expirada. Vuelve a iniciar sesión.", detail: {} } },
+        { status: 401 },
+      );
+      clearSessionCookies(response, request);
+      return response;
+    }
+    const response = NextResponse.json(
+      { access_token: tokens.access_token },
+      { headers: { "cache-control": "no-store" } },
+    );
     setSessionCookies(response, request, tokens);
     return response;
   }
