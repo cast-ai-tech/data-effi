@@ -58,12 +58,14 @@ DATE_FIELDS: tuple[str, ...] = ("creacion", "despacho", "entrega")
 
 
 class RegisterRequest(BaseModel):
-    """Creates the first owner of a deployment. Everyone else joins by invitation."""
+    """Creates an account on a free month. The first company is created next,
+    on its own screen, with its country; `tenant_name` is kept optional for
+    the older one-step flow and the tests that use it."""
 
     email: EmailStr
     password: str = Field(min_length=10, max_length=200)
     full_name: str = Field(min_length=2, max_length=120)
-    tenant_name: str = Field(min_length=2, max_length=120)
+    tenant_name: str | None = Field(default=None, min_length=2, max_length=120)
 
 
 class LoginRequest(BaseModel):
@@ -394,9 +396,12 @@ class OrgSummaryResponse(BaseModel):
 
 
 class TenantCreateRequest(BaseModel):
+    """A company. The simplified flow gives it exactly one country; the list
+    stays for the org chart, which may add more later."""
+
     name: str = Field(min_length=2, max_length=120)
     countries: list[CountryCode] = Field(
-        default_factory=list, description="Países en los que opera la sociedad"
+        default_factory=list, description="País (o países) en que opera la empresa"
     )
     notes: str | None = Field(default=None, max_length=500)
 

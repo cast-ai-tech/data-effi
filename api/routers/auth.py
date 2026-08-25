@@ -67,7 +67,7 @@ def _require_tenant(user: CurrentUser) -> UUID:
     """The company the caller is standing in, or a clear refusal."""
     if user.tenant_id is None:
         raise Forbidden(
-            "Tu usuario no está parado en ninguna sociedad. Elige una y vuelve a intentar."
+            "Tu usuario no está en ninguna empresa. Elige una y vuelve a intentar."
         )
     return user.tenant_id
 
@@ -268,21 +268,29 @@ def register(
     if taken:
         raise Conflict(
             "Ese correo ya tiene cuenta. Entra con tu contraseña, o pide que te inviten "
-            "a la sociedad."
+            "a la empresa."
         )
 
-    base_slug = slugify(payload.tenant_name) or "empresa"
+    # The organisation is the invisible holder of the plan and of the
+    # companies this person creates. Named after the company when the old
+    # one-step flow sends one, after the person otherwise.
+    org_name = payload.tenant_name or payload.full_name
+    base_slug = slugify(org_name) or "cuenta"
     org = fetch_required(
         conn,
         "INSERT INTO core.org (slug, name) VALUES (%s, %s) RETURNING id",
-        (_unique_slug(conn, "core.org", base_slug), payload.tenant_name),
+        (_unique_slug(conn, "core.org", base_slug), org_name),
     )
 
-    tenant = fetch_required(
-        conn,
-        "INSERT INTO core.tenant (slug, name, org_id) VALUES (%s, %s, %s) RETURNING id, name",
-        (_unique_slug(conn, "core.tenant", base_slug), payload.tenant_name, org["id"]),
-    )
+    # The company is created on its own screen, with its country, unless the
+    # caller still sends a name (older flow, tests).
+    tenant = None
+    if payload.tenant_name:
+        tenant = fetch_required(
+            conn,
+            "INSERT INTO core.tenant (slug, name, org_id) VALUES (%s, %s, %s) RETURNING id, name",
+            (_unique_slug(conn, "core.tenant", base_slug), payload.tenant_name, org["id"]),
+        )
     # The free month starts now: one company, thirty days (migration 048).
     start_trial(conn, org["id"], days=settings.trial_days)
 
@@ -299,14 +307,18 @@ def register(
         VALUES (%s, %s, %s, %s, %s, 'owner', true)
         RETURNING id, tenant_id, org_id, email, role, is_org_admin
         """,
-        (tenant["id"], org["id"], payload.email.lower(), password_hash, payload.full_name),
+        (
+            tenant["id"] if tenant else None, org["id"], payload.email.lower(),
+            password_hash, payload.full_name,
+        ),
     )
 
-    execute(
-        conn,
-        "INSERT INTO core.membership (user_id, tenant_id, role) VALUES (%s, %s, 'owner')",
-        (user["id"], tenant["id"]),
-    )
+    if tenant:
+        execute(
+            conn,
+            "INSERT INTO core.membership (user_id, tenant_id, role) VALUES (%s, %s, 'owner')",
+            (user["id"], tenant["id"]),
+        )
     # Whoever registers the deployment runs the holding. Migration 036 backfilled
     # this row for the people who already existed; it has to be written here too,
     # or the very first account is an org admin according to the legacy boolean
@@ -320,9 +332,9 @@ def register(
 
     _record_auth_event(
         conn, email=payload.email, event="register", request=request,
-        tenant_id=tenant["id"], user_id=user["id"],
+        tenant_id=tenant["id"] if tenant else None, user_id=user["id"],
     )
-    logger.info("first owner registered for tenant %s", tenant["id"])
+    logger.info("account registered for org %s", org["id"])
     return _issue_tokens(conn, settings, user)
 
 
@@ -644,7 +656,7 @@ def switch_workspace(
 
     allowed = {ws["tenant_id"] for ws in _workspaces(conn, user.id)}
     if payload.tenant_id not in allowed:
-        raise Forbidden("No tienes acceso a esa sociedad")
+        raise Forbidden("No tienes acceso a esa empresa")
 
     return _issue_tokens(conn, settings, row, tenant_id=payload.tenant_id)
 

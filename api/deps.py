@@ -46,7 +46,7 @@ CAPABILITY_DENIED = {
     "read": "Tu usuario solo puede cargar archivos, no ver resultados.",
     "ingest": "Tu usuario no tiene permiso para cargar datos.",
     "config": "Tu usuario no puede cambiar la configuración.",
-    "manage": "Solo el propietario de la sociedad puede administrar usuarios.",
+    "manage": "Solo el propietario de la empresa puede administrar usuarios.",
 }
 
 
@@ -95,7 +95,7 @@ def tenant_of(user: CurrentUser) -> UUID:
     """
     if user.tenant_id is None:
         raise Forbidden(
-            "Tu usuario no pertenece a ninguna sociedad. Pide que te agreguen a una."
+            "Tu usuario todavía no tiene empresa. Crea una o pide que te inviten."
         )
     return user.tenant_id
 
@@ -210,7 +210,7 @@ def db_for_user(user: CurrentUserDep, request: Request) -> Iterator[psycopg.Conn
     """A connection already scoped to the caller's tenant."""
     if user.tenant_id is None:
         raise Forbidden(
-            "Tu usuario no pertenece a ninguna sociedad. Pide que te agreguen a una."
+            "Tu usuario todavía no tiene empresa. Crea una o pide que te inviten."
         )
     _guard_country(user, request)
     with connection(user.tenant_id) as conn:

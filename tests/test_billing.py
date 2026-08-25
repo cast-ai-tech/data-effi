@@ -108,6 +108,46 @@ def test_the_same_email_cannot_register_twice(client, owner_a):
     assert response.status_code == 409, response.text
 
 
+def test_registering_without_a_company_then_creating_it_with_its_country(client):
+    """The simplified flow: account first, then "crea tu empresa" with ONE country."""
+    response = client.post(
+        "/auth/register",
+        json={"email": "solo.cuenta@dataeffi.co", "password": PASSWORD, "full_name": "Solo Cuenta"},
+    )
+    assert response.status_code == 201, response.text
+    token = response.json()["access_token"]
+    assert response.json()["tenant_id"] is None
+
+    me = client.get("/auth/me", headers=auth(token)).json()
+    assert me["tenant_id"] is None and me["workspaces"] == []
+    assert me["subscription"]["status"] == "trial"
+    assert me["subscription"]["tenants_used"] == 0
+    assert me["is_org_admin"] is True
+
+    created = client.post(
+        "/org/tenants", json={"name": "Distrilatam Ecuador", "countries": ["EC"]}, headers=auth(token)
+    )
+    assert created.status_code == 201, created.text
+    assert created.json()["countries"] == ["EC"]
+
+    switched = client.post(
+        "/auth/switch", json={"tenant_id": created.json()["tenant_id"]}, headers=auth(token)
+    )
+    assert switched.status_code == 200, switched.text
+    token2 = switched.json()["access_token"]
+    me2 = client.get("/auth/me", headers=auth(token2)).json()
+    assert me2["tenant_id"] == created.json()["tenant_id"]
+    assert me2["role"] == "owner"
+    assert me2["subscription"]["tenants_used"] == 1
+    assert [ws["countries"] for ws in me2["workspaces"]] == [["EC"]]
+
+    # The free month holds one company: the second is refused by the plan.
+    second = client.post(
+        "/org/tenants", json={"name": "Distrilatam Colombia", "countries": ["CO"]}, headers=auth(token2)
+    )
+    assert second.status_code == 402, second.text
+
+
 def test_the_free_month_holds_one_company(client, owner_a):
     response = client.post(
         "/org/tenants", json={"name": "Segunda empresa", "countries": []},

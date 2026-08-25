@@ -13,7 +13,9 @@ import {
   useDateBasisNote,
 } from "@/components/DateBasisNote";
 import GlobalSummary from "@/components/widgets/global_summary";
+import { HelpTip } from "@/components/HelpTip";
 import { Card, Chip, EmptyState, SkeletonRows, StatusDot } from "@/components/ui";
+import { TIER_LABELS, type GlossaryKey } from "@/lib/glossary";
 import { useRangedApi } from "@/lib/date-range";
 import { FALLBACK_COUNTRY, countryFlag, formatNumber, formatPercent, formatRelative } from "@/lib/format";
 import { useApi } from "@/lib/hooks";
@@ -90,35 +92,38 @@ export default function GlobalPage() {
           <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
             <StatTile
               label="Contribución (USD)"
+              help="contribucion"
               value={
                 totals.usd !== 0
                   ? `$ ${formatNumber(totals.usd, { ...FALLBACK_COUNTRY, decimal_places: 0 })}`
                   : "—"
               }
-              hint={totals.missingFx ? "Falta tasa en algún país" : "Convertido a dólares"}
+              hint={totals.missingFx ? "Falta la tasa de cambio de un país" : "Convertido a dólares"}
               tone={totals.usd < 0 ? "negative" : "positive"}
             />
             <StatTile
-              label="Despachos"
+              label="Guías despachadas"
+              help="guia"
               value={formatNumber(totals.shipments, { ...FALLBACK_COUNTRY, decimal_places: 0 })}
-              hint="Guías generadas en el periodo cargado"
+              hint="Paquetes que salieron en el rango elegido"
             />
             <StatTile
-              label="% de entrega"
+              label="% entregado"
               value={formatPercent(
                 totals.delivered + totals.returned > 0
                   ? (totals.delivered / (totals.delivered + totals.returned)) * 100
                   : null,
               )}
-              hint="Sobre guías ya resueltas"
+              hint="De las guías que ya se cerraron"
             />
             <StatTile
-              label="En tránsito"
+              label="En camino"
+              help="novedad"
               value={formatNumber(totals.inTransit, { ...FALLBACK_COUNTRY, decimal_places: 0 })}
               hint={
                 totals.issues > 0
-                  ? `Moviéndose ahora mismo · ${formatNumber(totals.issues, { ...FALLBACK_COUNTRY, decimal_places: 0 })} con novedad aparte`
-                  : "Moviéndose ahora mismo"
+                  ? `Todavía pueden entregarse · ${formatNumber(totals.issues, { ...FALLBACK_COUNTRY, decimal_places: 0 })} con novedad`
+                  : "Todavía pueden entregarse"
               }
             />
           </div>
@@ -156,16 +161,19 @@ function StatTile({
   value,
   hint,
   tone,
+  help,
 }: {
   label: string;
   value: string;
   hint: string;
   tone?: "positive" | "negative";
+  help?: GlossaryKey;
 }) {
   return (
-    <div className="rounded-card border border-line bg-surface p-4">
-      <p className="text-xs font-bold uppercase tracking-[0.08em] text-ink-faint">
-        {label}
+    <div className="rounded-card border border-line bg-surface p-4 shadow-card">
+      <p className="flex items-center gap-2 text-xs font-bold uppercase tracking-[0.06em] text-ink-muted">
+        <span>{label}</span>
+        {help && <HelpTip term={help} />}
       </p>
       <p
         className={
@@ -175,7 +183,7 @@ function StatTile({
       >
         {value}
       </p>
-      <p className="mt-2 text-xs text-ink-dim">{hint}</p>
+      <p className="mt-2 text-sm text-ink-muted">{hint}</p>
     </div>
   );
 }
@@ -253,7 +261,7 @@ function ConnectionsCard({ connections }: { connections: Connection[] }) {
                   {countryFlag(connection.country_code)} {connection.connection_name}
                 </p>
                 <p className="text-xs text-ink-dim">
-                  {connection.platform_name} · Tier {connection.tier}
+                  {connection.platform_name} · {TIER_LABELS[connection.tier] ?? `Tipo ${connection.tier}`}
                 </p>
               </div>
               <div className="flex shrink-0 items-center gap-2">

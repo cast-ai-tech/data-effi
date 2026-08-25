@@ -58,9 +58,12 @@ export function AppShell({ children }: { children: React.ReactNode }) {
     return () => setActive(false);
   }, [setActive]);
 
-  const { data: countries } = useApi<Country[]>("/config/countries");
   const { data: user } = useApi<User>("/auth/me");
-  const { data: connections } = useApi<Connection[]>("/config/connections");
+  // Nothing company-scoped is asked for until the person stands in a company:
+  // right after registering there is none, and every such call would be a 403.
+  const hasCompany = Boolean(user?.tenant_id);
+  const { data: countries } = useApi<Country[]>(hasCompany ? "/config/countries" : null);
+  const { data: connections } = useApi<Connection[]>(hasCompany ? "/config/connections" : null);
 
   const can = useCallback(
     (capability: Capability) => (user?.capabilities ?? []).includes(capability),
