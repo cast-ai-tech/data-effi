@@ -23,7 +23,7 @@ import { DEFAULT_FIELD, useDateRange } from "@/lib/date-range";
 import { countryFlag, formatRelative } from "@/lib/format";
 import { useApi, usePersistentState } from "@/lib/hooks";
 import { useNotifications } from "@/lib/notifications";
-import type { Capability, Connection, Country, Tokens, User } from "@/lib/types";
+import type { Capability, Connection, Country, Tokens, User, Workspace } from "@/lib/types";
 
 /**
  * The range selector lives HERE, not on the dashboard page, because it applies
@@ -196,9 +196,9 @@ export function AppShell({ children }: { children: React.ReactNode }) {
 
         {/* Which company you are standing in. Above everything else in the menu
             because every number below it means something different depending on
-            the answer. Hidden for someone who only belongs to one. */}
-        {(user?.workspaces?.length ?? 0) > 1 && (
-          <WorkspacePicker user={user!} collapsed={rail} />
+            the answer. Always shown: it is also where a new company is created. */}
+        {user && ((user.workspaces?.length ?? 0) > 0 || user.is_org_admin) && (
+          <WorkspacePicker user={user} collapsed={rail} />
         )}
 
         <nav className="flex flex-1 flex-col gap-0.5 overflow-y-auto p-2.5">
@@ -226,16 +226,13 @@ export function AppShell({ children }: { children: React.ReactNode }) {
             />
           )}
 
-          {!rail && activeCountries.length > 0 && (
-            <p className="px-2.5 pb-1.5 pt-3.5 text-xs font-bold uppercase tracking-[0.08em] text-ink-faint">
-              Países
-            </p>
-          )}
+          {/* A company operates in one country, so its sections show right
+              under the company picker - no "Países" heading to read past. */}
           {activeCountries.map((country) => (
             <CountryNav
               key={country.code}
               country={country}
-              open={currentCountry === country.code}
+              open={currentCountry === country.code || activeCountries.length === 1}
               collapsed={rail}
               pathname={pathname}
               rangeSuffix={rangeSuffix}
@@ -507,6 +504,10 @@ function WorkspacePicker({ user, collapsed }: { user: User; collapsed: boolean }
     };
   }, [open]);
 
+  const companyCountry = (ws: Workspace | undefined): string | null =>
+    ws ? (ws.country_scope?.[0] ?? ws.countries[0] ?? null) : null;
+  const currentCountryCode = companyCountry(current);
+
   async function switchTo(tenantId: string) {
     if (tenantId === user.tenant_id) {
       setOpen(false);
@@ -515,9 +516,9 @@ function WorkspacePicker({ user, collapsed }: { user: User; collapsed: boolean }
     setSwitching(tenantId);
     try {
       await api.post<Tokens>("/auth/switch", { tenant_id: tenantId });
-      // Back to the neutral screen: the country you were reading may not even
-      // exist in the company you just moved to.
-      window.location.assign("/global");
+      // Straight to that company's dashboard: a company lives in one country.
+      const country = companyCountry(user.workspaces.find((ws) => ws.tenant_id === tenantId));
+      window.location.assign(country ? `/${country.toLowerCase()}` : "/global");
     } catch {
       setSwitching(null);
       setOpen(false);
@@ -533,7 +534,9 @@ function WorkspacePicker({ user, collapsed }: { user: User; collapsed: boolean }
           title={current?.name ?? "Cambiar de empresa"}
           className="flex size-9 items-center justify-center rounded-control border border-line-strong bg-surface text-sm font-bold text-ink-2"
         >
-          {(current?.name ?? "?").slice(0, 2).toUpperCase()}
+          {currentCountryCode
+            ? countryFlag(currentCountryCode)
+            : (current?.name ?? "+").slice(0, 2).toUpperCase()}
         </button>
       </div>
     );
@@ -547,12 +550,19 @@ function WorkspacePicker({ user, collapsed }: { user: User; collapsed: boolean }
         aria-expanded={open}
         className="flex w-full items-center justify-between gap-2 rounded-control border border-line-strong bg-surface px-2.5 py-2 text-left hover:bg-hover"
       >
-        <span className="min-w-0">
-          <span className="block text-xs font-bold uppercase tracking-[0.08em] text-ink-faint">
-            Empresa
-          </span>
-          <span className="block truncate text-base font-semibold text-ink-2">
-            {current?.name ?? "Sin empresa"}
+        <span className="flex min-w-0 items-center gap-2">
+          {currentCountryCode && (
+            <span aria-hidden className="text-xl leading-none">
+              {countryFlag(currentCountryCode)}
+            </span>
+          )}
+          <span className="min-w-0">
+            <span className="block text-xs font-bold uppercase tracking-[0.08em] text-ink-faint">
+              Empresa
+            </span>
+            <span className="block truncate text-base font-semibold text-ink-2">
+              {current?.name ?? "Elige o crea una empresa"}
+            </span>
           </span>
         </span>
         <span aria-hidden className="text-xs text-ink-dim">
@@ -562,32 +572,52 @@ function WorkspacePicker({ user, collapsed }: { user: User; collapsed: boolean }
 
       {open && (
         <div className="absolute left-2.5 right-2.5 z-50 mt-1 overflow-hidden rounded-control border border-line-strong bg-surface shadow-pop">
-          {user.workspaces.map((ws) => (
-            <button
-              key={ws.tenant_id}
-              type="button"
-              onClick={() => switchTo(ws.tenant_id)}
-              disabled={switching !== null}
-              className={cx(
-                "flex w-full flex-col items-start gap-0.5 px-3 py-2 text-left hover:bg-hover-strong disabled:opacity-50",
-                ws.tenant_id === user.tenant_id && "bg-hover-strong",
-              )}
+          {user.workspaces.map((ws) => {
+            const flag = companyCountry(ws);
+            return (
+              <button
+                key={ws.tenant_id}
+                type="button"
+                onClick={() => switchTo(ws.tenant_id)}
+                disabled={switching !== null}
+                className={cx(
+                  "flex w-full items-center gap-2.5 px-3 py-2 text-left hover:bg-hover-strong disabled:opacity-50",
+                  ws.tenant_id === user.tenant_id && "bg-hover-strong",
+                )}
+              >
+                <span aria-hidden className="text-xl leading-none">
+                  {flag ? countryFlag(flag) : "🌐"}
+                </span>
+                <span className="min-w-0">
+                  <span className="block truncate text-base font-semibold text-ink-2">
+                    {ws.name}
+                    {switching === ws.tenant_id && " …"}
+                  </span>
+                  <span className="block text-xs text-ink-dim">
+                    {ROLE_LABEL[ws.role]}
+                    {ws.share_pct ? ` · ${ws.share_pct}%` : ""}
+                  </span>
+                </span>
+              </button>
+            );
+          })}
+          {user.is_org_admin && (
+            <Link
+              href="/empresas/nueva"
+              onClick={() => setOpen(false)}
+              className="flex w-full items-center gap-2.5 border-t border-line-subtle px-3 py-2 text-base font-semibold text-accent no-underline hover:bg-hover-strong"
             >
-              <span className="text-base font-semibold text-ink-2">
-                {ws.name}
-                {switching === ws.tenant_id && " …"}
-              </span>
-              <span className="text-xs text-ink-dim">
-                {ROLE_LABEL[ws.role]}
-                {ws.country_scope
-                  ? ` · solo ${ws.country_scope.join(", ")}`
-                  : ws.countries.length
-                    ? ` · ${ws.countries.join(", ")}`
-                    : ""}
-                {ws.share_pct ? ` · ${ws.share_pct}%` : ""}
-              </span>
-            </button>
-          ))}
+              <span aria-hidden className="text-lg leading-none">＋</span>
+              Crear nueva empresa
+            </Link>
+          )}
+          <Link
+            href="/empresas"
+            onClick={() => setOpen(false)}
+            className="flex w-full items-center gap-2.5 border-t border-line-subtle px-3 py-2 text-sm text-ink-dim no-underline hover:bg-hover-strong"
+          >
+            Ver todas mis empresas
+          </Link>
         </div>
       )}
     </div>
