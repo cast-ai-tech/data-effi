@@ -91,3 +91,8 @@ export function HelpTip({
     </span>
   );
 }
+
+/** `help` is either a glossary key or free text; pick the right prop. */
+export function HelpTipFor({ help }: { help: GlossaryKey | string }) {
+  return help in GLOSSARY ? <HelpTip term={help as GlossaryKey} /> : <HelpTip text={help} />;
+}

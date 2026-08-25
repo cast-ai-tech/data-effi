@@ -4,7 +4,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { Suspense, useState } from "react";
 
 import { BrandMark } from "@/components/BrandMark";
-import { Button } from "@/components/ui";
+import { Button, Field, Input } from "@/components/ui";
 import { ApiError, api } from "@/lib/api";
 import { safeNextPath } from "@/lib/safe-next";
 import type { Tokens } from "@/lib/types";
@@ -74,16 +74,16 @@ function LoginForm() {
     mode === "login" ? "Entrar" : mode === "register" ? "Iniciar gratis" : "Crear mi cuenta";
 
   return (
-    <main className="flex min-h-screen items-center justify-center bg-page px-4">
-      <div className="w-full max-w-[380px]">
+    <main className="flex min-h-screen items-center justify-center bg-page px-4 py-8 sm:px-6">
+      <div className="w-full max-w-[420px]">
         <BrandMark size="md" className="mb-7" />
 
-        <h1 className="text-xl font-bold leading-tight">{title}</h1>
-        <p className="mt-1.5 text-base leading-relaxed text-ink-dim">{lead}</p>
+        <h1 className="text-2xl font-bold leading-tight">{title}</h1>
+        <p className="mt-2 text-base leading-relaxed text-ink-muted">{lead}</p>
 
-        <form onSubmit={submit} className="mt-6 space-y-3">
+        <form onSubmit={submit} className="mt-6 space-y-4">
           {mode !== "login" && (
-            <Field
+            <LabelledInput
               label="Tu nombre"
               value={fullName}
               onChange={setFullName}
@@ -94,7 +94,7 @@ function LoginForm() {
           )}
 
           {mode !== "invite" && (
-            <Field
+            <LabelledInput
               label="Correo"
               type="email"
               value={email}
@@ -103,7 +103,7 @@ function LoginForm() {
               required
             />
           )}
-          <Field
+          <LabelledInput
             label="Contraseña"
             type="password"
             value={password}
@@ -123,7 +123,7 @@ function LoginForm() {
             </p>
           )}
 
-          <Button type="submit" className="w-full" disabled={pending}>
+          <Button type="submit" size="lg" className="w-full" disabled={pending}>
             {pending ? "Un momento…" : submitLabel}
           </Button>
         </form>
@@ -161,7 +161,8 @@ function LoginForm() {
   );
 }
 
-function Field({
+/** A labelled input, so `getByLabel("Correo")` and screen readers both work. */
+function LabelledInput({
   label,
   value,
   onChange,
@@ -176,17 +177,9 @@ function Field({
   hint?: string;
 } & Omit<React.InputHTMLAttributes<HTMLInputElement>, "onChange" | "value" | "type">) {
   return (
-    <label className="block">
-      <span className="mb-1 block text-sm font-medium text-ink-muted">{label}</span>
-      <input
-        type={type}
-        value={value}
-        onChange={(event) => onChange(event.target.value)}
-        className="w-full rounded-control border border-line-input bg-surface px-3 py-2.5 text-base text-ink placeholder:text-ink-dim focus:border-accent focus:outline-none"
-        {...props}
-      />
-      {hint && <span className="mt-1 block text-xs text-ink-dim">{hint}</span>}
-    </label>
+    <Field label={label} hint={hint}>
+      <Input type={type} value={value} onChange={(event) => onChange(event.target.value)} {...props} />
+    </Field>
   );
 }
 

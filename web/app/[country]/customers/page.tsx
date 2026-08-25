@@ -29,15 +29,8 @@ import {
   PaginationFooter,
   PiiNotice,
 } from "@/components/browse";
-import {
-  Button,
-  Card,
-  Chip,
-  EmptyState,
-  ErrorState,
-  SkeletonRows,
-  cx,
-} from "@/components/ui";
+import { Button, Card, Chip, Drawer, EmptyState, ErrorState, SkeletonRows, cx } from "@/components/ui";
+import { PageHeader } from "@/components/ui/PageHeader";
 import { ApiError, qs } from "@/lib/api";
 import { useRouteCountry } from "@/lib/country";
 import {
@@ -140,17 +133,11 @@ function CustomersScreen() {
 
   return (
     <>
-      <header className="mb-5">
-        <h1 className="flex items-center gap-2.5 text-2xl font-bold tracking-tight">
-          <span className="text-2xl leading-none">{countryFlag(countryCode)}</span>
-          Clientes
-        </h1>
-        <p className="mt-1 max-w-2xl text-sm leading-relaxed text-ink-dim">
-          Cada persona de {country?.name ?? countryCode} agrupada por su teléfono, con
-          todos sus pedidos juntos. Acá se ve quién recibe lo que le mandas y quién te
-          devuelve la mitad — algo que guía por guía es imposible de notar.
-        </p>
-      </header>
+      <PageHeader
+        flag={countryFlag(countryCode)}
+        title="Clientes"
+        subtitle={`Cada persona de ${country?.name ?? countryCode} agrupada por su teléfono, con todos sus pedidos juntos. Acá se ve quién recibe lo que le mandas y quién te devuelve la mitad, algo que guía por guía es imposible de notar.`}
+      />
 
       {notice && rows.length > 0 && (
         <PiiNotice>
@@ -459,42 +446,27 @@ function CustomerCard({
 
   return (
     <>
-      <div className="fixed inset-0 z-40 bg-scrim" onClick={onClose} aria-hidden />
-      <aside
-        className="fixed right-0 top-0 z-50 flex h-full w-full max-w-[520px] flex-col border-l border-line bg-sidebar"
-        role="dialog"
-        aria-label={contact ? `Cliente ${contact.primary}` : "Detalle del cliente"}
+      <Drawer
+        width="lg"
+        onClose={onClose}
+        label={contact ? `Cliente ${contact.primary}` : "Detalle del cliente"}
+        title={
+          <span className={cx(contact?.hidden && "font-mono")}>
+            {contact ? contact.primary : "Cargando…"}
+          </span>
+        }
+        subtitle={
+          customer &&
+          grade && (
+            <span className="flex flex-wrap items-center gap-2">
+              <Chip tone={grade.tone}>{grade.label}</Chip>
+              <span>
+                {pluralize(customer.orders, "pedido", "pedidos")} en {country.name}
+              </span>
+            </span>
+          )
+        }
       >
-        <header className="flex items-start justify-between gap-3 border-b border-line-subtle px-4 py-3.5">
-          <div className="min-w-0">
-            <h2
-              className={cx(
-                "truncate text-lg font-bold",
-                contact?.hidden && "font-mono",
-              )}
-            >
-              {contact ? contact.primary : "Cargando…"}
-            </h2>
-            {customer && grade && (
-              <div className="mt-1 flex items-center gap-2">
-                <Chip tone={grade.tone}>{grade.label}</Chip>
-                <span className="text-xs text-ink-dim">
-                  {pluralize(customer.orders, "pedido", "pedidos")} en {country.name}
-                </span>
-              </div>
-            )}
-          </div>
-          <button
-            type="button"
-            onClick={onClose}
-            className="rounded-md px-2 py-1 text-base text-ink-muted hover:bg-hover-strong"
-            aria-label="Cerrar"
-          >
-            ✕
-          </button>
-        </header>
-
-        <div className="flex-1 overflow-y-auto p-4">
           {loading && <SkeletonRows rows={12} />}
 
           {!loading && error && <ErrorState message={error.message} onRetry={reload} />}
@@ -622,8 +594,7 @@ function CustomerCard({
               <CustomerOrders orders={orders} country={country} />
             </div>
           )}
-        </div>
-      </aside>
+      </Drawer>
     </>
   );
 }

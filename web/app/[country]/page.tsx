@@ -18,7 +18,8 @@ import { DecisionStrip } from "@/components/DecisionStrip";
 import { WidgetRenderer } from "@/components/WidgetRenderer";
 import { TABS, type TabKey } from "@/components/widgets/registry";
 import { HelpTip } from "@/components/HelpTip";
-import { Card, EmptyState, SkeletonRows, cx } from "@/components/ui";
+import { Card, EmptyState, SkeletonRows, Tabs, cx } from "@/components/ui";
+import { PageHeader } from "@/components/ui/PageHeader";
 import { countryFlag } from "@/lib/format";
 import { TAB_HELP } from "@/lib/glossary";
 import { useApi } from "@/lib/hooks";
@@ -102,72 +103,59 @@ export default function CountryDashboard() {
 
   return (
     <AppShell>
-      <header className="mb-5 flex items-end justify-between gap-4">
-        <div>
-          <h1 className="flex items-center gap-2.5 text-2xl font-bold tracking-tight">
-            <span className="text-2xl leading-none">{countryFlag(countryCode)}</span>
-            {country?.name ?? countryCode}
-          </h1>
-          <p className="mt-1 flex flex-wrap items-center gap-x-1.5 gap-y-1 text-sm text-ink-muted">
-            {country ? (
-              <>
-                <span>
-                  Moneda {country.currency_code} · esperamos {country.maturation_days ?? 21} días
-                  para dar una guía por cerrada
-                </span>
-                <HelpTip term="maduracion" />
-              </>
-            ) : (
-              "Cargando…"
-            )}
-          </p>
-        </div>
+      <PageHeader
+        flag={countryFlag(countryCode)}
+        title={country?.name ?? countryCode}
+        subtitle={
+          country ? (
+            <span className="inline-flex flex-wrap items-center gap-x-1.5 gap-y-1">
+              <span>
+                Moneda {country.currency_code} · esperamos {country.maturation_days ?? 21} días
+                para dar una guía por cerrada
+              </span>
+              <HelpTip term="maduracion" />
+            </span>
+          ) : (
+            "Cargando…"
+          )
+        }
+        actions={
+          country && (
+            /* The printable version of the logistics tab: one block per platform,
+               the daily table, the consolidated strip. Keeps the range and the
+               platform from the URL so it opens on the same question. */
+            <Link
+              href={`/${countryCode.toLowerCase()}/informe${
+                search.toString() ? `?${search.toString()}` : ""
+              }`}
+              className="inline-flex min-h-11 items-center rounded-control border border-line-strong bg-surface px-4 text-base font-medium text-ink-2 no-underline hover:border-accent-deep hover:text-accent-ink"
+            >
+              Informe diario
+            </Link>
+          )
+        }
+      />
 
-        {/* The printable version of the logistics tab: one block per platform,
-            the daily table, the consolidated strip. Keeps the range and the
-            platform from the URL so it opens on the same question. */}
-        {country && (
-          <Link
-            href={`/${countryCode.toLowerCase()}/informe${
-              search.toString() ? `?${search.toString()}` : ""
-            }`}
-            className="shrink-0 rounded-control border border-line-strong bg-surface px-3 py-1.5 text-sm font-medium text-ink-2 no-underline hover:text-ink"
-          >
-            Informe diario
-          </Link>
-        )}
-      </header>
-
-      <div className="mb-5 flex gap-1 border-b border-line-strong">
-        {TABS.map((item) => (
-          <button
-            key={item.key}
-            type="button"
-            onClick={() => {
-              setTab(item.key);
-              // Rebuild from the current query, never from scratch: writing
-              // `?tab=x` alone would drop the date range the reader just set.
-              const next = new URLSearchParams(search.toString());
-              next.set("tab", item.key);
-              router.replace(`/${countryCode.toLowerCase()}?${next.toString()}`, {
-                scroll: false,
-              });
-            }}
-            className={cx(
-              "-mb-px border-b-2 px-3.5 py-2.5 text-base transition-colors",
-              tab === item.key
-                ? "border-accent font-semibold text-ink"
-                : "border-transparent text-ink-muted hover:text-ink-2",
-            )}
-          >
-            {item.label}
-          </button>
-        ))}
-      </div>
+      <Tabs
+        className="mb-4"
+        label="Secciones del tablero"
+        value={tab}
+        items={TABS}
+        onChange={(key) => {
+          setTab(key);
+          // Rebuild from the current query, never from scratch: writing
+          // `?tab=x` alone would drop the date range the reader just set.
+          const next = new URLSearchParams(search.toString());
+          next.set("tab", key);
+          router.replace(`/${countryCode.toLowerCase()}?${next.toString()}`, {
+            scroll: false,
+          });
+        }}
+      />
 
       {/* One line that says what this tab is about, for whoever has never
           opened it. Cheaper than a tooltip and it works on a phone. */}
-      <p className="-mt-2 mb-4 text-sm text-ink-muted">{TAB_HELP[tab]}</p>
+      <p className="mb-4 text-base text-ink-muted">{TAB_HELP[tab]}</p>
 
       {/* The verdicts for this tab, before the numbers that justify them. Only
           once the country is known: a strip for a country you may not open
@@ -195,11 +183,11 @@ export default function CountryDashboard() {
       )}
 
       {country && (
-        <div className="grid gap-4 xl:grid-cols-2">
+        <div className="grid grid-cols-1 gap-4 lg:grid-cols-2 lg:gap-5">
           {widgets.map((widget) => (
             <div
               key={widget.widget_code}
-              className={cx(FULL_WIDTH.has(widget.widget_code) && "xl:col-span-2")}
+              className={cx("min-w-0", FULL_WIDTH.has(widget.widget_code) && "lg:col-span-2")}
             >
               <WidgetRenderer widget={widget} country={country} />
             </div>

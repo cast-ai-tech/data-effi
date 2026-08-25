@@ -23,6 +23,7 @@ import { useState } from "react";
 
 import { AppShell } from "@/components/AppShell";
 import { Button, Card, Chip, EmptyState, SkeletonRows, ThemeToggle } from "@/components/ui";
+import { PageHeader } from "@/components/ui/PageHeader";
 import { ApiError, api } from "@/lib/api";
 import { countryFlag, formatRelative } from "@/lib/format";
 import { useApi } from "@/lib/hooks";
@@ -52,12 +53,7 @@ export default function CuentaPage() {
 
   return (
     <AppShell>
-      <header className="mb-5">
-        <h1 className="text-2xl font-bold tracking-tight">Mi cuenta</h1>
-        <p className="mt-1 text-sm text-ink-dim">
-          Tus datos, tu contraseña y a qué tienes acceso.
-        </p>
-      </header>
+      <PageHeader title="Mi cuenta" subtitle="Tus datos, tu contraseña y a qué tienes acceso." />
 
       {loading && (
         <Card>
@@ -66,7 +62,7 @@ export default function CuentaPage() {
       )}
 
       {!loading && user && (
-        <div className="grid gap-4 xl:grid-cols-[1fr_380px]">
+        <div className="grid gap-4 lg:grid-cols-[1fr_380px]">
           <div className="flex flex-col gap-4">
             <ProfileCard user={user} onSaved={reload} />
             <AccessCard user={user} />

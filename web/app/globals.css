@@ -181,6 +181,23 @@ body {
   -webkit-font-smoothing: antialiased;
 }
 
+/* Every form control is a comfortable tap target with readable text, even
+ * the ones styled inline. Utilities on the element still win. */
+@layer base {
+  input:not([type="checkbox"]):not([type="radio"]):not([type="file"]):not([type="range"]),
+  select,
+  textarea {
+    min-height: 2.75rem;
+    font-size: var(--text-base);
+  }
+  input[type="checkbox"],
+  input[type="radio"] {
+    width: 1.125rem;
+    height: 1.125rem;
+    accent-color: var(--color-accent-deep);
+  }
+}
+
 /* Keyboard focus is visible everywhere, in the brand colour. */
 :where(a, button, input, select, textarea, [tabindex]):focus-visible {
   outline: 2px solid var(--color-accent-deep);

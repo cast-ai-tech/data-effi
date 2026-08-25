@@ -13,6 +13,7 @@ import { useState } from "react";
 import { AppShell } from "@/components/AppShell";
 import { FxRatesSection } from "@/components/FxRatesSection";
 import { Button, Card, Chip, SkeletonRows } from "@/components/ui";
+import { PageHeader } from "@/components/ui/PageHeader";
 import { ApiError, api } from "@/lib/api";
 import { countryFlag } from "@/lib/format";
 import { useApi } from "@/lib/hooks";
@@ -23,12 +24,10 @@ export default function SettingsPage() {
 
   return (
     <AppShell>
-      <header className="mb-5">
-        <h1 className="text-2xl font-bold tracking-tight">Configuración</h1>
-        <p className="mt-1 text-sm text-ink-dim">
-          Países, personas y cuántos días esperar antes de dar una guía por cerrada.
-        </p>
-      </header>
+      <PageHeader
+        title="Configuración"
+        subtitle="Países, personas y cuántos días esperar antes de dar una guía por cerrada."
+      />
 
       {error && (
         <p className="mb-4 rounded-control border border-negative/30 bg-negative/[0.08] px-3 py-2 text-sm text-negative-ink">

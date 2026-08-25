@@ -23,6 +23,7 @@ import { useState } from "react";
 import { AppShell } from "@/components/AppShell";
 import { OrgStructure } from "@/components/OrgStructure";
 import { Card, Chip, EmptyState, SkeletonRows, cx } from "@/components/ui";
+import { PageHeader } from "@/components/ui/PageHeader";
 import { api } from "@/lib/api";
 import { useRangedApi } from "@/lib/date-range";
 import { countryFlag, formatNumber, formatPercent } from "@/lib/format";
@@ -45,16 +46,14 @@ export default function OrganizacionPage() {
 
   return (
     <AppShell>
-      <header className="mb-5">
-        <h1 className="text-2xl font-bold tracking-tight">
-          {data?.org_name ?? "Organización"}
-        </h1>
-        <p className="mt-1 text-sm text-ink-dim">
-          {companies.length > 0
+      <PageHeader
+        title={data?.org_name ?? "Organización"}
+        subtitle={
+          companies.length > 0
             ? `${companies.length} ${companies.length === 1 ? "empresa" : "empresas"} · todo convertido a ${data?.base_currency ?? "USD"}`
-            : "Consolidado de todas tus empresas"}
-        </p>
-      </header>
+            : "Consolidado de todas tus empresas"
+        }
+      />
 
       <div className="mb-5">
         <OrgStructure user={user ?? null} orgName={data?.org_name ?? user?.org_name ?? null} />

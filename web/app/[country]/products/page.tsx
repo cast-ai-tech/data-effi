@@ -24,15 +24,7 @@ import { useMemo, useState } from "react";
 import { AppShell } from "@/components/AppShell";
 import { CountryMissing } from "@/components/browse";
 import { VERDICT_META, decisionsPath } from "@/components/DecisionStrip";
-import {
-  Button,
-  Card,
-  Chip,
-  EmptyState,
-  ErrorState,
-  SkeletonRows,
-  cx,
-} from "@/components/ui";
+import { Button, Card, Chip, Drawer, EmptyState, ErrorState, SkeletonRows, cx } from "@/components/ui";
 import { ApiError, api } from "@/lib/api";
 import type { FormatCountry } from "@/lib/format";
 import {
@@ -873,36 +865,20 @@ function ProductPanel({
 
   return (
     <>
-      <div className="fixed inset-0 z-40 bg-scrim" onClick={onClose} aria-hidden />
-      <aside
-        className="fixed right-0 top-0 z-50 flex h-full w-full max-w-[420px] flex-col border-l border-line bg-sidebar"
-        role="dialog"
-        aria-label={row ? `Editar ${row.product_name}` : "Nuevo producto"}
+      <Drawer
+        onClose={onClose}
+        label={row ? `Editar ${row.product_name}` : "Nuevo producto"}
+        title={row ? row.product_name : "Nuevo producto"}
+        subtitle={
+          row &&
+          `${formatNumber(row.shipments, money, 0)} guías · ${
+            row.last_shipment_date
+              ? `último despacho ${formatDate(row.last_shipment_date, money)}`
+              : "sin despachos"
+          }`
+        }
+        bodyClassName="flex flex-col p-0 sm:p-0"
       >
-        <header className="flex items-start justify-between gap-3 border-b border-line-subtle px-4 py-3.5">
-          <div className="min-w-0">
-            <h2 className="truncate text-md font-bold">
-              {row ? row.product_name : "Nuevo producto"}
-            </h2>
-            {row && (
-              <p className="mt-0.5 text-xs text-ink-dim">
-                {formatNumber(row.shipments, money, 0)} guías ·{" "}
-                {row.last_shipment_date
-                  ? `último despacho ${formatDate(row.last_shipment_date, money)}`
-                  : "sin despachos"}
-              </p>
-            )}
-          </div>
-          <button
-            type="button"
-            onClick={onClose}
-            className="rounded-md px-2 py-1 text-base text-ink-muted hover:bg-hover-strong"
-            aria-label="Cerrar"
-          >
-            ✕
-          </button>
-        </header>
-
         <form onSubmit={submit} className="flex flex-1 flex-col overflow-y-auto">
           <div className="flex-1 space-y-3 p-4">
             {readOnly && (
@@ -1116,7 +1092,7 @@ function ProductPanel({
             </footer>
           )}
         </form>
-      </aside>
+      </Drawer>
     </>
   );
 }

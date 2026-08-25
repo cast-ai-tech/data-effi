@@ -18,7 +18,7 @@ import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useState } from "react";
 
 import { AlertCard } from "@/components/AlertCard";
-import { Button, Chip, Skeleton, cx } from "@/components/ui";
+import { Button, Chip, CloseButton, Drawer, Skeleton, cx } from "@/components/ui";
 import { ApiError, api, qs } from "@/lib/api";
 import { FALLBACK_COUNTRY, formatMoney, formatRelative } from "@/lib/format";
 import { useNotifications } from "@/lib/notifications";
@@ -102,56 +102,50 @@ export function NotificationCenter({
 
   return (
     <>
-      <div className="fixed inset-0 z-40 bg-scrim" onClick={onClose} aria-hidden />
-      <aside
+      <Drawer
         data-notification-center
-        className="fixed right-0 top-0 z-50 flex h-full w-full max-w-[420px] flex-col border-l border-line bg-sidebar"
-        role="dialog"
-        aria-label={view === "list" ? "Notificaciones" : "Umbrales"}
+        onClose={onClose}
+        label={view === "list" ? "Notificaciones" : "Umbrales"}
+        bodyClassName="flex flex-col p-0 sm:p-0"
+        header={
+            <header className="flex items-center justify-between gap-2 border-b border-line-subtle px-4 py-3 sm:px-5">
+              <div className="flex items-center gap-2">
+                {view === "thresholds" && (
+                  <button
+                    type="button"
+                    onClick={() => setView("list")}
+                    className="flex size-11 items-center justify-center rounded-control text-lg text-ink-muted hover:bg-hover-strong"
+                    aria-label="Volver a notificaciones"
+                  >
+                    ←
+                  </button>
+                )}
+                <h2 className="text-lg font-bold">
+                  {view === "list" ? "Notificaciones" : "Umbrales"}
+                </h2>
+              </div>
+              <div className="flex items-center gap-1">
+                {view === "list" && (
+                  <button
+                    type="button"
+                    onClick={() => setView("thresholds")}
+                    className="min-h-11 rounded-control px-3 text-base font-medium text-ink-muted hover:bg-hover-strong hover:text-accent-ink"
+                  >
+                    Umbrales
+                  </button>
+                )}
+                <CloseButton onClose={onClose} />
+              </div>
+            </header>
+        }
       >
-        <header className="flex items-center justify-between gap-2 border-b border-line-subtle px-4 py-3.5">
-          <div className="flex items-center gap-2">
-            {view === "thresholds" && (
-              <button
-                type="button"
-                onClick={() => setView("list")}
-                className="rounded-md px-1.5 py-1 text-base text-ink-muted hover:bg-hover-strong"
-                aria-label="Volver a notificaciones"
-              >
-                ←
-              </button>
-            )}
-            <h2 className="text-md font-bold">
-              {view === "list" ? "Notificaciones" : "Umbrales"}
-            </h2>
-          </div>
-          <div className="flex items-center gap-1">
-            {view === "list" && (
-              <button
-                type="button"
-                onClick={() => setView("thresholds")}
-                className="rounded-md px-2 py-1 text-sm font-medium text-ink-muted hover:bg-hover-strong hover:text-accent-ink"
-              >
-                Umbrales
-              </button>
-            )}
-            <button
-              type="button"
-              onClick={onClose}
-              className="rounded-md px-2 py-1 text-base text-ink-muted hover:bg-hover-strong"
-              aria-label="Cerrar"
-            >
-              ✕
-            </button>
-          </div>
-        </header>
 
         {view === "list" ? (
           <NotificationList countryCode={countryCode} onNavigate={onClose} />
         ) : (
           <ThresholdsView countryCode={countryCode} />
         )}
-      </aside>
+      </Drawer>
     </>
   );
 }

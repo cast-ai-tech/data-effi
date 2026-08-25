@@ -13,9 +13,10 @@ import {
   useDateBasisNote,
 } from "@/components/DateBasisNote";
 import GlobalSummary from "@/components/widgets/global_summary";
-import { HelpTip } from "@/components/HelpTip";
+import { PageHeader } from "@/components/ui/PageHeader";
+import { StatTile } from "@/components/ui/StatTile";
 import { Card, Chip, EmptyState, SkeletonRows, StatusDot } from "@/components/ui";
-import { TIER_LABELS, type GlossaryKey } from "@/lib/glossary";
+import { TIER_LABELS } from "@/lib/glossary";
 import { useRangedApi } from "@/lib/date-range";
 import { FALLBACK_COUNTRY, countryFlag, formatNumber, formatPercent, formatRelative } from "@/lib/format";
 import { useApi } from "@/lib/hooks";
@@ -52,14 +53,14 @@ export default function GlobalPage() {
 
   return (
     <AppShell>
-      <header className="mb-5">
-        <h1 className="text-2xl font-bold tracking-tight">Global</h1>
-        <p className="mt-1 text-sm text-ink-dim">
-          {active.length > 0
+      <PageHeader
+        title="Global"
+        subtitle={
+          active.length > 0
             ? `${active.length} ${active.length === 1 ? "país activo" : "países activos"}`
-            : "Aún no has activado ningún país"}
-        </p>
-      </header>
+            : "Aún no has activado ningún país"
+        }
+      />
 
       {loading && <SkeletonRows rows={4} />}
 
@@ -89,7 +90,7 @@ export default function GlobalPage() {
           )}
 
           <div className="mb-4">
-          <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+          <div className="grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-4">
             <StatTile
               label="Contribución (USD)"
               help="contribucion"
@@ -146,45 +147,13 @@ export default function GlobalPage() {
             </div>
           )}
 
-          <div className="grid gap-4 xl:grid-cols-2">
+          <div className="grid gap-4 lg:grid-cols-2">
             <BriefCard countryCode={active[0]?.code ?? null} />
             <ConnectionsCard connections={connections ?? []} />
           </div>
         </>
       )}
     </AppShell>
-  );
-}
-
-function StatTile({
-  label,
-  value,
-  hint,
-  tone,
-  help,
-}: {
-  label: string;
-  value: string;
-  hint: string;
-  tone?: "positive" | "negative";
-  help?: GlossaryKey;
-}) {
-  return (
-    <div className="rounded-card border border-line bg-surface p-4 shadow-card">
-      <p className="flex items-center gap-2 text-xs font-bold uppercase tracking-[0.06em] text-ink-muted">
-        <span>{label}</span>
-        {help && <HelpTip term={help} />}
-      </p>
-      <p
-        className={
-          "mt-1.5 text-3xl font-bold leading-none " +
-          (tone === "negative" ? "text-negative-ink" : tone === "positive" ? "text-positive-ink" : "text-ink")
-        }
-      >
-        {value}
-      </p>
-      <p className="mt-2 text-sm text-ink-muted">{hint}</p>
-    </div>
   );
 }
 

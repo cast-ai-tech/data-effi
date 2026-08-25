@@ -17,6 +17,7 @@ import { useEffect, useMemo } from "react";
 
 import { AppShell } from "@/components/AppShell";
 import { Card, EmptyState, SkeletonRows } from "@/components/ui";
+import { PageHeader } from "@/components/ui/PageHeader";
 import { countryFlag } from "@/lib/format";
 import { useApi } from "@/lib/hooks";
 import type { Country, User } from "@/lib/types";
@@ -40,12 +41,10 @@ export default function IngestForwardPage() {
 
   return (
     <AppShell>
-      <header className="mb-5">
-        <h1 className="text-2xl font-bold tracking-tight">Cargar datos</h1>
-        <p className="mt-1 text-sm text-ink-dim">
-          Cada país tiene su propia carga: ahí eliges de qué plataforma es el archivo.
-        </p>
-      </header>
+      <PageHeader
+        title="Cargar datos"
+        subtitle="Cada país tiene su propia carga: ahí eliges de qué plataforma es el archivo."
+      />
 
       <Card>
         {loading && <SkeletonRows rows={3} />}

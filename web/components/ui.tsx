@@ -11,12 +11,16 @@
 import { useEffect, useState } from "react";
 import type { ReactNode } from "react";
 
-import { HelpTip } from "@/components/HelpTip";
+import { HelpTipFor } from "@/components/HelpTip";
 import { cx } from "@/components/ui/cx";
-import { GLOSSARY, type GlossaryKey } from "@/lib/glossary";
+import type { GlossaryKey } from "@/lib/glossary";
 
 export { cx } from "@/components/ui/cx";
 export { ThemeToggle, useTheme } from "@/components/ui/ThemeToggle";
+export { Drawer, CloseButton } from "@/components/ui/Drawer";
+export { Tabs } from "@/components/ui/Tabs";
+export { Field, Input, Textarea, Select, CONTROL_CLASS } from "@/components/ui/Field";
+export { HelpTipFor } from "@/components/HelpTip";
 
 // ---------------------------------------------------------------------------
 // Card
@@ -305,10 +309,6 @@ export function SectionTitle({
   );
 }
 
-/** `help` is either a glossary key or free text; pick the right prop. */
-export function HelpTipFor({ help }: { help: GlossaryKey | string }) {
-  return help in GLOSSARY ? <HelpTip term={help as GlossaryKey} /> : <HelpTip text={help} />;
-}
 
 // ---------------------------------------------------------------------------
 // Progressive disclosure for long lists

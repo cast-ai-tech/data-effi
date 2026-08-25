@@ -18,16 +18,7 @@ import { useEffect, useMemo, useState } from "react";
 import { AppShell } from "@/components/AppShell";
 import { ConfirmDialog } from "@/components/ConfirmDialog";
 import type { ConfirmDetail } from "@/components/ConfirmDialog";
-import {
-  Button,
-  Chip,
-  EmptyState,
-  ErrorState,
-  SectionTitle,
-  SkeletonRows,
-  StatusDot,
-  cx,
-} from "@/components/ui";
+import { Button, Chip, Drawer, EmptyState, ErrorState, SectionTitle, SkeletonRows, StatusDot, cx } from "@/components/ui";
 import { TIER_LABELS } from "@/lib/glossary";
 import { API_URL, ApiError, api } from "@/lib/api";
 import { countryFlag, formatRelative } from "@/lib/format";
@@ -675,28 +666,9 @@ function SidePanel({
 
   return (
     <>
-      <div className="fixed inset-0 z-40 bg-scrim" onClick={onClose} aria-hidden />
-      <aside
-        className="fixed right-0 top-0 z-50 flex h-full w-full max-w-[440px] flex-col border-l border-line bg-sidebar"
-        role="dialog"
-        aria-label={title}
-      >
-        <header className="flex items-start justify-between gap-3 border-b border-line-subtle px-4 py-3.5">
-          <div className="min-w-0">
-            <h2 className="truncate text-md font-bold">{title}</h2>
-            {subtitle && <p className="mt-0.5 text-xs text-ink-dim">{subtitle}</p>}
-          </div>
-          <button
-            type="button"
-            onClick={onClose}
-            className="shrink-0 rounded-md px-2 py-1 text-base text-ink-muted hover:bg-hover-strong"
-            aria-label="Cerrar"
-          >
-            ✕
-          </button>
-        </header>
-        <div className="flex-1 overflow-y-auto p-4">{children}</div>
-      </aside>
+      <Drawer onClose={onClose} label={title} title={title} subtitle={subtitle}>
+        {children}
+      </Drawer>
     </>
   );
 }

@@ -15,6 +15,7 @@ import { useState } from "react";
 
 import { AppShell } from "@/components/AppShell";
 import { Card, Chip, EmptyState, ErrorState, SkeletonRows, cx } from "@/components/ui";
+import { PageHeader } from "@/components/ui/PageHeader";
 import { ApiError, api } from "@/lib/api";
 import { planCompanies, planPrice } from "@/lib/billing";
 import { formatDate } from "@/lib/format";
@@ -41,13 +42,10 @@ export default function PlanesPage() {
 
   return (
     <AppShell>
-      <header className="mb-5">
-        <h1 className="text-2xl font-bold tracking-tight">Planes</h1>
-        <p className="mt-1 text-sm text-ink-dim">
-          Un mes gratis para 1 empresa. Después, el plan que te sirva; un asesor lo activa
-          cuando pagas.
-        </p>
-      </header>
+      <PageHeader
+        title="Planes"
+        subtitle="Un mes gratis para 1 empresa. Después, el plan que te sirva; un asesor lo activa cuando pagas."
+      />
 
       {loading && <SkeletonRows rows={6} />}
       {!loading && error && <ErrorState message={error.message} onRetry={reload} />}

@@ -12,7 +12,7 @@
 import { useEffect, useRef, useState } from "react";
 
 import { AlertCard } from "@/components/AlertCard";
-import { Button, Chip, Skeleton } from "@/components/ui";
+import { Button, Chip, Drawer, Skeleton } from "@/components/ui";
 import { ApiError, api } from "@/lib/api";
 import { useApi } from "@/lib/hooks";
 import type { Alert, AskResult, Brief } from "@/lib/types";
@@ -45,34 +45,11 @@ export function CopilotPanel({
 
   return (
     <>
-      <div
-        className="fixed inset-0 z-40 bg-scrim"
-        onClick={onClose}
-        aria-hidden
-      />
-      <aside
-        className="fixed right-0 top-0 z-50 flex h-full w-full max-w-[420px] flex-col border-l border-line bg-sidebar"
-        role="dialog"
-        aria-label="Copiloto"
-      >
-        <header className="flex items-center justify-between border-b border-line-subtle px-4 py-3.5">
-          <h2 className="text-md font-bold">Copiloto</h2>
-          <button
-            type="button"
-            onClick={onClose}
-            className="rounded-md px-2 py-1 text-base text-ink-muted hover:bg-hover-strong"
-            aria-label="Cerrar"
-          >
-            ✕
-          </button>
-        </header>
-
-        <div className="flex-1 space-y-5 overflow-y-auto p-4">
+      <Drawer onClose={onClose} label="Copiloto" title="Copiloto" bodyClassName="space-y-5">
           <BriefBlock countryCode={countryCode} />
           <AlertsBlock countryCode={countryCode} onNavigate={onClose} />
           <AskBlock countryCode={countryCode} />
-        </div>
-      </aside>
+      </Drawer>
     </>
   );
 }

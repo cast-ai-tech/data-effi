@@ -36,6 +36,7 @@ import {
   type CountryOption,
 } from "@/components/MemberPickers";
 import { Card, Chip, EmptyState, SkeletonRows, cx } from "@/components/ui";
+import { PageHeader } from "@/components/ui/PageHeader";
 import { ApiError, api } from "@/lib/api";
 import { countryFlag, formatRelative } from "@/lib/format";
 import { useApi } from "@/lib/hooks";
@@ -88,13 +89,15 @@ export default function UsuariosPage() {
 
   return (
     <AppShell>
-      <header className="mb-5">
-        <h1 className="text-2xl font-bold tracking-tight">Usuarios</h1>
-        <p className="mt-1 text-sm text-ink-dim">
-          Quién entra a <strong>{user?.tenant_name ?? "esta empresa"}</strong>,
-          qué puede hacer. Cada empresa tiene su propia lista.
-        </p>
-      </header>
+      <PageHeader
+        title="Usuarios"
+        subtitle={
+          <>
+            Quién entra a <strong>{user?.tenant_name ?? "esta empresa"}</strong> y qué puede
+            hacer. Cada empresa tiene su propia lista.
+          </>
+        }
+      />
 
       {!canAdminister && (
         <Card>

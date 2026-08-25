@@ -30,15 +30,8 @@ import {
   PaginationFooter,
   PiiNotice,
 } from "@/components/browse";
-import {
-  Button,
-  Card,
-  Chip,
-  EmptyState,
-  ErrorState,
-  SkeletonRows,
-  cx,
-} from "@/components/ui";
+import { Button, Card, Chip, Drawer, EmptyState, ErrorState, SkeletonRows, cx } from "@/components/ui";
+import { PageHeader } from "@/components/ui/PageHeader";
 import { ApiError, qs } from "@/lib/api";
 import { useRouteCountry } from "@/lib/country";
 import {
@@ -145,18 +138,12 @@ function OrdersScreen() {
 
   return (
     <>
-      <header className="mb-5">
-        <h1 className="flex items-center gap-2.5 text-2xl font-bold tracking-tight">
-          <span className="text-2xl leading-none">{countryFlag(countryCode)}</span>
-          Órdenes
-        </h1>
-        <p className="mt-1 max-w-2xl text-sm leading-relaxed text-ink-dim">
-          Cada guía despachada de {country?.name ?? countryCode}, con lo que dejó y
-          cuánto lleva abierta. Haz clic en una fila para ver su historia completa: a
-          quién iba, qué se cobró y qué se pagó, y todo lo que le fue pasando en el
-          camino.
-        </p>
-      </header>
+      <PageHeader
+        flag={countryFlag(countryCode)}
+        title="Órdenes"
+        help="guia"
+        subtitle={`Cada guía despachada de ${country?.name ?? countryCode}, con lo que dejó y cuánto lleva abierta. Toca una fila para ver su historia completa: a quién iba, qué se cobró y qué se pagó, y todo lo que le fue pasando en el camino.`}
+      />
 
       {notice && rows.length > 0 && (
         <PiiNotice>
@@ -484,35 +471,20 @@ function OrderCard({
 
   return (
     <>
-      <div className="fixed inset-0 z-40 bg-scrim" onClick={onClose} aria-hidden />
-      <aside
-        className="fixed right-0 top-0 z-50 flex h-full w-full max-w-[520px] flex-col border-l border-line bg-sidebar"
-        role="dialog"
-        aria-label={order ? `Guía ${order.tracking_number}` : "Detalle de la guía"}
+      <Drawer
+        width="lg"
+        onClose={onClose}
+        label={order ? `Guía ${order.tracking_number}` : "Detalle de la guía"}
+        title={order ? order.tracking_number : "Cargando…"}
+        subtitle={
+          order && (
+            <span className="flex flex-wrap items-center gap-2">
+              {status && <Chip tone={status.tone}>{status.label}</Chip>}
+              <span>{order.status_label}</span>
+            </span>
+          )
+        }
       >
-        <header className="flex items-start justify-between gap-3 border-b border-line-subtle px-4 py-3.5">
-          <div className="min-w-0">
-            <h2 className="truncate text-lg font-bold">
-              {order ? order.tracking_number : "Cargando…"}
-            </h2>
-            {order && (
-              <div className="mt-1 flex items-center gap-2">
-                {status && <Chip tone={status.tone}>{status.label}</Chip>}
-                <span className="text-xs text-ink-dim">{order.status_label}</span>
-              </div>
-            )}
-          </div>
-          <button
-            type="button"
-            onClick={onClose}
-            className="rounded-md px-2 py-1 text-base text-ink-muted hover:bg-hover-strong"
-            aria-label="Cerrar"
-          >
-            ✕
-          </button>
-        </header>
-
-        <div className="flex-1 overflow-y-auto p-4">
           {loading && <SkeletonRows rows={10} />}
 
           {!loading && error && <ErrorState message={error.message} onRetry={reload} />}
@@ -612,8 +584,7 @@ function OrderCard({
               <Timeline events={data?.timeline ?? []} country={country} />
             </div>
           )}
-        </div>
-      </aside>
+      </Drawer>
     </>
   );
 }
