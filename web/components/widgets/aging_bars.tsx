@@ -18,9 +18,10 @@ import { Card, EmptyState, ErrorState, SkeletonRows, cx } from "@/components/ui"
 import { useRangedApi } from "@/lib/date-range";
 import { formatMoney, formatNumber } from "@/lib/format";
 import type { AgingRow } from "@/lib/types";
+import { CHART } from "@/lib/chart-palette";
 
 /** 0-3, 4-7, 8-12, 13-20, 21+ — read positionally from `bucket_order`. */
-const BUCKET_COLOURS = ["#21c08a", "#5fcb9e", "#f5a83c", "#ff6259", "#ff6259"];
+const BUCKET_COLOURS = [CHART.positive, CHART.positive2, CHART.warning, CHART.negative, CHART.negative];
 
 /** The 4th and 5th buckets (13-20 and 21+) are the ones at real risk. */
 const AT_RISK_FROM_INDEX = 3;

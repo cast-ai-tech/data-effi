@@ -31,6 +31,7 @@ import { useRangedApi } from "@/lib/date-range";
 import type { FormatCountry } from "@/lib/format";
 import { formatMoney, formatNumber, formatPercent } from "@/lib/format";
 import type { FreightAnalysisRow } from "@/lib/types";
+import { CHART } from "@/lib/chart-palette";
 
 /** A service level nobody filled in. Not worth repeating in every label. */
 const NO_SERVICE = "Sin servicio";
@@ -51,9 +52,9 @@ const RIGHT_ALIGNED = new Set([
  * data does not support.
  */
 const COMPONENTS = [
-  { key: "avg_freight_base" as const, label: "Flete base", colour: "#5b6272" },
-  { key: "avg_handling" as const, label: "Manejo", colour: "#3a4152" },
-  { key: "avg_collection_fee" as const, label: "Recaudo", colour: "#8b93a5" },
+  { key: "avg_freight_base" as const, label: "Flete base", colour: CHART.neutral },
+  { key: "avg_handling" as const, label: "Manejo", colour: CHART.neutralBar },
+  { key: "avg_collection_fee" as const, label: "Recaudo", colour: CHART.dim },
 ];
 
 /** Nulls sort to the bottom instead of pretending to be zero. */

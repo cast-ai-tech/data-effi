@@ -30,6 +30,7 @@ import { useRangedApi } from "@/lib/date-range";
 import type { FormatCountry } from "@/lib/format";
 import { formatMoney, formatNumber, formatPercent } from "@/lib/format";
 import type { ProductRow } from "@/lib/types";
+import { AXIS_PROPS, CHART, CHART_FONT, CHART_HEIGHT } from "@/lib/chart-palette";
 
 /** The line between "arrives" and "does not arrive". */
 const DELIVERY_THRESHOLD = 70;
@@ -39,10 +40,10 @@ const MARGIN_THRESHOLD = 30;
 type Quadrant = "escalar" | "arreglar" | "subir_precio" | "matar";
 
 const QUADRANT_COLOUR: Record<Quadrant, string> = {
-  escalar: "#21c08a",
-  arreglar: "#f5a83c",
-  subir_precio: "#29a9e0",
-  matar: "#ff6259",
+  escalar: CHART.positive,
+  arreglar: CHART.warning,
+  subir_precio: CHART.accent,
+  matar: CHART.negative,
 };
 
 const QUADRANT_LABEL: Record<Quadrant, string> = {
@@ -147,16 +148,16 @@ export default function MarginDeliveryScatter({ countryCode, country }: WidgetPr
       <div className="relative">
         <QuadrantLabels />
 
-        <ResponsiveContainer width="100%" height={320}>
+        <ResponsiveContainer width="100%" height={CHART_HEIGHT.lg}>
           <ScatterChart margin={{ top: 8, right: 12, bottom: 24, left: 4 }}>
-            <CartesianGrid stroke="var(--color-line)" strokeDasharray="2 4" />
+            <CartesianGrid stroke="var(--color-line)" strokeDasharray="3 3" />
             <XAxis
               type="number"
               dataKey="deliveryRate"
               name="% entrega"
               domain={[0, 100]}
               ticks={[0, 25, 50, 75, 100]}
-              tick={{ fill: "var(--color-ink-dim)", fontSize: 11 }}
+              tick={AXIS_PROPS.tick}
               tickLine={false}
               axisLine={{ stroke: "var(--color-line)" }}
               tickFormatter={(value: number) => `${value}%`}
@@ -165,14 +166,14 @@ export default function MarginDeliveryScatter({ countryCode, country }: WidgetPr
                 position: "insideBottom",
                 offset: -14,
                 fill: "var(--color-ink-dim)",
-                fontSize: 11,
+                fontSize: CHART_FONT.label,
               }}
             />
             <YAxis
               type="number"
               dataKey="marginPct"
               name="margen"
-              tick={{ fill: "var(--color-ink-dim)", fontSize: 11 }}
+              tick={AXIS_PROPS.tick}
               tickLine={false}
               axisLine={false}
               width={44}
@@ -182,7 +183,7 @@ export default function MarginDeliveryScatter({ countryCode, country }: WidgetPr
                 angle: -90,
                 position: "insideLeft",
                 fill: "var(--color-ink-dim)",
-                fontSize: 11,
+                fontSize: CHART_FONT.label,
               }}
             />
             <ZAxis type="number" dataKey="shipments" range={[40, 520]} name="guías" />

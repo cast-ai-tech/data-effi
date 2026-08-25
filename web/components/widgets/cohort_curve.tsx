@@ -32,9 +32,10 @@ const TITLE = "Cómo se van entregando las guías de cada semana";
 import { useRangedApi } from "@/lib/date-range";
 import { formatDate, formatPercent, parseIsoDate } from "@/lib/format";
 import type { CohortRow } from "@/lib/types";
+import { AXIS_PROPS, CHART, CHART_FONT, CHART_HEIGHT } from "@/lib/chart-palette";
 
 /** Most recent week first: accent for "now", neutral grey for the oldest. */
-const WEEK_COLOURS = ["#29a9e0", "#21c08a", "#f5a83c", "#5b6272"];
+const WEEK_COLOURS = [CHART.accent, CHART.positive, CHART.warning, CHART.neutral];
 
 const MAX_WEEKS = 4;
 const MAX_DAYS = 30;
@@ -174,21 +175,21 @@ export default function CohortCurve({ countryCode, country }: WidgetProps) {
       subtitle="Cada línea es una semana de despachos, seguida día a día"
       help="cohorte"
     >
-      <ResponsiveContainer width="100%" height={260}>
+      <ResponsiveContainer width="100%" height={CHART_HEIGHT.md}>
         <LineChart data={chartData} margin={{ top: 12, right: 12, bottom: 4, left: -8 }}>
-          <CartesianGrid stroke="var(--color-line)" strokeDasharray="2 4" vertical={false} />
+          <CartesianGrid stroke="var(--color-line)" strokeDasharray="3 3" vertical={false} />
           <XAxis
             dataKey="days_since"
             type="number"
             domain={[0, MAX_DAYS]}
             ticks={[0, 5, 10, 15, 20, 25, 30]}
-            tick={{ fill: "var(--color-ink-dim)", fontSize: 11 }}
+            tick={AXIS_PROPS.tick}
             tickLine={false}
             axisLine={{ stroke: "var(--color-line)" }}
           />
           <YAxis
             domain={[0, 100]}
-            tick={{ fill: "var(--color-ink-dim)", fontSize: 11 }}
+            tick={AXIS_PROPS.tick}
             tickLine={false}
             axisLine={false}
             tickFormatter={(value: number) => formatPercent(value, 0)}
@@ -197,12 +198,13 @@ export default function CohortCurve({ countryCode, country }: WidgetProps) {
             isAnimationActive={false}
             contentStyle={{
               background: "var(--color-surface)",
-              border: "1px solid var(--color-line-strong)",
-              borderRadius: 8,
-              fontSize: 12,
+              border: "1px solid var(--color-line)",
+              borderRadius: 10,
+              boxShadow: "var(--shadow-pop)",
+              fontSize: CHART_FONT.label,
             }}
-            labelStyle={{ color: "var(--color-ink-dim)", fontSize: 11 }}
-            itemStyle={{ fontSize: 12 }}
+            labelStyle={{ color: "var(--color-ink-dim)", fontSize: CHART_FONT.label }}
+            itemStyle={{ fontSize: CHART_FONT.label }}
             labelFormatter={(label) => `Día ${label} desde el despacho`}
             formatter={(value) =>
               formatPercent(typeof value === "number" ? value : null, 1)
@@ -210,7 +212,7 @@ export default function CohortCurve({ countryCode, country }: WidgetProps) {
           />
           <Legend
             iconType="plainline"
-            wrapperStyle={{ fontSize: 11, color: "var(--color-ink-dim)" }}
+            wrapperStyle={{ fontSize: CHART_FONT.label, color: "var(--color-ink-dim)" }}
           />
 
           {maturationDays !== null && (
@@ -222,7 +224,7 @@ export default function CohortCurve({ countryCode, country }: WidgetProps) {
                 value: "Maduración",
                 position: "top",
                 fill: "var(--color-ink-dim)",
-                fontSize: 11,
+                fontSize: CHART_FONT.label,
               }}
             />
           )}

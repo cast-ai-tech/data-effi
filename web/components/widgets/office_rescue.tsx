@@ -26,6 +26,7 @@ import { useRangedApi } from "@/lib/date-range";
 import { formatMoney, formatNumber } from "@/lib/format";
 import { useApi } from "@/lib/hooks";
 import type { Decision, DecisionsResponse, OfficeRescueRow } from "@/lib/types";
+import { CHART } from "@/lib/chart-palette";
 
 /** How many cities "Llamar primero" names. Five is one morning's calls. */
 const CALL_FIRST = 5;
@@ -42,25 +43,25 @@ const BANDS = [
   {
     key: "fresh_0_7" as const,
     label: "0-7 días",
-    colour: "#21c08a",
+    colour: CHART.positive,
     hint: "Normal: el cliente todavía está dentro del plazo para recogerlo.",
   },
   {
     key: "aging_8_14" as const,
     label: "8-14 días",
-    colour: "#f5a83c",
+    colour: CHART.warning,
     hint: "Se está enfriando. Una llamada acá casi siempre lo rescata.",
   },
   {
     key: "urgent_15_21" as const,
     label: "15-21 días",
-    colour: "#ff6259",
+    colour: CHART.negative,
     hint: "Última semana antes de que la transportadora lo devuelva.",
   },
   {
     key: "probably_lost" as const,
     label: "Más de 21 días",
-    colour: "#5b6272",
+    colour: CHART.neutral,
     hint: "Ya va de vuelta. Llamar no cambia el resultado.",
   },
 ];

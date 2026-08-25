@@ -27,6 +27,7 @@ import { useRangedApi } from "@/lib/date-range";
 import type { FormatCountry } from "@/lib/format";
 import { formatDayShort, formatMoney, formatNumber, formatPercent } from "@/lib/format";
 import type { CpaRow } from "@/lib/types";
+import { AXIS_PROPS, CHART, CHART_HEIGHT } from "@/lib/chart-palette";
 
 interface DayPoint {
   day: string;
@@ -212,7 +213,7 @@ export default function CpaRoas({ countryCode, country }: WidgetProps) {
       )}
 
       <div className="mt-4">
-        <ResponsiveContainer width="100%" height={240}>
+        <ResponsiveContainer width="100%" height={CHART_HEIGHT.md}>
           <ComposedChart
             data={model.points}
             margin={{ top: 8, right: 8, bottom: 4, left: 8 }}
@@ -226,7 +227,7 @@ export default function CpaRoas({ countryCode, country }: WidgetProps) {
               dataKey="label"
               axisLine={false}
               tickLine={false}
-              tick={{ fill: "var(--color-ink-muted)", fontSize: 11 }}
+              tick={AXIS_PROPS.tick}
               minTickGap={16}
             />
             <YAxis
@@ -234,7 +235,7 @@ export default function CpaRoas({ countryCode, country }: WidgetProps) {
               axisLine={false}
               tickLine={false}
               width={54}
-              tick={{ fill: "var(--color-ink-dim)", fontSize: 10 }}
+              tick={AXIS_PROPS.tick}
               tickFormatter={(value: number) => formatMoney(value, country, { compact: true })}
             />
             <YAxis
@@ -243,7 +244,7 @@ export default function CpaRoas({ countryCode, country }: WidgetProps) {
               axisLine={false}
               tickLine={false}
               width={54}
-              tick={{ fill: "var(--color-ink-dim)", fontSize: 10 }}
+              tick={AXIS_PROPS.tick}
               tickFormatter={(value: number) => formatMoney(value, country, { compact: true })}
             />
             <Tooltip
@@ -254,8 +255,8 @@ export default function CpaRoas({ countryCode, country }: WidgetProps) {
             <Bar
               yAxisId="spend"
               dataKey="ad_spend"
-              fill="#3a4152"
-              radius={[3, 3, 0, 0]}
+              fill={CHART.neutralBar}
+              radius={[4, 4, 0, 0]}
               isAnimationActive={false}
             />
             {/* The cost to watch. */}
@@ -263,7 +264,7 @@ export default function CpaRoas({ countryCode, country }: WidgetProps) {
               yAxisId="cpa"
               type="monotone"
               dataKey="cpa_delivered"
-              stroke="#f5a83c"
+              stroke={CHART.warning}
               strokeWidth={2}
               dot={false}
               connectNulls

@@ -26,12 +26,13 @@ import { useRangedApi } from "@/lib/date-range";
 import type { FormatCountry } from "@/lib/format";
 import { formatDate, formatDayShort, formatNumber, formatPercent } from "@/lib/format";
 import type { CsRow } from "@/lib/types";
+import { AXIS_PROPS, CHART, CHART_HEIGHT } from "@/lib/chart-palette";
 
 const SERIES = [
-  { key: "confirmed", label: "Confirmados", colour: "#21c08a" },
-  { key: "rejected", label: "Rechazados", colour: "#ff6259" },
-  { key: "no_answer", label: "Sin respuesta", colour: "#5b6272" },
-  { key: "pending", label: "Pendientes", colour: "#f5a83c" },
+  { key: "confirmed", label: "Confirmados", colour: CHART.positive },
+  { key: "rejected", label: "Rechazados", colour: CHART.negative },
+  { key: "no_answer", label: "Sin respuesta", colour: CHART.neutral },
+  { key: "pending", label: "Pendientes", colour: CHART.warning },
 ] as const;
 
 type SeriesKey = (typeof SERIES)[number]["key"];
@@ -141,19 +142,19 @@ export default function CsConfirmation({ countryCode, country }: WidgetProps) {
         />
       </div>
 
-      <ResponsiveContainer width="100%" height={220}>
+      <ResponsiveContainer width="100%" height={CHART_HEIGHT.sm}>
         <BarChart data={rows} margin={{ top: 4, right: 8, bottom: 4, left: 0 }}>
-          <CartesianGrid stroke="var(--color-line)" strokeDasharray="2 4" vertical={false} />
+          <CartesianGrid stroke="var(--color-line)" strokeDasharray="3 3" vertical={false} />
           <XAxis
             dataKey="day"
-            tick={{ fill: "var(--color-ink-dim)", fontSize: 11 }}
+            tick={AXIS_PROPS.tick}
             tickLine={false}
             axisLine={{ stroke: "var(--color-line)" }}
             tickFormatter={(value: string) => formatDayShort(value)}
             minTickGap={16}
           />
           <YAxis
-            tick={{ fill: "var(--color-ink-dim)", fontSize: 11 }}
+            tick={AXIS_PROPS.tick}
             tickLine={false}
             axisLine={false}
             width={44}

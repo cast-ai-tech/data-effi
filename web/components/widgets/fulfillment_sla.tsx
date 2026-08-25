@@ -30,11 +30,12 @@ import { useRangedApi } from "@/lib/date-range";
 import type { FormatCountry } from "@/lib/format";
 import { formatNumber, formatPercent } from "@/lib/format";
 import type { FulfillmentSlaRow } from "@/lib/types";
+import { AXIS_PROPS, CHART, CHART_HEIGHT } from "@/lib/chart-palette";
 
 /** Yours. */
-const PREP_COLOUR = "#f5a83c";
+const PREP_COLOUR = CHART.warning;
 /** Theirs. */
-const TRANSIT_COLOUR = "#29a9e0";
+const TRANSIT_COLOUR = CHART.accent;
 
 /** A service level nobody filled in. Not worth repeating in every label. */
 const NO_SERVICE = "Sin servicio";
@@ -218,7 +219,7 @@ export default function FulfillmentSla({ countryCode, country }: WidgetProps) {
     );
   }
 
-  const chartHeight = Math.max(160, model.lanes.length * 34 + 32);
+  const chartHeight = Math.max(CHART_HEIGHT.sm, model.lanes.length * 34 + 32);
 
   return (
     <Card title="Alistamiento y cumplimiento" subtitle={SUBTITLE}>
@@ -265,7 +266,7 @@ export default function FulfillmentSla({ countryCode, country }: WidgetProps) {
               type="number"
               axisLine={false}
               tickLine={false}
-              tick={{ fill: "var(--color-ink-dim)", fontSize: 11 }}
+              tick={AXIS_PROPS.tick}
               tickFormatter={(value: number) => `${formatNumber(value, country, 0)} d`}
             />
             <YAxis
@@ -274,7 +275,7 @@ export default function FulfillmentSla({ countryCode, country }: WidgetProps) {
               axisLine={false}
               tickLine={false}
               width={132}
-              tick={{ fill: "var(--color-ink-dim)", fontSize: 11 }}
+              tick={AXIS_PROPS.tick}
             />
             <Tooltip
               cursor={{ fill: "var(--color-line-subtle)" }}
@@ -284,14 +285,14 @@ export default function FulfillmentSla({ countryCode, country }: WidgetProps) {
               dataKey="prep_days"
               stackId="clock"
               fill={PREP_COLOUR}
-              radius={[3, 0, 0, 3]}
+              radius={[4, 0, 0, 4]}
               isAnimationActive={false}
             />
             <Bar
               dataKey="transit_days"
               stackId="clock"
               fill={TRANSIT_COLOUR}
-              radius={[0, 3, 3, 0]}
+              radius={[0, 4, 4, 0]}
               isAnimationActive={false}
             />
           </BarChart>

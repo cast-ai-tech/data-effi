@@ -29,6 +29,7 @@ import type { WidgetProps } from "@/components/widgets/types";
 import { useRangedApi } from "@/lib/date-range";
 import { formatMoney } from "@/lib/format";
 import type { DailyContribution } from "@/lib/types";
+import { AXIS_PROPS, CHART, CHART_FONT, CHART_HEIGHT } from "@/lib/chart-palette";
 
 /** Rounding noise below this is not worth a footnote. */
 const RECONCILIATION_EPSILON = 1;
@@ -69,12 +70,12 @@ export default function WaterfallPnl({ countryCode, country }: WidgetProps) {
     const contribution = sumBy(rows, (row) => row.contribution);
 
     const deductions: Array<{ name: string; amount: number; colour: string }> = [
-      { name: "Producto", amount: cogs, colour: "#ff6259" },
-      { name: "Flete", amount: freight, colour: "#ff6259" },
-      { name: "Comisiones", amount: fees, colour: "#ff6259" },
+      { name: "Producto", amount: cogs, colour: CHART.negative },
+      { name: "Flete", amount: freight, colour: CHART.negative },
+      { name: "Comisiones", amount: fees, colour: CHART.negative },
     ];
     if (!adSpendMissing) {
-      deductions.push({ name: "Pauta", amount: adSpend, colour: "#f5a83c" });
+      deductions.push({ name: "Pauta", amount: adSpend, colour: CHART.warning });
     }
 
     const steps: Step[] = [
@@ -82,7 +83,7 @@ export default function WaterfallPnl({ countryCode, country }: WidgetProps) {
         name: "Recaudo",
         base: 0,
         value: revenue,
-        colour: "#3a4152",
+        colour: CHART.neutralBar,
         label: formatMoney(revenue, country, { compact: true }),
       },
     ];
@@ -103,7 +104,7 @@ export default function WaterfallPnl({ countryCode, country }: WidgetProps) {
       name: "Contribución",
       base: 0,
       value: contribution,
-      colour: contribution >= 0 ? "#21c08a" : "#ff6259",
+      colour: contribution >= 0 ? CHART.positive : CHART.negative,
       label: formatMoney(contribution, country, { compact: true }),
     });
 
@@ -146,7 +147,7 @@ export default function WaterfallPnl({ countryCode, country }: WidgetProps) {
       title="Del recaudo a la contribución"
       subtitle="Cada barra arranca donde terminó la anterior"
     >
-      <ResponsiveContainer width="100%" height={280}>
+      <ResponsiveContainer width="100%" height={CHART_HEIGHT.md}>
         <BarChart
           data={model.steps}
           margin={{ top: 24, right: 8, bottom: 4, left: 8 }}
@@ -160,12 +161,12 @@ export default function WaterfallPnl({ countryCode, country }: WidgetProps) {
             dataKey="name"
             axisLine={false}
             tickLine={false}
-            tick={{ fill: "var(--color-ink-muted)", fontSize: 11 }}
+            tick={AXIS_PROPS.tick}
           />
           <YAxis hide />
           {/* The pedestal. Transparent, but it is what makes this a waterfall. */}
           <Bar dataKey="base" stackId="pnl" fill="transparent" isAnimationActive={false} />
-          <Bar dataKey="value" stackId="pnl" radius={[3, 3, 0, 0]} isAnimationActive={false}>
+          <Bar dataKey="value" stackId="pnl" radius={[4, 4, 0, 0]} isAnimationActive={false}>
             {model.steps.map((step) => (
               <Cell key={step.name} fill={step.colour} />
             ))}
@@ -173,7 +174,7 @@ export default function WaterfallPnl({ countryCode, country }: WidgetProps) {
               dataKey="label"
               position="top"
               fill="var(--color-ink-muted)"
-              fontSize={11}
+              fontSize={CHART_FONT.label}
             />
           </Bar>
         </BarChart>

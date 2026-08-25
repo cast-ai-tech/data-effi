@@ -243,7 +243,7 @@ export default function KpiContribution({ countryCode, country }: WidgetProps) {
           </div>
 
           <div className="mt-3 -mx-1">
-            <ResponsiveContainer width="100%" height={40}>
+            <ResponsiveContainer width="100%" height={48}>
               <AreaChart data={kpi.points} margin={{ top: 2, right: 2, bottom: 0, left: 2 }}>
                 <XAxis dataKey="day" hide />
                 <YAxis hide domain={["dataMin", "dataMax"]} />
