@@ -203,7 +203,7 @@ def _bccr_costa_rica(client: Any) -> tuple[float | None, date | None]:
             "Indicador": "318",  # tipo de cambio de venta
             "FechaInicio": hoy,
             "FechaFinal": hoy,
-            "Nombre": "DataEffi",
+            "Nombre": "MasterData",
             "SubNiveles": "N",
             "CorreoElectronico": correo,
             "Token": token,

@@ -19,9 +19,9 @@ pytest.importorskip("fastapi")
 
 pytestmark = pytest.mark.postgres
 
-OWNER_EMAIL = "operador@dataeffi.co"
+OWNER_EMAIL = "operador@masterdata.app"
 OWNER_PASSWORD = "una-clave-larga-de-prueba"
-PARTNER_EMAIL = "socio.holding@dataeffi.co"
+PARTNER_EMAIL = "socio.holding@masterdata.app"
 PARTNER_PASSWORD = "clave-del-socio-1234"
 
 
@@ -140,7 +140,7 @@ def test_an_unknown_email_cannot_be_promoted(client, owner):
     response = client.post(
         "/org/members",
         headers=auth(owner["access_token"]),
-        json={"email": "nadie@dataeffi.co", "role": "viewer"},
+        json={"email": "nadie@masterdata.app", "role": "viewer"},
     )
     assert response.status_code == 404, response.text
 

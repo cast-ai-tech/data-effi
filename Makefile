@@ -1,4 +1,4 @@
-# Data Effi - common tasks.
+# Master Data - common tasks.
 #
 # Every target has a plain `docker compose` equivalent shown in the README, for
 # anyone without make installed (which on Windows is most people).

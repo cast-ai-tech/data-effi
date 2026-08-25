@@ -1,1 +1,1 @@
-"""Data Effi external connectors."""
+"""Master Data external connectors."""

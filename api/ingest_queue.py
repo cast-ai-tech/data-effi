@@ -203,7 +203,7 @@ class IngestQueue:
         )
         if row is None:
             raise CountryUndeterminedError(
-                f"El país '{country_code}' no está soportado por Data Effi."
+                f"El país '{country_code}' no está soportado por Master Data."
             )
         return country_code, row["currency_code"]
 

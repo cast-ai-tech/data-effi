@@ -19,7 +19,7 @@ import pytest
 pytest.importorskip("fastapi")
 
 VERCEL_REGEX = r"^https://masterdataweb(-[a-z0-9-]+)?\.vercel\.app$"
-NETLIFY = "https://data-effi.netlify.app"
+NETLIFY = "https://master-data.netlify.app"
 
 
 @pytest.fixture(scope="module")

@@ -275,7 +275,7 @@ class IngestReport:
     warnings: list[str] = field(default_factory=list)
     # Which known report shape this file matched, if any. Shown to the user as
     # "Detectado: Effi · Reporte de guías" so they can tell at a glance that
-    # Data Effi understood the file rather than guessing at it.
+    # Master Data understood the file rather than guessing at it.
     profile_code: str | None = None
     profile_label: str | None = None
     # What country the file itself says it is about, and what it wrote there.

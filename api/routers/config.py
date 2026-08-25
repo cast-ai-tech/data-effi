@@ -129,7 +129,7 @@ def list_platforms(
 ) -> list[PlatformResponse]:
     """The catalogue, or the subset a given country can actually connect.
 
-    Without a country this answers "what does Data Effi integrate with?" and the
+    Without a country this answers "what does Master Data integrate with?" and the
     honest answer includes the integrations that do not work yet - each one
     carrying its `availability` and its `setup_hint`, ordered by category so the
     settings screen can group them. With a country it answers the narrower

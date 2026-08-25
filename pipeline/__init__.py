@@ -1,1 +1,1 @@
-"""Data Effi ingestion pipeline."""
+"""Master Data ingestion pipeline."""

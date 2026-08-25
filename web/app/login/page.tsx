@@ -66,7 +66,7 @@ function LoginForm() {
         : "Te invitaron a Master Data";
   const lead =
     mode === "login"
-      ? "Analítica de contraentrega para tus países, tus transportadoras y tus productos."
+      ? "Tus guías, tu plata y tus productos, país por país, en una sola pantalla."
       : mode === "register"
         ? "Crea tu cuenta; en el siguiente paso, tu primera empresa y sus conexiones. Un mes gratis, sin tarjeta."
         : "Escribe tu nombre y elige una contraseña. El correo ya viene en la invitación.";

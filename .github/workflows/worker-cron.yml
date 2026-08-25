@@ -69,7 +69,7 @@ jobs:
 
       - name: Llamar al worker
         env:
-          API: https://data-effi-api.onrender.com
+          API: https://master-data-api.onrender.com
           SECRET: ${{ secrets.WORKER_TRIGGER_SECRET }}
           JOBS: ${{ steps.pick.outputs.jobs }}
         run: |

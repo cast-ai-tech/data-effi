@@ -1,4 +1,4 @@
-# Data Effi API and worker.
+# Master Data API and worker.
 #
 # One image serves both: the API runs uvicorn, the worker runs the scheduler.
 # They share every dependency, so building twice would only buy divergence.
@@ -31,10 +31,10 @@ COPY migrations/ ./migrations/
 COPY tests/fixtures/ ./tests/fixtures/
 
 # Runs as a non-root user: a container that does not need root should not have it.
-RUN useradd --create-home --uid 10001 dataeffi \
+RUN useradd --create-home --uid 10001 masterdata \
     && mkdir -p /app/uploads \
-    && chown -R dataeffi:dataeffi /app
-USER dataeffi
+    && chown -R masterdata:masterdata /app
+USER masterdata
 
 EXPOSE 8000
 

@@ -1,4 +1,4 @@
-"""Source profiles: exact column maps for reports Data Effi knows by name.
+"""Source profiles: exact column maps for reports Master Data knows by name.
 
 WHY THIS EXISTS ALONGSIDE THE ALIAS MATCHER. `mapping.py` guesses: it takes a
 header like "Valor" and hopes it means the declared value. That is the right
@@ -65,8 +65,8 @@ def _norm_keys(mapping: dict[str, str]) -> dict[str, str]:
 # =============================================================================
 # Effi - guides report ("Reporte de Guías de transporte YYYY-MM-DD.xlsx")
 #
-# 87 columns. Only the ones Data Effi can act on are mapped; the rest are reported
-# back to the user as ignored, which is how they find out Data Effi skipped
+# 87 columns. Only the ones Master Data can act on are mapped; the rest are reported
+# back to the user as ignored, which is how they find out Master Data skipped
 # something they cared about.
 #
 # THE FOUR CONTACT COLUMNS are mapped, and what happens to them afterwards
@@ -479,7 +479,7 @@ def parse_content(raw: Any) -> tuple[int | None, str | None, int]:
     """Parse Effi's `Contenido` field.
 
     Returns (quantity, product_name, extra_items). `extra_items` is how many
-    additional products the cell held - a multi-product guide that Data Effi's
+    additional products the cell held - a multi-product guide that Master Data's
     one-product-per-shipment model cannot represent, and which the batch report
     surfaces rather than silently dropping.
     """

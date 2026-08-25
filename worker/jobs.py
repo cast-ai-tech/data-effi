@@ -640,7 +640,7 @@ def _country_for_connection(
         cur.execute("SELECT currency_code FROM core.country WHERE code = %s", (country_code,))
         country = cur.fetchone()
     if country is None:
-        raise ValueError(f"El país '{country_code}' no está soportado por Data Effi.")
+        raise ValueError(f"El país '{country_code}' no está soportado por Master Data.")
 
     return country_code, country["currency_code"]
 

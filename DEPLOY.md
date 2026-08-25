@@ -1,6 +1,6 @@
-# Poner Data Effi en producción
+# Poner Master Data en producción
 
-Esta guía es para el desarrollador que va a dejar Data Effi funcionando en
+Esta guía es para el desarrollador que va a dejar Master Data funcionando en
 internet, y para quien lo tenga que mantener después. Está escrita paso a paso,
 sin dar nada por sabido. Si algo aquí ya lo sabes, sáltatelo.
 
@@ -18,7 +18,7 @@ Para correrlo en tu computador mientras desarrollas, no uses esta guía: usa el
 | Pieza | Qué es | Dónde vive | Cómo se despliega |
 |---|---|---|---|
 | **Base de datos** | PostgreSQL con **44 migraciones** (`migrations/001` … `044`) | **Supabase** | Migraciones a mano desde tu máquina (sección 2) |
-| **API** | FastAPI (Python). Recibe archivos, calcula KPIs, sirve todo | **Render**, servicio `data-effi-api`, plan free, Docker (`render.yaml`) | **Manual Deploy** en Render después de cada push (`autoDeploy: false`) |
+| **API** | FastAPI (Python). Recibe archivos, calcula KPIs, sirve todo | **Render**, servicio `master-data-api`, plan free, Docker (`render.yaml`) | **Manual Deploy** en Render después de cada push (`autoDeploy: false`) |
 | **Worker** | Los jobs de fondo (sincronizar hojas, relink, FX, digest…) | **No corre como servicio.** Los dispara **GitHub Actions** (`.github/workflows/worker-cron.yml`) llamando a la API | Solo con el push del workflow |
 | **Frontend** | Next.js 15. Lo que el usuario ve | **Vercel**, proyecto `masterdataweb`, Root Directory `web/` | Automático con cada push a `main`; cada rama/PR tiene su preview |
 
@@ -56,7 +56,7 @@ dejarla conectarse. Se rompe así:
 
 1. Entra a https://supabase.com y crea una cuenta si no tienes.
 2. Haz clic en **New project**.
-3. Ponle un nombre, por ejemplo `data-effi`.
+3. Ponle un nombre, por ejemplo `master-data`.
 4. Donde dice **Database Password**, haz clic en **Generate a password** y
    **guárdala en tu gestor de contraseñas ahora mismo**. Supabase no te la vuelve
    a mostrar. Esta es la contraseña del usuario `postgres`.
@@ -67,7 +67,7 @@ dejarla conectarse. Se rompe así:
 ### Paso 2. Copia las dos cadenas de conexión
 
 Una "cadena de conexión" es la dirección completa de la base de datos, con
-usuario y contraseña adentro. Data Effi usa dos formas distintas de conectarse y
+usuario y contraseña adentro. Master Data usa dos formas distintas de conectarse y
 necesitas las dos.
 
 1. Arriba a la derecha, haz clic en **Connect**.
@@ -94,7 +94,7 @@ muchas peticiones, que es lo que quieres con una API. Pero en ese modo no
 sobrevive nada entre una consulta y otra, así que las migraciones — que crean
 tablas, roles y funciones — tienen que ir por el 5432.
 
-Data Effi es compatible con el puerto 6543 porque el aislamiento por cliente usa
+Master Data es compatible con el puerto 6543 porque el aislamiento por cliente usa
 `SET LOCAL` (`api/db.py`, función `connection()`): el `tenant_id` vive dentro de
 la transacción y muere con ella, así que una conexión reciclada nunca arrastra el
 contexto de un cliente al siguiente. **No cambies eso por un `SET` normal.** Si
@@ -221,13 +221,13 @@ base que va a producción, sáltatelo.
 ## 3. La API en Render
 
 El repositorio trae el Blueprint completo en **`render.yaml`**: servicio web
-`data-effi-api`, Docker (`Dockerfile.api`), plan free, región Virginia,
+`master-data-api`, Docker (`Dockerfile.api`), plan free, región Virginia,
 healthcheck en `/health`, y **`autoDeploy: false`**.
 
 ### Paso 1. Crea el servicio desde el Blueprint
 
 1. Entra a https://render.com → **New** → **Blueprint**.
-2. Conecta el repositorio `cast-ai-tech/data-effi` y elige la rama `main`.
+2. Conecta el repositorio `cast-ai-tech/master-data` y elige la rama `main`.
 3. Render lee `render.yaml` y te pide los valores de las variables marcadas
    `sync: false`. Son estas — **solo nombres aquí**, los valores van del
    gestor de contraseñas al formulario de Render:
@@ -241,7 +241,7 @@ healthcheck en `/health`, y **`autoDeploy: false`**.
 | `PII_ENCRYPTION_KEY` | Generado; **permanente** |
 | `WORKER_TRIGGER_SECRET` | Generado; el mismo va en GitHub (sección 6) |
 | `PROXY_SHARED_SECRET` | Generado; el mismo va en Vercel (sección 4) |
-| `PUBLIC_API_URL` | La URL pública de este servicio, sin barra final (`https://data-effi-api.onrender.com`) |
+| `PUBLIC_API_URL` | La URL pública de este servicio, sin barra final (`https://master-data-api.onrender.com`) |
 | `CORS_ORIGINS` | Los dominios de la web, separados por coma, sin barra final. Hoy: la URL de producción en Vercel **y** la de Netlify mientras siga de respaldo |
 | `AI_ENABLED`, `GEMINI_API_KEY`, `AI_MODEL` | Solo si vas a activar el copiloto de IA. Se gestionan desde el panel, no desde el Blueprint |
 
@@ -252,12 +252,40 @@ Las demás (`ENVIRONMENT`, `API_HOST`, `API_PORT`, `LOG_LEVEL`,
 panel: un valor fijo del Blueprint pisa lo que escribas ahí en cada sync.
 
 4. **Apply**. El primer build tarda unos minutos. Al terminar, la dirección es
-   `https://data-effi-api.onrender.com`.
+   `https://master-data-api.onrender.com`.
+
+### Cambio de nombre (agosto 2026): el servicio nuevo convive con el viejo
+
+La plataforma pasó de llamarse Data Effi a **Master Data**. El servicio de Render
+se llamaba `data-effi-api` y su URL era `https://data-effi-api.onrender.com`.
+Renombrarlo en el sitio cambia la URL al instante y deja la web sin API hasta
+que Vercel redespliegue, así que se hace **en paralelo**:
+
+1. Render → **New** → **Blueprint** con este mismo repositorio. `render.yaml` ya
+   dice `name: master-data-api`, así que crea un servicio nuevo sin tocar el
+   viejo. Carga las mismas variables `sync: false` que tiene `data-effi-api`,
+   con `PUBLIC_API_URL = https://master-data-api.onrender.com`.
+2. Comprueba `curl https://master-data-api.onrender.com/health`.
+3. Vercel → proyecto `masterdataweb` → **Settings → Environment Variables**:
+   `NEXT_PUBLIC_API_URL` y `API_URL` = la URL nueva → **Deployments → Redeploy**
+   (sin caché). Desde ese momento la web habla con el servicio nuevo.
+4. cron-job.org: cambia el host en el ping de `/health` y en `/worker/trigger/*`.
+   El workflow `.github/workflows/worker-cron.yml` ya apunta al nuevo.
+5. **Webhooks externos.** Las conexiones tipo *Webhook* entregaron a n8n/Make/
+   Zapier una URL con el host viejo. Entra a Configuración → Conexiones, copia
+   la URL nueva de cada una y pégala en la automatización. La ruta y la clave no
+   cambian, solo el dominio.
+6. Cuando lleve una semana sin incidentes, apaga o borra `data-effi-api`.
+
+Nadie tiene que volver a entrar: la web sigue leyendo las cookies viejas
+(`dataeffi_*`) hasta el 2026-09-15 y las reescribe con el nombre nuevo en la
+primera renovación silenciosa. Después de esa fecha, retirar las constantes
+`LEGACY_*` de `web/middleware.ts` y `web/app/api/backend/[...path]/route.ts`.
 
 ### Paso 2. Cada vez que haya un cambio en la API
 
 `autoDeploy` está en `false`: un push a `main` **no** despliega la API. Hay que
-entrar a Render → `data-effi-api` → **Manual Deploy** → **Deploy latest
+entrar a Render → `master-data-api` → **Manual Deploy** → **Deploy latest
 commit**. (La web en Vercel sí se despliega sola.)
 
 ### Lo que hay que saber del plan free
@@ -286,7 +314,7 @@ token.
 
 1. Entra a https://vercel.com e inicia sesión con GitHub.
 2. **Add New** → **Project**.
-3. Busca `cast-ai-tech/data-effi` y haz clic en **Import**. Si no aparece,
+3. Busca `cast-ai-tech/master-data` y haz clic en **Import**. Si no aparece,
    **Adjust GitHub App Permissions** y dale acceso a la organización.
 
 ### Paso 2. Dile que el frontend está en una subcarpeta
@@ -327,7 +355,7 @@ Todas las llamadas del navegador van por el proxy de Next, **menos los
 archivos**, que van directo a Render. Para esos el navegador exige que la API
 autorice el dominio de Vercel (CORS):
 
-1. Render → `data-effi-api` → **Environment** → `CORS_ORIGINS`: agrega la URL
+1. Render → `master-data-api` → **Environment** → `CORS_ORIGINS`: agrega la URL
    de producción de Vercel, separada por coma de las que ya estén (Netlify
    sigue ahí mientras sea respaldo). Sin barra al final.
 2. **Manual Deploy**.
@@ -416,14 +444,14 @@ En orden. Si uno falla, no sigas al siguiente.
 
 1. **La API está viva:**
    ```bash
-   curl https://data-effi-api.onrender.com/health
+   curl https://master-data-api.onrender.com/health
    ```
    Debe responder `"status": "ok"`. Si tarda 30 s, estaba dormida; es normal.
 
 2. **La API deja pasar a la web (CORS).** Simula el preflight que hace el
    navegador antes de subir un archivo. Con el dominio de producción de Vercel:
    ```bash
-   curl -s -o /dev/null -D - -X OPTIONS https://data-effi-api.onrender.com/ingest/upload \
+   curl -s -o /dev/null -D - -X OPTIONS https://master-data-api.onrender.com/ingest/upload \
      -H "Origin: https://masterdataweb.vercel.app" \
      -H "Access-Control-Request-Method: POST" \
      -H "Access-Control-Request-Headers: authorization"
@@ -492,27 +520,9 @@ propios con los comandos de la sección 2, paso 3.
 
 ---
 
-## Legacy: Netlify (respaldo temporal)
+## Historial: Netlify
 
-Hasta el 2026-08-24 la web vivía en Netlify (`data-effi.netlify.app`). Queda
-como respaldo mientras Vercel se asienta y **se apagará pronto**. Mientras siga
-encendido:
-
-- `netlify.toml` (raíz del repo) sigue siendo su configuración: `base = "web"`,
-  plugin `@netlify/plugin-nextjs`. Sus variables (`NEXT_PUBLIC_API_URL`,
-  `API_URL`, `PROXY_SHARED_SECRET`) viven en el dashboard de Netlify.
-- Su URL sigue en `CORS_ORIGINS` de Render para que también pueda subir
-  archivos.
-
-**Al apagar Netlify, quitar:**
-
-1. `netlify.toml`.
-2. La URL de Netlify de `CORS_ORIGINS` en Render (+ Manual Deploy).
-3. Esta sección, y las menciones a Netlify en los comentarios de `render.yaml`,
-   `.env.example`, `api/events.py`, `api/routers/events.py`,
-   `web/app/api/backend/[...path]/route.ts`, `web/lib/api.ts` y
-   `web/lib/upload-transport.ts` (son solo comentarios; nada de código depende
-   de Netlify).
-4. En `web/app/api/backend/[...path]/route.ts`, la cabecera
-   `x-nf-client-connection-ip` de `trustedClientIp()` — en Vercel la IP real
-   llega por `x-real-ip`, que ya está contemplada.
+Hasta el 2026-08-24 la web vivió en Netlify. Ya no: `netlify.toml` se retiró del
+repositorio en el cambio de nombre a Master Data y la web solo se despliega en
+Vercel. Si la URL de Netlify sigue en `CORS_ORIGINS` de Render, quítala
+(+ Manual Deploy).

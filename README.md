@@ -1,10 +1,10 @@
-# Data Effi
+# Master Data
 
 > Esta guía te lo pone a andar **en tu computador**. Para dejarlo en internet, con la base de datos en Supabase y el tablero en Vercel, sigue [DEPLOY.md](DEPLOY.md).
 
-## 1. Qué es Data Effi
+## 1. Qué es Master Data
 
-Data Effi es un tablero que responde una sola pregunta: **de cada guía que despachas,
+Master Data es un tablero que responde una sola pregunta: **de cada guía que despachas,
 ¿estás ganando o perdiendo plata, y qué haces al respecto?**
 
 En contraentrega (el cliente paga cuando recibe el paquete) una venta **no es plata
@@ -14,7 +14,7 @@ nunca**: el cliente no contesta, la transportadora no logra llegar, o rechazan e
 paquete en la puerta. Esa plata no se ve en un reporte de ventas, pero sí se ve en tu
 cuenta bancaria a fin de mes.
 
-Data Effi toma los reportes que ya exportas hoy de tu transportadora o de tu plataforma de
+Master Data toma los reportes que ya exportas hoy de tu transportadora o de tu plataforma de
 fulfillment, los junta, y te muestra la verdad por transportadora, por producto, por
 ciudad y por país: cuánto entregas de verdad, cuánto te cuesta cada devolución y
 cuánto queda al final. Cuando le falta un dato para calcular algo, **te lo dice** en
@@ -70,7 +70,7 @@ Deja esa ventana abierta. Vas a usarla en todos los pasos que siguen.
 ### Paso 2. Entra a la carpeta del proyecto
 
 Escribe `cd` (que significa "cambiar de carpeta"), un espacio, y la ruta de la carpeta
-donde está Data Effi entre comillas. Por ejemplo:
+donde está Master Data entre comillas. Por ejemplo:
 
 ```
 cd "F:\Users\SICOMMER SAS\Documents\Proyectos\dashboard-oswald"
@@ -99,7 +99,7 @@ No verás ningún mensaje. Eso significa que salió bien.
 
 ### Paso 4. Genera las contraseñas
 
-Data Effi necesita seis contraseñas largas y aleatorias. No las inventes tú: una
+Master Data necesita seis contraseñas largas y aleatorias. No las inventes tú: una
 contraseña que a ti se te ocurre es una contraseña que alguien más puede adivinar.
 El computador las genera mejor.
 
@@ -157,11 +157,11 @@ Sin espacios antes ni después del `=`. Sin comillas.
 > de tus copias manuales respondes tú.
 >
 > Una advertencia más sobre `PII_HASH_SALT`: esa llave es la que protege los teléfonos
-> y documentos de tus clientes. **Si la cambias después de haber cargado datos, Data Effi
+> y documentos de tus clientes. **Si la cambias después de haber cargado datos, Master Data
 > pierde el rastro de todos los clientes que ya tenía.** Genérala una vez y no la
 > toques nunca más.
 
-### Paso 5. Enciende Data Effi
+### Paso 5. Enciende Master Data
 
 Copia y pega este comando, y presiona `Enter`:
 
@@ -172,13 +172,18 @@ docker compose up -d --build
 **La primera vez esto se demora entre 5 y 15 minutos.** Docker está descargando y
 armando cada pieza. Vas a ver montones de texto pasando por la pantalla: es normal, no
 lo interrumpas. Cuando termine, verás algo como `Started` o `Running` al lado de los
-nombres `dataeffi_db`, `dataeffi_api`, `dataeffi_worker` y `dataeffi_web`.
+nombres `masterdata_db`, `masterdata_api`, `masterdata_worker` y `masterdata_web`.
+
+> **¿Ya habías usado la plataforma cuando se llamaba Data Effi?** Los contenedores y los
+> volúmenes cambiaron de nombre (`dataeffi_*` → `masterdata_*`), así que Docker arranca con
+> una base de datos local nueva y vacía. Los datos viejos siguen en el volumen anterior; si
+> no los necesitas, bórralo con `docker volume rm dataeffi_pgdata dataeffi_uploads`.
 
 Las siguientes veces arranca en segundos.
 
 ### Paso 6. Carga los datos de demostración
 
-Data Effi arranca vacío. Este comando le mete una operación de ejemplo de tres países para
+Master Data arranca vacío. Este comando le mete una operación de ejemplo de tres países para
 que puedas ver cómo se ve todo funcionando antes de meter tus datos reales.
 
 Copia y pega, y presiona `Enter`:
@@ -197,7 +202,7 @@ quedaron bloqueados (eso también es a propósito, lo explicamos abajo).
 
 ---
 
-### Ya está: entra a Data Effi
+### Ya está: entra a Master Data
 
 Abre tu navegador (Chrome, Edge, Safari, el que uses) y ve a:
 
@@ -207,8 +212,8 @@ Entra con estos datos:
 
 | | |
 |---|---|
-| **Correo** | `demo@dataeffi.co` |
-| **Contraseña** | `demo-dataeffi-2026` |
+| **Correo** | `demo@masterdata.app` |
+| **Contraseña** | `demo-masterdata-2026` |
 
 ### Qué deberías ver
 
@@ -223,7 +228,7 @@ tarda cada guía en resolverse, y la cascada que muestra dónde se va la plata d
 valor despachado hasta lo que realmente queda.
 
 Vas a notar que **algunos recuadros aparecen grises, borrosos y con un candado**. Eso
-no es un error ni una pantalla rota: es Data Effi diciéndote *"para calcular esto me falta
+no es un error ni una pantalla rota: es Master Data diciéndote *"para calcular esto me falta
 que conectes tu cuenta de publicidad"*. En la demostración, Colombia y Guatemala no
 tienen conexión de pauta a propósito, para que veas cómo se comporta.
 
@@ -232,7 +237,7 @@ tienen conexión de pauta a propósito, para que veas cómo se comporta.
 ## 4. Tu primer reporte real
 
 Cuando ya viste cómo funciona la demostración, es hora de meter tus propios datos.
-Son tres pasos. No tienes que crear ninguna "conexión" antes: Data Effi la crea sola
+Son tres pasos. No tienes que crear ninguna "conexión" antes: Master Data la crea sola
 la primera vez que cargas.
 
 ### Paso 1. Activa tu país
@@ -253,11 +258,11 @@ Al activarlo, el país aparece en el menú de la izquierda con su bandera.
 4. Arrastra tu archivo de Excel o CSV hasta el recuadro punteado, o haz clic ahí para
    buscarlo en tu computador.
 
-Si el archivo es un reporte de Effi y elegiste otra plataforma, Data Effi **no lo
+Si el archivo es un reporte de Effi y elegiste otra plataforma, Master Data **no lo
 carga** y te dice de cuál es: así ninguna guía queda contada en la plataforma
 equivocada.
 
-Data Effi acepta archivos `.csv`, `.xlsx`, `.xlsm`, `.txt` y `.tsv`, de hasta 25 MB cada
+Master Data acepta archivos `.csv`, `.xlsx`, `.xlsm`, `.txt` y `.tsv`, de hasta 25 MB cada
 uno, y hasta 20 archivos a la vez. El progreso aparece en esa misma pantalla.
 
 ### Paso 3. Revisa el resultado de la carga
@@ -267,11 +272,11 @@ Mientras procesa, cada archivo muestra su estado: *En cola*, *Procesando…* y a
 
 Más abajo, en el historial de cargas, haz clic en tu archivo. Ahí ves cuántas filas
 leyó, cuántas eran nuevas, y una línea que dice **"Columnas ignoradas"** con el nombre
-exacto de cada columna que Data Effi no supo interpretar.
+exacto de cada columna que Master Data no supo interpretar.
 
 ### Si exportas desde Effi ERP: no tienes que hacer nada
 
-Data Effi **reconoce los dos reportes de Effi tal como salen**, sin que toques una sola
+Master Data **reconoce los dos reportes de Effi tal como salen**, sin que toques una sola
 columna. Cuando subas uno, la pantalla te lo dice: *"Detectado: Effi · Reporte de guías
 de transporte"*.
 
@@ -280,27 +285,27 @@ de transporte"*.
 | `Reporte de Guías de transporte AAAA-MM-DD.xlsx` | 87 columnas: guías, estados, destinos, fletes y valores | **Guías** |
 | `Reporte de movimientos de dinero Effi ....xls` | 56 columnas: el movimiento de tu Wallet, plata que entra y sale | **Movimientos de dinero** |
 
-**Sube los dos.** Con las guías solas, Data Effi estima tus costos; con los movimientos,
+**Sube los dos.** Con las guías solas, Master Data estima tus costos; con los movimientos,
 usa la plata real que entró y salió de tu Wallet. La diferencia entre "estimado" y
 "real" es exactamente la diferencia entre un tablero bonito y uno en el que puedes
 confiar para decidir.
 
-Tres cosas que Data Effi hace por ti con estos archivos:
+Tres cosas que Master Data hace por ti con estos archivos:
 
 1. **El "`.xls`" de movimientos no es un Excel de verdad** — Effi lo exporta como una
-   tabla de página web con nombre de Excel. Data Effi lo detecta por dentro y lo lee igual.
+   tabla de página web con nombre de Excel. Master Data lo detecta por dentro y lo lee igual.
    No necesitas abrirlo ni convertirlo.
 2. **Los cruza solos.** El reporte de dinero solo menciona el número de la
-   transportadora (`LC54718007`), nunca el número interno de Effi. Data Effi los amarra por
+   transportadora (`LC54718007`), nunca el número interno de Effi. Master Data los amarra por
    ese número, así que cada peso queda pegado a su guía.
 3. **Separa "entregado" de "cobrado".** Effi marca la liquidación aparte: una guía
-   entregada el lunes puede pagarse el viernes. Data Effi te muestra las dos fechas y cuánta
+   entregada el lunes puede pagarse el viernes. Master Data te muestra las dos fechas y cuánta
    plata está entregada pero todavía no liquidada.
 
 Además distingue un estado que casi nadie mira: **"Disponible para retiro en oficina"**.
 En un reporte real de 1.649 guías, **278 estaban ahí** — ni entregadas ni devueltas,
 esperando que el cliente pasara a recogerlas. Es la plata más fácil de recuperar que
-tienes, y por eso Data Effi no la mete en el montón de "novedad".
+tienes, y por eso Master Data no la mete en el montón de "novedad".
 
 ### Si usas Effi Y Dropi: carga desde el país y di de cuál es
 
@@ -313,10 +318,10 @@ país (por ejemplo 🇪🇨 Ecuador) y entra a **Cargar datos**. Ahí:
 3. Arrastra el archivo.
 
 No tienes que crear conexiones: la primera vez que cargas un archivo como "Dropi"
-para Ecuador, Data Effi crea sola la conexión "Dropi · EC · archivo" y las siguientes
+para Ecuador, Master Data crea sola la conexión "Dropi · EC · archivo" y las siguientes
 cargas van a la misma.
 
-**El check que evita mezclar.** Data Effi reconoce el reporte de Effi por sus columnas.
+**El check que evita mezclar.** Master Data reconoce el reporte de Effi por sus columnas.
 Si subes un reporte de Effi y elegiste Dropi, **no se carga**: te dice "este archivo es
 de Effi, elige Effi". Y si no elegiste nada y el archivo es de Effi, lo elige por ti y
 te lo avisa. Un archivo genérico (un CSV tuyo) no dice de dónde viene, así que se carga
@@ -355,7 +360,7 @@ Dos detalles que el informe hecho a mano no tiene y este sí:
 
 ### Qué columnas necesita tu archivo (si NO viene de Effi)
 
-Para un Excel armado a mano o de otra plataforma, no tienes que renombrar nada. Data Effi ya conoce las formas más
+Para un Excel armado a mano o de otra plataforma, no tienes que renombrar nada. Master Data ya conoce las formas más
 comunes en que viene escrita cada columna en LATAM. Estas son:
 
 | Qué es | Cómo puede llamarse la columna en tu archivo | ¿Obligatoria? |
@@ -381,21 +386,21 @@ comunes en que viene escrita cada columna en LATAM. Estas son:
 | Fecha de devolución | `fecha devolución`, `fecha de devolución`, `devuelto el` | No |
 
 No importan las mayúsculas ni las tildes: `CIUDAD`, `Ciudad` y `ciudad` son lo mismo
-para Data Effi.
+para Master Data.
 
 **La única columna obligatoria es el número de guía.** Sin ella no hay forma de saber
 de qué envío habla cada fila, y el archivo se rechaza completo.
 
-**Las columnas que Data Effi no reconoce se te reportan, nunca se ignoran en silencio.**
-Si tu archivo trae una columna `Valor Neto` que Data Effi no supo interpretar, te la lista
+**Las columnas que Master Data no reconoce se te reportan, nunca se ignoran en silencio.**
+Si tu archivo trae una columna `Valor Neto` que Master Data no supo interpretar, te la lista
 en el reporte de la carga. Un tablero que descarta columnas calladito es un tablero
 que miente.
 
-**Lo mismo pasa con los estados.** Si tu transportadora usa una palabra que Data Effi no
+**Lo mismo pasa con los estados.** Si tu transportadora usa una palabra que Master Data no
 conoce, te la reporta en vez de adivinar. Adivinar un estado dañaría todos tus
 porcentajes de entrega.
 
-**Subir el mismo archivo dos veces es completamente seguro.** Data Effi le calcula una
+**Subir el mismo archivo dos veces es completamente seguro.** Master Data le calcula una
 huella digital a cada archivo. Si ya lo había cargado, te dice "ya estaba cargado" y no
 duplica ni una sola guía. Puedes volver a subir el reporte de la semana pasada sin
 miedo, y puedes subir reportes que se solapan: la misma guía que aparece en diez
@@ -405,18 +410,18 @@ archivos distintos sigue siendo una sola fila.
 
 ## 5. Los tres tipos de conexión
 
-Data Effi clasifica cada fuente de datos por **cómo** consigue la información.
+Master Data clasifica cada fuente de datos por **cómo** consigue la información.
 
 | Tier | Cómo consigue los datos | Ejemplos | ¿Necesita tu permiso? | Riesgo |
 |---|---|---|---|---|
 | **Tier 1** | Por la API oficial de la plataforma. Una **API** es *una puerta que la propia plataforma abre para que otros programas se conecten*. Es el camino que ellos mismos diseñaron. | Shopify, Meta Ads, TikTok Ads, Google Ads | No | Bajo |
-| **Tier 2** | Por archivo. Tú exportas el reporte desde tu panel y lo subes a Data Effi, o llega a un buzón de correo. | Dropi, carga manual de Excel/CSV, hoja de confirmación | No | Bajo |
-| **Tier 3** | Data Effi entra **con tu propia sesión de usuario** y descarga el mismo reporte que tú descargarías a mano. | Effi | **Sí, obligatorio** | **Alto** |
+| **Tier 2** | Por archivo. Tú exportas el reporte desde tu panel y lo subes a Master Data, o llega a un buzón de correo. | Dropi, carga manual de Excel/CSV, hoja de confirmación | No | Bajo |
+| **Tier 3** | Master Data entra **con tu propia sesión de usuario** y descarga el mismo reporte que tú descargarías a mano. | Effi | **Sí, obligatorio** | **Alto** |
 
 ### ⚠️ Antes de activar una conexión Tier 3, lee esto
 
 > **Una conexión Tier 3 usa tu propia sesión de usuario en la plataforma.** No es una
-> integración que la plataforma haya aprobado: es Data Effi pulsando por ti el botón de
+> integración que la plataforma haya aprobado: es Master Data pulsando por ti el botón de
 > "exportar reporte" dentro de tu panel.
 >
 > **Puede violar los Términos de Servicio de esa plataforma.** Muchas plataformas
@@ -425,16 +430,16 @@ Data Effi clasifica cada fuente de datos por **cómo** consigue la información.
 > **Tu cuenta podría ser suspendida.** Si la plataforma detecta el acceso automatizado
 > y decide sancionarlo, el afectado eres tú.
 >
-> **La responsabilidad de esa decisión es tuya, no de Data Effi.** Data Effi te pide un
+> **La responsabilidad de esa decisión es tuya, no de Master Data.** Master Data te pide un
 > consentimiento explícito, lo registra con fecha y hora, y no consulta nada sin él.
 > Pero la decisión de asumir ese riesgo la tomas tú.
 >
 > **El Tier 2 hace exactamente el mismo trabajo, sin ningún riesgo.** Exportas el
-> reporte desde el panel, lo subes a Data Effi, y obtienes los mismos tableros. Es un poco
+> reporte desde el panel, lo subes a Master Data, y obtienes los mismos tableros. Es un poco
 > más manual y es completamente seguro. **Si tienes cualquier duda, usa Tier 2.**
 
 Lee la política completa antes de decidir: **[docs/tier3-politica.md](docs/tier3-politica.md)**.
-Ahí está explicado qué hace Data Effi con tus credenciales, cómo se detiene si la
+Ahí está explicado qué hace Master Data con tus credenciales, cómo se detiene si la
 plataforma lo rechaza, y cómo revocarle el acceso de verdad.
 
 ---
@@ -444,17 +449,17 @@ plataforma lo rechaza, y cómo revocarle el acceso de verdad.
 | Qué ves | Qué significa | Qué haces |
 |---|---|---|
 | `Cannot connect to the Docker daemon`, `docker: command not found`, o `error during connect` | Docker no está encendido, o no está instalado. | Abre Docker Desktop y espera a que la ballenita 🐳 diga *"Docker Desktop is running"*. Después vuelve a correr `docker compose up -d --build`. Si el computador no lo tiene instalado, instálalo desde https://www.docker.com/products/docker-desktop/ |
-| `port is already allocated` o `bind: address already in use` con el número **3000** | Otro programa de tu computador ya está usando la puerta 3000. | Abre tu archivo `.env`, agrega al final la línea `WEB_PORT=3001`, guarda, y corre `docker compose up -d` otra vez. Ahora Data Effi vive en **http://localhost:3001** |
+| `port is already allocated` o `bind: address already in use` con el número **3000** | Otro programa de tu computador ya está usando la puerta 3000. | Abre tu archivo `.env`, agrega al final la línea `WEB_PORT=3001`, guarda, y corre `docker compose up -d` otra vez. Ahora Master Data vive en **http://localhost:3001** |
 | El mismo error, pero con el número **5433** | Ya tienes otra base de datos PostgreSQL corriendo en tu computador. | En tu archivo `.env`, cambia la línea `POSTGRES_PORT=5433` por `POSTGRES_PORT=5434`, guarda, y corre `docker compose up -d` otra vez. |
-| `POSTGRES_APP_PASSWORD is required`, `JWT_SECRET is required`, o **`Data Effi no puede arrancar: falta configuración`** | Falta llenar una contraseña en el archivo `.env`, o quedó con el texto de relleno `CHANGE_ME`. | El mensaje te dice **exactamente cuál** falta. Vuelve al **Paso 4**, genera los valores y pégalos. Ojo: `JWT_SECRET`, `PII_HASH_SALT` y `WORKER_TRIGGER_SECRET` deben tener mínimo 32 caracteres, y las contraseñas de base de datos mínimo 16. El comando del paso 4 ya las genera del tamaño correcto. |
-| La página abre pero no hay ningún dato: todo en cero o pantallas vacías | Data Effi está funcionando, pero todavía no tiene información que mostrar. | Tres cosas que revisar, en este orden: (1) ¿corriste el comando del **Paso 6**? (2) ¿activaste al menos un país en **Configuración**? (3) ¿creaste una conexión y subiste un archivo en **Cargar datos**? |
-| Un recuadro aparece **gris, borroso y con un candado** | **Esto es correcto, no es un error.** Data Effi te está diciendo qué conector le falta para poder calcular ese número. Por ejemplo, el costo por venta necesita tus datos de publicidad; sin la cuenta de pauta conectada, no puede calcularlo. | Si quieres ese recuadro, ve a **Configuración → Conexiones** y crea la conexión que el mensaje del candado te indica. Si no la necesitas, déjalo así: Data Effi prefiere mostrarte un candado honesto antes que un número inventado. |
-| Al subir un archivo te dice **"ya estaba cargado"** | **Esto también es correcto.** Ese archivo exacto ya había entrado antes. Data Effi lo reconoció por su huella digital y no lo procesó de nuevo. | Nada. Es la respuesta que debe dar. Si de verdad son datos nuevos, exporta el reporte otra vez desde tu plataforma: si el contenido cambió aunque sea en una fila, Data Effi lo trata como archivo nuevo. |
+| `POSTGRES_APP_PASSWORD is required`, `JWT_SECRET is required`, o **`Master Data no puede arrancar: falta configuración`** | Falta llenar una contraseña en el archivo `.env`, o quedó con el texto de relleno `CHANGE_ME`. | El mensaje te dice **exactamente cuál** falta. Vuelve al **Paso 4**, genera los valores y pégalos. Ojo: `JWT_SECRET`, `PII_HASH_SALT` y `WORKER_TRIGGER_SECRET` deben tener mínimo 32 caracteres, y las contraseñas de base de datos mínimo 16. El comando del paso 4 ya las genera del tamaño correcto. |
+| La página abre pero no hay ningún dato: todo en cero o pantallas vacías | Master Data está funcionando, pero todavía no tiene información que mostrar. | Tres cosas que revisar, en este orden: (1) ¿corriste el comando del **Paso 6**? (2) ¿activaste al menos un país en **Configuración**? (3) ¿creaste una conexión y subiste un archivo en **Cargar datos**? |
+| Un recuadro aparece **gris, borroso y con un candado** | **Esto es correcto, no es un error.** Master Data te está diciendo qué conector le falta para poder calcular ese número. Por ejemplo, el costo por venta necesita tus datos de publicidad; sin la cuenta de pauta conectada, no puede calcularlo. | Si quieres ese recuadro, ve a **Configuración → Conexiones** y crea la conexión que el mensaje del candado te indica. Si no la necesitas, déjalo así: Master Data prefiere mostrarte un candado honesto antes que un número inventado. |
+| Al subir un archivo te dice **"ya estaba cargado"** | **Esto también es correcto.** Ese archivo exacto ya había entrado antes. Master Data lo reconoció por su huella digital y no lo procesó de nuevo. | Nada. Es la respuesta que debe dar. Si de verdad son datos nuevos, exporta el reporte otra vez desde tu plataforma: si el contenido cambió aunque sea en una fila, Master Data lo trata como archivo nuevo. |
 | La página abre pero dice que no puede conectarse al servidor, o todo se queda cargando | El servidor (la API) no arrancó bien. | Corre `docker compose logs api --tail=50` y lee las últimas líneas: ahí está el motivo. Casi siempre es una variable faltante en `.env`. |
 | Cambiaste `API_PORT` en `.env` y ahora la web no trae datos | La página web guarda la dirección del servidor en el momento en que se construye. | En `.env`, ajusta también `NEXT_PUBLIC_API_URL` al puerto nuevo (por ejemplo `http://localhost:8001`) y reconstruye con `docker compose up -d --build`. |
 | Quieres empezar completamente de cero | — | `docker compose down -v` borra **todos los datos**, incluidos los tuyos. Es irreversible. Después vuelve al **Paso 5**. |
 
-**Para apagar Data Effi sin perder nada:** `docker compose down`. Los datos se quedan
+**Para apagar Master Data sin perder nada:** `docker compose down`. Los datos se quedan
 guardados y vuelven cuando lo enciendas otra vez.
 
 ---
@@ -545,9 +550,9 @@ Obligatorias para arrancar: `POSTGRES_PASSWORD`, `POSTGRES_APP_PASSWORD`,
 explícito si falta alguna, y la API se niega a arrancar con un secreto corto o con el
 valor de relleno todavía puesto.
 
-`PUBLIC_API_URL` pasa a ser obligatoria en cuanto publiques Data Effi detrás de un
+`PUBLIC_API_URL` pasa a ser obligatoria en cuanto publiques Master Data detrás de un
 dominio o un proxy (Nginx, Traefik, Cloudflare). Es la dirección con la que te ven
-**desde afuera**, por ejemplo `https://api.tu-dominio.com`. Data Effi la usa para armar
+**desde afuera**, por ejemplo `https://api.tu-dominio.com`. Master Data la usa para armar
 la URL del webhook que le pegas a n8n, Make o Zapier. Si la dejas vacía, esa URL se
 arma con la dirección interna del contenedor (`http://api:8000`), que tu automatización
 no puede alcanzar — y el token del webhook se muestra **una sola vez**, así que no hay
@@ -562,13 +567,13 @@ https://aistudio.google.com/apikey, se pega en `GEMINI_API_KEY` dentro de tu `.e
 no se comparte ni se sube a Git. El modelo por defecto es `gemini-2.5-flash` y se
 cambia con `AI_MODEL`. `AI_DAILY_TOKEN_BUDGET` pone un techo de gasto por día y por
 tenant: cuando se agota, el copiloto lo dice y los tableros siguen funcionando igual.
-Con `AI_ENABLED=false` Data Effi arranca sin llave y sin copiloto; nada más se ve afectado.
+Con `AI_ENABLED=false` Master Data arranca sin llave y sin copiloto; nada más se ve afectado.
 
 ### Documentación
 
 | Documento | Qué contiene |
 |---|---|
-| [docs/estructura-analisis-ecommerce.md](docs/estructura-analisis-ecommerce.md) | Qué mide Data Effi y por qué. La definición exacta detrás de cada número: las dos tasas de entrega, la escalera de estados, la maduración de cohortes, la cascada de contribución. |
+| [docs/estructura-analisis-ecommerce.md](docs/estructura-analisis-ecommerce.md) | Qué mide Master Data y por qué. La definición exacta detrás de cada número: las dos tasas de entrega, la escalera de estados, la maduración de cohortes, la cascada de contribución. |
 | [docs/arquitectura-multipais-conectores.md](docs/arquitectura-multipais-conectores.md) | Cómo el país es dato y no código, las capas tenant → país → tienda → conexión, los tiers de conector, la degradación honesta y la idempotencia. |
 | [docs/tier3-politica.md](docs/tier3-politica.md) | Las cinco reglas de las conexiones por sesión, qué asumes al activarlas y cómo revocarlas de verdad. |
 | [docs/plataformas-effi-dropi.md](docs/plataformas-effi-dropi.md) | Effi y Dropi lado a lado: la plataforma como filtro y como dimensión (migraciones 040/041), los cinco grupos de estado, los dos porcentajes de devolución y el informe diario imprimible. |

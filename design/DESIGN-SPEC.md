@@ -1,6 +1,77 @@
-# Data Effi — Especificación de diseño
+# Master Data — Especificación de diseño
 
-Fuente: `DataEffi.dc.html` (prototipo dark-mode BI para ecommerce COD en LATAM).
+> **Actualización 2026-08-25.** La plataforma se llama **Master Data** y su tema
+> por defecto es **claro**; el oscuro es opcional (`:root[data-theme="dark"]`, cookie
+> `masterdata_theme`). La fuente de verdad de los tokens es `web/app/globals.css`.
+> Lo que sigue documenta primero la paleta nueva y después, como referencia
+> histórica, el prototipo dark-mode original (`design/legacy-dataeffi/`).
+
+## 0. Paleta clara y escala tipográfica (vigente)
+
+### Superficies y texto
+
+| Token | Claro | Oscuro | Uso |
+|---|---|---|---|
+| `page` | `#f4f6f9` | `#0b0e14` | fondo de la página |
+| `sidebar` / `surface` | `#ffffff` | `#0d1017` / `#12161f` | menú lateral, cards, paneles |
+| `sunken` | `#f1f4f8` | `#0f131a` | filas internas, cajas secundarias |
+| `track` | `#e4e9f0` | `#1b212c` | fondo de micro-barras |
+| `hover` / `hover-strong` | `rgba(15,23,42,.04/.07)` | `rgba(255,255,255,.04/.07)` | hover y seleccionado |
+| `scrim` | `rgba(15,23,42,.38)` | `rgba(0,0,0,.55)` | velo detrás de paneles |
+| `line` … `line-input` | `rgba(15,23,42,.06–.18)` | `rgba(255,255,255,.05–.10)` | bordes |
+| `ink` / `ink-body` / `ink-2` | `#0f172a` / `#1e293b` / `#334155` | claros | texto principal |
+| `ink-muted` / `ink-dim` / `ink-faint` | `#475569` / `#536074` / `#5e6a7d` | claros | texto secundario (todos ≥ 4.5:1) |
+| `on-accent` | `#04202e` | igual | texto sobre botones azules (6.3:1) |
+
+### Semántica: relleno vs. texto
+
+El azul de marca `#29a9e0` sobre blanco da 2.7:1 y **no sirve como texto**. Por
+eso cada color semántico tiene dos tokens:
+
+| Significado | Relleno (barras, puntos, botones) | Texto (`*-ink`, AA sobre blanco) |
+|---|---|---|
+| accent (acción, marca) | `#29a9e0` | `#16739c` |
+| positive (dinero que entra, entrega) | `#21c08a` | `#0b7d56` |
+| warning (vigilar) | `#f5a83c` | `#b45309` |
+| negative (dinero que sale, devolución) | `#ff6259` | `#c52a24` |
+
+Series de gráficas: `--color-series-1..7` = accent, positive, warning, negative,
+`#6d4fd6`, `#17a398`, `#94a3b8`. Se consumen desde `web/lib/chart-palette.ts`.
+
+### Tipografía
+
+Inter (vía `next/font`, `var(--font-inter)`), `tabular-nums` global. Nada por
+debajo de 13 px:
+
+| Clase | px | Uso |
+|---|---|---|
+| `text-xs` | 13 | metadatos, encabezados de columna, chips |
+| `text-sm` | 14 | celdas, subtítulos, ayudas |
+| `text-base` | 15 | cuerpo (también `body`) |
+| `text-md` | 16 | títulos de card |
+| `text-lg` | 18 | títulos de panel |
+| `text-xl` | 20 | títulos de paso |
+| `text-2xl` / `text-3xl` | 24 / 28 | título de pantalla (móvil / escritorio) |
+| `text-3xl` / `text-4xl` | 28 / 34 | cifras grandes (StatTile) |
+
+Radios: `rounded-card` 14 px, `rounded-control` 10 px. Sombras: `shadow-card`
+(reposo), `shadow-pop` (menús, paneles, tooltips). Objetivos táctiles: 44 px
+(`min-h-11`) en botones, navegación y campos.
+
+### Componentes compartidos (`web/components/ui/`)
+
+`Card` (con `help`), `PageHeader`, `Tabs`, `Drawer`, `Field`/`Input`/`Select`/
+`Textarea`, `StatTile`, `Button` (sm/md/lg), `Chip`, `HelpTip` (glosario en
+`web/lib/glossary.ts`), `ThemeToggle`, `BrandMark`. Tablas anchas: contenedor
+`.data-table` (scroll lateral con bordes que se desvanecen y primera columna
+fija).
+
+---
+
+# Referencia histórica: prototipo Data Effi (dark)
+
+
+Fuente: `MasterData.dc.html` (prototipo dark-mode BI para ecommerce COD en LATAM).
 Destino: Next.js + Tailwind. Todos los valores son literales del prototipo.
 
 ---
@@ -95,7 +166,7 @@ Fondos translúcidos de acento (badges/estados):
 | Ciclo de caja ("Tu plata vuelve en…") | 18px | 700 | — | primary |
 | KPI móvil | 18px | 800 | — | primary |
 | Título de alerta (detalle móvil) | 16px | 700 | lh 1.4 | primary |
-| Logo "Data Effi" / título del topbar | 15px | 700 | `-.01em` | primary |
+| Logo "Master Data" / título del topbar | 15px | 700 | `-.01em` | primary |
 | Emoji de bandera en nav | 15px | — | `line-height:1` | — |
 | Dropzone principal (onboarding) | 15px | 600 | — | primary |
 | Header de sección móvil ("Alertas") | 15px | 700 | — | primary |
@@ -217,7 +288,7 @@ Fuera de esos tres, **no hay sombras**: la jerarquía se construye sólo con fon
 
 ### 4.1 Sidebar
 - Ancho: **224px expandido / 64px colapsado** (`transition: width .15s ease`), `flex-shrink:0`, fondo `#0D1017`, `border-right:1px solid rgba(255,255,255,0.08)`.
-- **Header** (`20px 18px`, `border-bottom:1px solid rgba(255,255,255,0.06)`): cuadrado `28×28`, radio `7px`, fondo `#33E5B0`, letras "DE" 14px/800 color `#06110C`; junto a él "Data Effi" 15px/700/`-.01em` (se oculta al colapsar).
+- **Header** (`20px 18px`, `border-bottom:1px solid rgba(255,255,255,0.06)`): cuadrado `28×28`, radio `7px`, fondo `#33E5B0`, letras "DE" 14px/800 color `#06110C`; junto a él "Master Data" 15px/700/`-.01em` (se oculta al colapsar).
 - **Lista**: `flex:1; overflow-y:auto; padding:14px 10px; gap:2px`.
 - **Nav item**
   - Base: `display:flex; align-items:center; gap:10px; padding:9px 10px; border-radius:8px; font-size:13px; cursor:pointer`
@@ -544,7 +615,7 @@ dropzone → lista de filas de archivo (`gap:10px`: 2 correctas/en progreso + 1 
 - `pauta_colombia_ago.csv` — "Detectado: Meta Ads · Reporte de pauta (Colombia)" — 64%
 - `movimientos_gt.xlsx` — "Falló la validación" — *"Recaudo promedio fuera de rango — posible archivo en centavos. No se cargó nada."*
 - Historial: `15/08 · guias_ago_ecuador.xlsx · 212 nuevas · 431 act. · Alexander` — `14/08 · dropi_reporte.csv · 88 nuevas · 120 act. · Alexander`
-- Buzón de ingesta: `ingesta-a8f3@dataeffi.app`
+- Buzón de ingesta: `ingesta-a8f3@masterdata.app`
 - Dropzone: "Arrastra tus archivos aquí" / "Soporta múltiples archivos a la vez · CSV, XLSX"
 
 ### Configuración

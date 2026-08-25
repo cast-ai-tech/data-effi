@@ -30,7 +30,7 @@ _OLE2_MAGIC = b"\xd0\xcf\x11\xe0\xa1\xb1\x1a\xe1"
 
 
 class UnsupportedFileError(ValueError):
-    """The file is not something Data Effi knows how to read."""
+    """The file is not something Master Data knows how to read."""
 
 
 class EmptyFileError(ValueError):

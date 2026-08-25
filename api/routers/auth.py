@@ -496,7 +496,7 @@ def me(user: CurrentUserDep, conn: UnscopedDbDep) -> UserResponse:
 
 
 # =============================================================================
-# The account panel: the part of Data Effi a person administers about themselves.
+# The account panel: the part of Master Data a person administers about themselves.
 #
 # Everything here is keyed by `user.id` from the token and NEVER by a parameter,
 # so there is no id to tamper with: you can only ever read and change your own

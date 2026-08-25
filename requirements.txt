@@ -1,4 +1,4 @@
-# Data Effi - backend runtime dependencies (Python 3.12)
+# Master Data - backend runtime dependencies (Python 3.12)
 #
 # Pinned exactly. Versions were chosen by running `pip-audit` and taking the
 # lowest release with no known advisory; re-run `make audit` before bumping.

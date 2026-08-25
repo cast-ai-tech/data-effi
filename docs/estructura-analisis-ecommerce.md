@@ -1,6 +1,6 @@
 # Estructura de análisis: ecommerce COD
 
-Este documento define **qué mide Data Effi y por qué**. Es la referencia de negocio
+Este documento define **qué mide Master Data y por qué**. Es la referencia de negocio
 detrás de cada vista `mart.*`. Si un número del dashboard no te cuadra, aquí está la
 definición exacta que lo produjo.
 
@@ -16,7 +16,7 @@ el clic y el dinero pasan tres cosas que pueden matarla:
 2. La transportadora no logra entregar.
 3. El cliente rechaza el paquete en la puerta.
 
-Por eso **ninguna métrica de Data Effi usa "ventas" como numerador principal**. La unidad
+Por eso **ninguna métrica de Master Data usa "ventas" como numerador principal**. La unidad
 de análisis es la **guía** y su desenlace.
 
 ## 2. La unidad de análisis: la guía
@@ -53,7 +53,7 @@ congelados. Esta regla vive en `merge_shipment()` y se replica en el `ON CONFLIC
 
 ## 4. Las dos tasas de entrega (y por qué son distintas)
 
-Data Effi reporta dos, y confundirlas es el error más común del sector:
+Master Data reporta dos, y confundirlas es el error más común del sector:
 
 - **Efectividad terminal** = `entregadas / (entregadas + devueltas + muertas)`
   Solo cuenta guías que ya se resolvieron. Es la tasa **real** de la operación.
@@ -81,7 +81,7 @@ curva sin distinguirlas.
 
 ## 6. La cascada de contribución
 
-Data Effi no habla de "utilidad". Habla de **contribución**: lo que queda de cada guía
+Master Data no habla de "utilidad". Habla de **contribución**: lo que queda de cada guía
 después de sus costos directos.
 
 ```
@@ -145,12 +145,12 @@ Solo existen si hay conexión de pauta. Y se reportan **dos** CPA:
 - **CPA sobre entregadas** = `pauta / guías entregadas` — lo que realmente pagaste por
   cada venta cobrada. **Este es el que manda.**
 
-Con 70% de efectividad, tu CPA real es 43% más alto que el que reporta Meta. Data Effi
+Con 70% de efectividad, tu CPA real es 43% más alto que el que reporta Meta. Master Data
 muestra los dos lado a lado para que la brecha sea imposible de ignorar.
 
 ## 10. Degradación honesta
 
-Cuando falta una fuente, Data Effi **no esconde el widget**: lo muestra bloqueado, con
+Cuando falta una fuente, Master Data **no esconde el widget**: lo muestra bloqueado, con
 candado, diciendo exactamente qué conector falta y con un botón para conectarlo.
 
 Un dashboard que oculta lo que no sabe te hace creer que lo viste todo.
@@ -160,7 +160,7 @@ Un dashboard que oculta lo que no sabe te hace creer que lo viste todo.
 Y cuando el número existe pero es parcial —contribución sin pauta, por ejemplo— la
 vista marca `ad_spend_missing = true` y el widget lo dice en voz alta.
 
-## 11. Lo que Data Effi nunca guarda
+## 11. Lo que Master Data nunca guarda
 
 - Teléfonos, cédulas, direcciones ni nombres de clientes finales.
 - Solo `customer_hash`: SHA-256 con salt por tenant, irreversible.

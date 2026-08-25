@@ -28,9 +28,9 @@ pytest.importorskip("fastapi")
 
 pytestmark = pytest.mark.postgres
 
-OWNER_EMAIL = "admin.aislamiento@dataeffi.co"
+OWNER_EMAIL = "admin.aislamiento@masterdata.app"
 OWNER_PASSWORD = "una-clave-larga-de-prueba"
-PARTNER_EMAIL = "operadora.gt.hn@dataeffi.co"
+PARTNER_EMAIL = "operadora.gt.hn@masterdata.app"
 PARTNER_PASSWORD = "clave-de-la-operadora-1"
 COUNTRIES = ("GT", "HN", "CR")
 # Customer hashes are 64 hex characters; one fixed one per country.

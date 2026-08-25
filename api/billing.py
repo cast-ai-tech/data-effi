@@ -128,7 +128,7 @@ def subscription_state(conn: psycopg.Connection, org_id: UUID) -> SubscriptionSt
             "vuelves a entrar."
         )
     elif blocked:
-        message = "Tu mes gratis terminó. Elige un plan para seguir usando Data Effi."
+        message = "Tu mes gratis terminó. Elige un plan para seguir usando Master Data."
     elif status == "trial":
         message = f"Prueba gratis: te quedan {days_left} días."
     elif status == "pending":
@@ -221,5 +221,5 @@ def advisor_whatsapp_url(number: str | None, org_name: str | None = None) -> str
     if not digits:
         return None
     who = f" para {org_name}" if org_name else ""
-    text = f"Hola, quiero un plan a la medida de Data Effi{who}."
+    text = f"Hola, quiero un plan a la medida de Master Data{who}."
     return f"https://wa.me/{digits}?text={quote(text)}"

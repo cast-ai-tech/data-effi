@@ -850,7 +850,7 @@ def _money_text(value: Any) -> str:
 
 
 def connect(dsn: str, *, tenant_id: UUID | None = None) -> psycopg.Connection:
-    """Open a connection configured for Data Effi.
+    """Open a connection configured for Master Data.
 
     Setting `norte.tenant_id` is what makes every mart.* view return this
     tenant's rows and nothing else. Without it the views are empty by design.

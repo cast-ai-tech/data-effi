@@ -194,7 +194,7 @@ def _refuse_platform_mismatch(
 ) -> None:
     """A recognised report must land on its own platform.
 
-    Only shapes Data Effi knows by name carry a platform (the profiles in
+    Only shapes Master Data knows by name carry a platform (the profiles in
     pipeline/profiles.py). A generic CSV says nothing about where it came from
     and is let through; that is what `manual_xlsx` is for. A file that cannot
     be read is not refused HERE - the ingestion job reports that with its own
@@ -325,7 +325,7 @@ async def upload(
     tell Effi from Dropi - a guide belongs to the platform of the connection
     that loaded it, and "Carga manual" is a platform called manual_xlsx.
 
-    THE CHECK: when a file is a report shape Data Effi recognises (Effi's
+    THE CHECK: when a file is a report shape Master Data recognises (Effi's
     guide export, say) and that shape belongs to a different platform than the
     one it is being loaded into, the upload is refused with `platform_mismatch`
     naming both. Loading Effi's export as Dropi would not fail - it would count
@@ -781,7 +781,7 @@ async def detect(
     settings: SettingsDep,
     file: Annotated[UploadFile, File(description="Un solo archivo. No se almacena.")],
 ) -> DetectResponse:
-    """Say what Data Effi understood about a file, before anything is committed.
+    """Say what Master Data understood about a file, before anything is committed.
 
     Nothing is written: not to disk, not to `raw.upload_job`, not to the queue.
     This is what lets the upload screen say "esto es un reporte de guías de

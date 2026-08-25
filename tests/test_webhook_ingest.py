@@ -22,12 +22,12 @@ pytest.importorskip("fastapi")
 
 pytestmark = pytest.mark.postgres
 
-OWNER_EMAIL = "webhook@dataeffi.co"
+OWNER_EMAIL = "webhook@masterdata.app"
 OWNER_PASSWORD = "una-clave-larga-de-prueba"
 WORKER_SECRET = "w" * 48
 # The public origin, deliberately NOT the TestClient's own host: the whole point
 # of PUBLIC_API_URL is that the two differ behind a proxy.
-PUBLIC_API_URL = "https://api.dataeffi.co"
+PUBLIC_API_URL = "https://api.masterdata.app"
 
 # Column names an operator would plausibly use in n8n. None of them is an Effi
 # export, so this exercises the alias matcher, not a source profile.
@@ -187,7 +187,7 @@ def test_the_token_is_never_readable_again(client, owner_token, connection_id, w
 
 def test_only_an_owner_can_issue_a_token(client, owner_token, connection_id):
     invite = client.post(
-        "/auth/invite", json={"email": "analista@dataeffi.co", "role": "analyst"},
+        "/auth/invite", json={"email": "analista@masterdata.app", "role": "analyst"},
         headers=auth(owner_token),
     )
     assert invite.status_code == 201

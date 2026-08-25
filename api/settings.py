@@ -122,7 +122,7 @@ class Settings(BaseSettings):
         if not cleaned.startswith(("http://", "https://")):
             raise ValueError(
                 "PUBLIC_API_URL must start with http:// or https:// "
-                "(e.g. https://api.dataeffi.co)"
+                "(e.g. https://api.masterdata.app)"
             )
         return cleaned
 
@@ -161,7 +161,7 @@ def get_settings() -> Settings:
         return Settings()  # type: ignore[call-arg]
     except Exception as exc:
         print("\n" + "=" * 72, file=sys.stderr)
-        print("Data Effi no puede arrancar: falta configuración.", file=sys.stderr)
+        print("Master Data no puede arrancar: falta configuración.", file=sys.stderr)
         print("=" * 72, file=sys.stderr)
         print(str(exc), file=sys.stderr)
         print(

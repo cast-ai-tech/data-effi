@@ -20,7 +20,7 @@ pytest.importorskip("fastapi")
 
 pytestmark = pytest.mark.postgres
 
-EMAIL = "cuenta@dataeffi.co"
+EMAIL = "cuenta@masterdata.app"
 PASSWORD = "una-clave-larga-de-prueba"
 NEW_PASSWORD = "otra-clave-mas-larga-todavia"
 
@@ -236,7 +236,7 @@ def test_an_unknown_email_takes_as_long_as_a_wrong_password(client, account):
 
     # Warm up once so the first-call cost of either path does not skew it.
     elapsed(EMAIL)
-    elapsed("nadie@dataeffi.co")
+    elapsed("nadie@masterdata.app")
     known = min(elapsed(EMAIL) for _ in range(3))
-    unknown = min(elapsed("nadie@dataeffi.co") for _ in range(3))
+    unknown = min(elapsed("nadie@masterdata.app") for _ in range(3))
     assert unknown > known * 0.25, f"unknown={unknown:.4f}s known={known:.4f}s"

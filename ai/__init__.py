@@ -1,1 +1,1 @@
-"""Data Effi AI layer."""
+"""Master Data AI layer."""

@@ -634,7 +634,7 @@ class UploadAcceptedResponse(BaseModel):
 
 
 class DetectResponse(BaseModel):
-    """What Data Effi understood about a file, before anything is stored."""
+    """What Master Data understood about a file, before anything is stored."""
 
     filename: str
     format: str = Field(description="xlsx | html | csv | xls_binary")
@@ -651,7 +651,7 @@ class DetectResponse(BaseModel):
     column_count: int
     mapped_columns: dict[str, str] = Field(
         default_factory=dict,
-        description="Encabezado del archivo -> campo canonico de Data Effi.",
+        description="Encabezado del archivo -> campo canonico de Master Data.",
     )
     unmapped_columns: list[str] = Field(default_factory=list)
 

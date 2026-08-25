@@ -19,7 +19,7 @@ THE RULES THIS MODULE ENFORCES
    169.254.169.254 or an internal admin panel on the operator's behalf. Anything
    that is not an `https://docs.google.com/...` address is refused outright -
    no redirects followed, no other host, no other scheme.
-2. NO EVASION. Data Effi identifies itself in the User-Agent, waits between
+2. NO EVASION. Master Data identifies itself in the User-Agent, waits between
    requests, and does not retry a 401/403. If Google says no, the answer is no.
 3. NO URL IN THE LOGS. A published URL is public, but the same column could one
    day hold one with `?key=` or a long opaque id in it, and a log line is
@@ -47,7 +47,7 @@ logger = logging.getLogger(__name__)
 
 DEFAULT_TIMEOUT_SECONDS = 45.0
 MIN_SECONDS_BETWEEN_REQUESTS = 1.0
-USER_AGENT = "DataEffi-Analytics/1.0 (+hoja publicada por el comerciante)"
+USER_AGENT = "MasterData-Analytics/1.0 (+hoja publicada por el comerciante)"
 
 # The one host this connector will ever fetch from. Not a suffix match: an
 # attacker registering `docs.google.com.evil.tld` would pass a suffix check.
@@ -95,7 +95,7 @@ def validate_published_url(raw_url: str) -> str:
     parts = urlsplit(url)
     if parts.scheme != "https":
         raise InvalidSheetUrlError(
-            "La URL debe empezar por https://. Data Effi no descarga hojas por http."
+            "La URL debe empezar por https://. Master Data no descarga hojas por http."
         )
     # `hostname` is lowercased and strips any user:password@ prefix, which is the
     # classic way to make a URL look like it points somewhere it does not.

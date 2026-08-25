@@ -26,9 +26,9 @@ pytest.importorskip("fastapi")
 
 pytestmark = pytest.mark.postgres
 
-OWNER_EMAIL = "duena.alcance@dataeffi.co"
+OWNER_EMAIL = "duena.alcance@masterdata.app"
 OWNER_PASSWORD = "una-clave-larga-de-prueba"
-PARTNER_EMAIL = "socio.gt.alcance@dataeffi.co"
+PARTNER_EMAIL = "socio.gt.alcance@masterdata.app"
 PARTNER_PASSWORD = "clave-del-socio-1234"
 
 

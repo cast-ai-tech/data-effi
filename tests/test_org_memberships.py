@@ -25,11 +25,11 @@ pytest.importorskip("fastapi")
 
 pytestmark = pytest.mark.postgres
 
-OWNER_EMAIL = "jefe@dataeffi.co"
+OWNER_EMAIL = "jefe@masterdata.app"
 OWNER_PASSWORD = "una-clave-larga-de-prueba"
-PARTNER_EMAIL = "socio.gt@dataeffi.co"
+PARTNER_EMAIL = "socio.gt@masterdata.app"
 PARTNER_PASSWORD = "clave-del-socio-1234"
-LOADER_EMAIL = "carga@dataeffi.co"
+LOADER_EMAIL = "carga@masterdata.app"
 LOADER_PASSWORD = "clave-de-la-carga-99"
 
 
@@ -210,7 +210,7 @@ def test_a_country_scope_must_name_countries_the_company_operates(client, owner_
     response = client.post(
         "/auth/invite",
         headers=auth(owner_in_guatemala),
-        json={"email": "nadie@dataeffi.co", "role": "viewer", "country_scope": ["CO"]},
+        json={"email": "nadie@masterdata.app", "role": "viewer", "country_scope": ["CO"]},
     )
     assert response.status_code == 400
     assert response.json()["error"]["code"] == "unknown_country"
@@ -319,7 +319,7 @@ def test_a_viewer_cannot_invite_or_manage(client, partner_token, guatemala):
     ).json()["access_token"]
 
     invited = client.post(
-        "/auth/invite", headers=auth(scoped), json={"email": "x@dataeffi.co", "role": "viewer"}
+        "/auth/invite", headers=auth(scoped), json={"email": "x@masterdata.app", "role": "viewer"}
     )
     assert invited.status_code == 403
 

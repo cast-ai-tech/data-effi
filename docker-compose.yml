@@ -1,4 +1,4 @@
-# Data Effi - the whole platform.
+# Master Data - the whole platform.
 #
 #   docker compose up          -> database, migrations, API, worker, web
 #   make seed-demo             -> a three-country demo workspace with real numbers
@@ -45,7 +45,7 @@ x-app-env: &app-env
 services:
   db:
     image: postgres:16-alpine
-    container_name: dataeffi_db
+    container_name: masterdata_db
     environment:
       POSTGRES_USER: ${POSTGRES_USER:-norte}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}
@@ -54,7 +54,7 @@ services:
     ports:
       - "${POSTGRES_PORT:-5433}:5432"
     volumes:
-      - dataeffi_pgdata:/var/lib/postgresql/data
+      - masterdata_pgdata:/var/lib/postgresql/data
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
       interval: 3s
@@ -68,7 +68,7 @@ services:
     build:
       context: .
       dockerfile: Dockerfile.api
-    container_name: dataeffi_migrate
+    container_name: masterdata_migrate
     environment:
       <<: *app-env
     depends_on:
@@ -94,14 +94,14 @@ services:
     build:
       context: .
       dockerfile: Dockerfile.api
-    container_name: dataeffi_api
+    container_name: masterdata_api
     environment:
       <<: *app-env
       UPLOAD_DIR: /app/uploads
     ports:
       - "${API_PORT:-8000}:8000"
     volumes:
-      - dataeffi_uploads:/app/uploads
+      - masterdata_uploads:/app/uploads
     depends_on:
       migrate:
         condition: service_completed_successfully
@@ -111,7 +111,7 @@ services:
     build:
       context: .
       dockerfile: Dockerfile.api
-    container_name: dataeffi_worker
+    container_name: masterdata_worker
     environment:
       <<: *app-env
       WORKER_ENABLED: ${WORKER_ENABLED:-true}
@@ -135,7 +135,7 @@ services:
       dockerfile: Dockerfile
       args:
         NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-http://localhost:8000}
-    container_name: dataeffi_web
+    container_name: masterdata_web
     environment:
       # Docker overwrites HOSTNAME with the container id, and Next's standalone
       # server binds to whatever HOSTNAME says - so it ends up listening on a
@@ -153,5 +153,5 @@ services:
     restart: unless-stopped
 
 volumes:
-  dataeffi_pgdata:
-  dataeffi_uploads:
+  masterdata_pgdata:
+  masterdata_uploads:

@@ -34,7 +34,7 @@ STATEMENT_TIMEOUT_MS = 5_000
 # from core, nothing from raw, nothing from stg, no catalogs.
 #
 # THE OPERATOR ASKED FOR "ANY DATA IN THE PLATFORM". This list is the answer to
-# that: every business aggregate Data Effi computes is reachable. What is NOT on it,
+# that: every business aggregate Master Data computes is reachable. What is NOT on it,
 # and never will be:
 #
 #   * mart.v_source_row_archive - the original file rows. Customer name, id,
@@ -384,7 +384,7 @@ mart.v_product_catalogue(product_name, sku, category, supplier_name, unit_cost, 
 
 SYSTEM_PROMPT = f"""Eres un analista de datos que traduce preguntas de negocio a SQL de PostgreSQL.
 
-Trabajas para Data Effi, una plataforma de analítica de ecommerce contraentrega (COD) en LATAM.
+Trabajas para Master Data, una plataforma de analítica de ecommerce contraentrega (COD) en LATAM.
 
 REGLAS ABSOLUTAS:
 - Devuelves ÚNICAMENTE una sentencia SELECT. Nada más: ni explicación, ni punto y coma final,

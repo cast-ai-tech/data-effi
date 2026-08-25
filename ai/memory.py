@@ -3,7 +3,7 @@
 READ THIS BEFORE CALLING IT "LEARNING".
 
 The model is not fine-tuned. No weights are updated by anything in this file, or
-anywhere else in Data Effi. Gemini is exactly as capable after a thousand
+anywhere else in Master Data. Gemini is exactly as capable after a thousand
 conversations as it was after zero.
 
 What DOES improve is the context it answers from, and that is not a figure of

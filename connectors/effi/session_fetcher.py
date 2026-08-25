@@ -4,7 +4,7 @@ WHY THIS IS TIER 3
 ------------------
 Effi publishes no API. The only way to get a merchant's own operational data out
 of it is to ask for the same report export the merchant can download by hand, in
-the browser, while logged in. That means Data Effi acts on the user's behalf with the
+the browser, while logged in. That means Master Data acts on the user's behalf with the
 user's credentials - a materially different thing from calling a documented API,
 and it carries obligations that tier 1 and 2 do not.
 
@@ -15,7 +15,7 @@ THE RULES THIS MODULE ENFORCES
 2. NO CREDENTIALS IN CODE. The session token is read from the environment
    variable named by the connection's `secret_ref`. It is never logged, never
    persisted, never included in an error message.
-3. NO EVASION. Data Effi identifies itself in the User-Agent, obeys a minimum delay
+3. NO EVASION. Master Data identifies itself in the User-Agent, obeys a minimum delay
    between requests, and stops on the first 401/403 instead of retrying. If Effi
    does not want this traffic, the correct response is to stop - not to disguise
    it.
@@ -42,7 +42,7 @@ logger = logging.getLogger(__name__)
 DEFAULT_BASE_URL = "https://app.effi.com.co"
 DEFAULT_TIMEOUT_SECONDS = 60.0
 MIN_SECONDS_BETWEEN_REQUESTS = 2.0
-USER_AGENT = "DataEffi-Analytics/1.0 (+operador autorizado por el comerciante)"
+USER_AGENT = "MasterData-Analytics/1.0 (+operador autorizado por el comerciante)"
 
 # Report paths per data kind. Overridable by environment so a change on Effi's
 # side does not require a code deploy.

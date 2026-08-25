@@ -34,8 +34,8 @@ from pipeline.dbconn import connect as db_connect
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 DEMO_TENANT = UUID("d0000000-0000-4000-a000-000000000001")
-DEMO_EMAIL = "demo@dataeffi.co"
-DEMO_PASSWORD = "demo-dataeffi-2026"
+DEMO_EMAIL = "demo@masterdata.app"
+DEMO_PASSWORD = "demo-masterdata-2026"
 
 # Deterministic: the same seed produces the same demo every time, so a bug
 # someone reports on the demo data is reproducible.
@@ -587,7 +587,7 @@ def summarise(conn: psycopg.Connection) -> None:
 
 
 def main() -> int:
-    parser = argparse.ArgumentParser(description="Carga datos de demostración en Data Effi")
+    parser = argparse.ArgumentParser(description="Carga datos de demostración en Master Data")
     parser.add_argument("--reset", action="store_true", help="Borra la demo anterior primero")
     args = parser.parse_args()
 

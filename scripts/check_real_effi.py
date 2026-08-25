@@ -1,7 +1,7 @@
 """Run real Effi exports through the pipeline and report what happened.
 
 A verification harness, not a test: it reads files from wherever you point it,
-loads them into a scratch tenant, and prints what Data Effi understood. The real
+loads them into a scratch tenant, and prints what Master Data understood. The real
 files carry customer PII and never enter the repository - this script exists so
 they never have to.
 

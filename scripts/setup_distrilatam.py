@@ -4,7 +4,7 @@ WHAT THIS DOES, AND WHY IT IS A SCRIPT AND NOT A MIGRATION
 A migration describes the SHAPE of the database and runs on every deployment,
 including someone else's. This is one operator's data: an org, its first company,
 the countries it sells in, and the person who runs it. Putting it in migrations/
-would create Distrilatam on every install of Data Effi, which is nonsense.
+would create Distrilatam on every install of Master Data, which is nonsense.
 
     python -m scripts.setup_distrilatam [--dry-run]
 

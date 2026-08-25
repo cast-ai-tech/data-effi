@@ -1,4 +1,4 @@
-# Data Effi - gitleaks configuration.
+# Master Data - gitleaks configuration.
 #
 # The default rules stay on. What is allow-listed here are values that LOOK like
 # secrets and are not: example lines in the documentation, the throwaway

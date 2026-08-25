@@ -1,4 +1,4 @@
-"""Data Effi API.
+"""Master Data API.
 
 Boots only when the environment is complete, and says exactly what is missing
 when it is not. Everything past /health and /auth/login requires a token.
@@ -38,7 +38,7 @@ from api.settings import get_settings
 logger = logging.getLogger(__name__)
 
 DESCRIPTION = """
-API de **Data Effi**, plataforma de analítica para operaciones de ecommerce
+API de **Master Data**, plataforma de analítica para operaciones de ecommerce
 contraentrega (COD) multi-país en LATAM.
 
 Todos los KPI se leen de vistas `mart.*`; la API no calcula métricas. El
@@ -62,13 +62,13 @@ async def lifespan(app: FastAPI):
     queue = init_queue(settings)
     await queue.recover_pending()
 
-    logger.info("Data Effi API lista en %s:%s", settings.api_host, settings.api_port)
+    logger.info("Master Data API lista en %s:%s", settings.api_host, settings.api_port)
     try:
         yield
     finally:
         await get_queue().drain()
         close_pools()
-        logger.info("Data Effi API detenida limpiamente")
+        logger.info("Master Data API detenida limpiamente")
 
 
 def create_app() -> FastAPI:
@@ -78,7 +78,7 @@ def create_app() -> FastAPI:
     # API. Useful on a laptop; a free reconnaissance report on the internet.
     production = settings.environment == "production"
     app = FastAPI(
-        title="Data Effi API",
+        title="Master Data API",
         description=DESCRIPTION,
         version="1.0.0",
         lifespan=lifespan,

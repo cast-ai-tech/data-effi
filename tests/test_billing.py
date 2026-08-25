@@ -21,8 +21,8 @@ pytest.importorskip("fastapi")
 
 pytestmark = pytest.mark.postgres
 
-A_EMAIL = "dueno.a@dataeffi.co"
-B_EMAIL = "dueno.b@dataeffi.co"
+A_EMAIL = "dueno.a@masterdata.app"
+B_EMAIL = "dueno.b@masterdata.app"
 PASSWORD = "una-clave-larga-de-prueba"
 
 
@@ -112,7 +112,7 @@ def test_registering_without_a_company_then_creating_it_with_its_country(client)
     """The simplified flow: account first, then "crea tu empresa" with ONE country."""
     response = client.post(
         "/auth/register",
-        json={"email": "solo.cuenta@dataeffi.co", "password": PASSWORD, "full_name": "Solo Cuenta"},
+        json={"email": "solo.cuenta@masterdata.app", "password": PASSWORD, "full_name": "Solo Cuenta"},
     )
     assert response.status_code == 201, response.text
     token = response.json()["access_token"]
