@@ -250,7 +250,7 @@ export default function FreightAnalysis({ countryCode, country }: WidgetProps) {
       <Card title="Análisis de flete" subtitle={SUBTITLE}>
         <EmptyState
           title="Todavía no hay fletes para comparar"
-          instruction="Sube un reporte de guías que traiga el peso y el valor del flete desde Master Data. Sin el peso no se puede calcular el flete por kilo, que es el único número comparable entre transportadoras."
+          instruction="Sube un reporte de guías que traiga el peso y el valor del flete desde Cargar datos. Sin el peso no se puede calcular el flete por kilo, que es el único número comparable entre transportadoras."
         />
       </Card>
     );

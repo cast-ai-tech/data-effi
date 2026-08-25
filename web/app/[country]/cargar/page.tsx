@@ -139,7 +139,7 @@ export default function CountryUploadPage() {
     <AppShell>
       <header className="mb-5">
         <p className="text-[11px] font-bold uppercase tracking-[0.08em] text-ink-faint">
-          Master Data
+          Cargar datos
         </p>
         <h1 className="mt-1 flex items-center gap-2.5 text-[22px] font-bold tracking-tight">
           <span className="text-[24px] leading-none">{countryFlag(countryCode)}</span>

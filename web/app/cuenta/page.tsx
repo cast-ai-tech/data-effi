@@ -22,7 +22,7 @@ import { useRouter } from "next/navigation";
 import { useState } from "react";
 
 import { AppShell } from "@/components/AppShell";
-import { Button, Card, Chip, EmptyState, SkeletonRows } from "@/components/ui";
+import { Button, Card, Chip, EmptyState, SkeletonRows, ThemeToggle } from "@/components/ui";
 import { ApiError, api } from "@/lib/api";
 import { countryFlag, formatRelative } from "@/lib/format";
 import { useApi } from "@/lib/hooks";
@@ -72,12 +72,27 @@ export default function CuentaPage() {
             <AccessCard user={user} />
           </div>
           <div className="flex flex-col gap-4">
+            <AppearanceCard />
             <PasswordCard />
             <SessionsCard />
           </div>
         </div>
       )}
     </AppShell>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Apariencia
+// ---------------------------------------------------------------------------
+
+function AppearanceCard() {
+  return (
+    <Card title="Apariencia" subtitle="Claro es el modo normal. Oscuro es opcional.">
+      <div className="-mx-3 -my-1">
+        <ThemeToggle />
+      </div>
+    </Card>
   );
 }
 

@@ -15,7 +15,7 @@ import { DateFieldPicker, ExcludedByFieldBand } from "@/components/DateFieldPick
 import { DateRangePicker } from "@/components/DateRangePicker";
 import { PlatformPicker } from "@/components/PlatformPicker";
 import { NotificationBell } from "@/components/NotificationBell";
-import { Chip, StatusDot, cx } from "@/components/ui";
+import { Chip, StatusDot, ThemeToggle, cx } from "@/components/ui";
 import { api, signOut as endSession } from "@/lib/api";
 import { PLANS_PATH, shouldRedirectToPlans, subscriptionBanner } from "@/lib/billing";
 import { DEFAULT_FIELD, useDateRange } from "@/lib/date-range";
@@ -285,6 +285,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
               <p className="truncate text-[10.5px] text-ink-dim">{user.tenant_name}</p>
             </div>
           )}
+          <ThemeToggle showLabel={!rail} />
           <button
             type="button"
             onClick={() => setCollapsed(!collapsed)}
@@ -571,7 +572,7 @@ function CountryNav({
     // Each country loads its own files and names the platform they come from
     // (migration 042). There is no global upload entry any more.
     ...(canIngest
-      ? [{ match: `${base}/cargar`, href: `${base}/cargar`, label: "Master Data", icon: <UploadIcon />, exact: false }]
+      ? [{ match: `${base}/cargar`, href: `${base}/cargar`, label: "Cargar datos", icon: <UploadIcon />, exact: false }]
       : []),
   ];
 

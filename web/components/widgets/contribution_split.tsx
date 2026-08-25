@@ -55,7 +55,7 @@ export default function ContributionSplitWidget({ countryCode, country }: Widget
       <Card title={TITLE} subtitle={SUBTITLE}>
         <EmptyState
           title="Todavía no hay guías para separar"
-          instruction="Sube un reporte de guías desde Master Data. Apenas exista la primera, este widget empieza a mostrar cuánto ya se cobró y cuánto sigue en la calle."
+          instruction="Sube un reporte de guías desde Cargar datos. Apenas exista la primera, este widget empieza a mostrar cuánto ya se cobró y cuánto sigue en la calle."
         />
       </Card>
     );

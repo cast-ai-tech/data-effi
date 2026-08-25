@@ -68,7 +68,7 @@ export default function CashCycle({ countryCode, country }: WidgetProps) {
       <Card title="Ciclo de caja" subtitle={SUBTITLE}>
         <EmptyState
           title="Todavía no se puede medir el ciclo de caja"
-          instruction="Sube un reporte de guías con la fecha de liquidación desde Master Data. Mientras no exista al menos una guía ya liquidada, no hay forma de saber cuántos días tarda la transportadora en pagarte."
+          instruction="Sube un reporte de guías con la fecha de liquidación desde Cargar datos. Mientras no exista al menos una guía ya liquidada, no hay forma de saber cuántos días tarda la transportadora en pagarte."
         />
       </Card>
     );

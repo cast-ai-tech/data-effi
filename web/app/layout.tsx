@@ -1,6 +1,6 @@
 import type { Metadata, Viewport } from "next";
 import { Inter } from "next/font/google";
-import { headers } from "next/headers";
+import { cookies, headers } from "next/headers";
 
 import { FlagFont } from "@/components/FlagFont";
 import { Suspense } from "react";
@@ -17,17 +17,39 @@ const inter = Inter({
   variable: "--font-inter",
 });
 
+const THEME_COOKIE = "masterdata_theme";
+
 export const metadata: Metadata = {
-  title: "Data Effi · Analítica contraentrega",
+  title: {
+    default: "Master Data · Tu operación en números",
+    template: "%s · Master Data",
+  },
   description:
-    "Plataforma de analítica para operaciones de ecommerce contraentrega (COD) multi-país en LATAM.",
+    "Sube los reportes de tus guías y Master Data te dice, por país y por producto, si estás ganando o perdiendo plata.",
+  applicationName: "Master Data",
+  openGraph: {
+    title: "Master Data · Tu operación en números",
+    description:
+      "Sube los reportes de tus guías y Master Data te dice, por país y por producto, si estás ganando o perdiendo plata.",
+    siteName: "Master Data",
+    locale: "es_CO",
+    type: "website",
+  },
 };
 
-export const viewport: Viewport = {
-  themeColor: "#0b0e14",
-  width: "device-width",
-  initialScale: 1,
-};
+async function readTheme(): Promise<"dark" | undefined> {
+  const store = await cookies();
+  return store.get(THEME_COOKIE)?.value === "dark" ? "dark" : undefined;
+}
+
+export async function generateViewport(): Promise<Viewport> {
+  const theme = await readTheme();
+  return {
+    themeColor: theme === "dark" ? "#0b0e14" : "#f4f6f9",
+    width: "device-width",
+    initialScale: 1,
+  };
+}
 
 // Rendered per request, never prerendered. The Content-Security-Policy that
 // middleware.ts sends carries a nonce that changes on every request, and Next
@@ -40,8 +62,11 @@ export default async function RootLayout({ children }: { children: React.ReactNo
   // Reading the request headers is what opts the whole tree into dynamic
   // rendering; the nonce itself is picked up by Next from the CSP header.
   await headers();
+  // The theme is decided here, on the server, so the first paint is already
+  // right: no flash and no inline script (see components/ui/ThemeToggle.tsx).
+  const theme = await readTheme();
   return (
-    <html lang="es" className={inter.variable}>
+    <html lang="es" className={inter.variable} data-theme={theme}>
       <body className="min-h-screen bg-page text-ink antialiased">
         {/*
           Windows no trae los glifos de las banderas, así que Chrome pinta las

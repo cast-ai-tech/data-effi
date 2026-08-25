@@ -1,115 +1,169 @@
 @import "tailwindcss";
 
 /*
- * Data Effi design tokens.
+ * Master Data design tokens (light-first).
  *
- * Structure, density and scale come from design/DataEffi.dc.html (see
- * design/DESIGN-SPEC.md). The accent hue comes from Effi, the platform this
- * tool sits next to all day - a dashboard that clashes with the ERP beside it
- * reads as a foreign object.
+ * The base palette is LIGHT: white surfaces on a very pale grey page, dark ink.
+ * Dark mode is an opt-in override under `:root[data-theme="dark"]`, stamped on
+ * <html> by app/layout.tsx from the `masterdata_theme` cookie, so the first
+ * paint is already right and no inline script is needed (the CSP has a nonce).
  *
  * COLOUR IS NEVER DECORATION HERE. Each one means exactly one thing:
  *   accent   -> actionable / brand
  *   positive -> money earned, delivery, things going up that should
  *   warning  -> degraded, watch this
  *   negative -> money lost, returns, things going down
+ *
+ * Two families per semantic colour:
+ *   `--color-accent`      for FILLS (buttons, bars, dots) - the brand hue.
+ *   `--color-accent-ink`  for TEXT - a darker shade that passes WCAG AA on
+ *                         white. The brand blue on white is only 2.7:1, so it
+ *                         must never be used as text on a light surface.
  */
 
 @theme {
   /* --- surfaces --- */
+  --color-page: #f4f6f9;
+  --color-sidebar: #ffffff;
+  --color-surface: #ffffff;
+  --color-sunken: #f1f4f8;
+  --color-track: #e4e9f0;
+  --color-range-active: #e3eef8;
+  --color-hover: rgba(15, 23, 42, 0.04);
+  --color-hover-strong: rgba(15, 23, 42, 0.07);
+  --color-scrim: rgba(15, 23, 42, 0.38);
+
+  /* --- borders --- */
+  --color-line: rgba(15, 23, 42, 0.1);
+  --color-line-strong: rgba(15, 23, 42, 0.14);
+  --color-line-subtle: rgba(15, 23, 42, 0.07);
+  --color-line-row: rgba(15, 23, 42, 0.06);
+  --color-line-input: rgba(15, 23, 42, 0.18);
+
+  /* --- text (every shade >= 4.5:1 on page and on surface) --- */
+  --color-ink: #0f172a;
+  --color-ink-body: #1e293b;
+  --color-ink-2: #334155;
+  --color-ink-muted: #475569;
+  --color-ink-dim: #536074;
+  --color-ink-faint: #5e6a7d;
+  --color-ink-nav: #334155;
+  --color-on-accent: #04202e;
+  --color-on-solid: #ffffff;
+
+  /* --- semantics: fills, bars, dots (brand hues) --- */
+  --color-accent: #29a9e0;
+  --color-accent-hover: #1f9bd1;
+  --color-accent-deep: #16739c;
+  --color-positive: #21c08a;
+  --color-positive-2: #5fcb9e;
+  --color-warning: #f5a83c;
+  --color-negative: #ff6259;
+  --color-negative-soft: #f5a0a0;
+  --color-neutral-bar: #94a3b8;
+  --color-neutral-series: #64748b;
+
+  /* --- semantics: TEXT (AA on white and on page) --- */
+  --color-accent-ink: #16739c;
+  --color-positive-ink: #0b7d56;
+  --color-warning-ink: #b45309;
+  --color-negative-ink: #c52a24;
+
+  /* --- chart series --- */
+  --color-series-1: #29a9e0;
+  --color-series-2: #21c08a;
+  --color-series-3: #f5a83c;
+  --color-series-4: #ff6259;
+  --color-series-5: #6d4fd6;
+  --color-series-6: #17a398;
+  --color-series-7: #94a3b8;
+
+  /* --- typography: nothing below 13px, body 15px --- */
+  --text-xs: 13px;
+  --text-xs--line-height: 1.4;
+  --text-sm: 14px;
+  --text-sm--line-height: 1.45;
+  --text-base: 15px;
+  --text-base--line-height: 1.5;
+  --text-md: 16px;
+  --text-md--line-height: 1.5;
+  --text-lg: 18px;
+  --text-lg--line-height: 1.4;
+  --text-xl: 20px;
+  --text-xl--line-height: 1.3;
+  --text-2xl: 24px;
+  --text-2xl--line-height: 1.2;
+  --text-3xl: 28px;
+  --text-3xl--line-height: 1.1;
+  --text-4xl: 34px;
+  --text-4xl--line-height: 1.05;
+
+  /* --- shadows --- */
+  --shadow-card: 0 1px 2px rgba(15, 23, 42, 0.04), 0 1px 3px rgba(15, 23, 42, 0.06);
+  --shadow-pop: 0 8px 24px rgba(15, 23, 42, 0.14), 0 2px 6px rgba(15, 23, 42, 0.08);
+
+  /* --- radii --- */
+  --radius-card: 14px;
+  --radius-control: 10px;
+
+  /* "Twemoji Country Flags" va PRIMERA y cubre solo los indicadores
+     regionales: Windows no tiene esos glifos y sin ella 🇨🇴 se dibuja como
+     "CO". Para cualquier otro carácter no aporta nada y manda Inter, que
+     next/font expone como var(--font-inter). */
+  --font-sans: "Twemoji Country Flags", var(--font-inter), Inter, -apple-system,
+    BlinkMacSystemFont, "Segoe UI", sans-serif;
+}
+
+:root {
+  color-scheme: light;
+}
+
+/* Dark mode: opt-in. The values are the original dark palette. */
+:root[data-theme="dark"] {
+  color-scheme: dark;
+
   --color-page: #0b0e14;
   --color-sidebar: #0d1017;
   --color-surface: #12161f;
   --color-sunken: #0f131a;
   --color-track: #1b212c;
   --color-range-active: #1e2530;
+  --color-hover: rgba(255, 255, 255, 0.04);
+  --color-hover-strong: rgba(255, 255, 255, 0.07);
+  --color-scrim: rgba(0, 0, 0, 0.55);
 
-  /* --- borders --- */
   --color-line: rgba(255, 255, 255, 0.07);
   --color-line-strong: rgba(255, 255, 255, 0.08);
   --color-line-subtle: rgba(255, 255, 255, 0.06);
   --color-line-row: rgba(255, 255, 255, 0.05);
   --color-line-input: rgba(255, 255, 255, 0.1);
 
-  /* --- text --- */
   --color-ink: #e7eaf0;
   --color-ink-body: #dadee6;
   --color-ink-2: #c4cad6;
-  --color-ink-muted: #8b93a5;
-  --color-ink-dim: #5b6272;
-  --color-ink-faint: #4c5364;
+  --color-ink-muted: #9aa1b0;
+  --color-ink-dim: #8b93a5;
+  --color-ink-faint: #7d8597;
   --color-ink-nav: #9aa1b0;
   --color-on-accent: #04202e;
+  --color-on-solid: #ffffff;
 
-  /* --- semantics (Effi palette) --- */
-  --color-accent: #29a9e0;
   --color-accent-hover: #4fbcea;
   --color-accent-deep: #1c86b4;
-  --color-positive: #21c08a;
-  --color-positive-2: #5fcb9e;
-  --color-warning: #f5a83c;
-  --color-negative: #ff6259;
-  --color-negative-soft: #f5a0a0;
   --color-neutral-bar: #3a4152;
   --color-neutral-series: #5b6272;
 
-  /* --- radii --- */
-  --radius-card: 12px;
-  --radius-control: 8px;
+  --color-accent-ink: #4fbcea;
+  --color-positive-ink: #21c08a;
+  --color-warning-ink: #f5a83c;
+  --color-negative-ink: #ff6259;
 
-  /* "Twemoji Country Flags" va PRIMERA y cubre solo los indicadores
-     regionales: Windows no tiene esos glifos y sin ella 🇨🇴 se dibuja como
-     "CO". Para cualquier otro carácter no aporta nada y manda Inter.
-     La instala components/FlagFont.tsx, y solo si el navegador la necesita. */
-  --font-sans: "Twemoji Country Flags", Inter, -apple-system, BlinkMacSystemFont,
-    "Segoe UI", sans-serif;
-}
+  --color-series-5: #8b74ff;
+  --color-series-6: #2fc4b6;
+  --color-series-7: #5b6272;
 
-/* Light theme. The product is dark-first; this keeps it usable in a bright room
- * without inventing a second design. */
-@media (prefers-color-scheme: light) {
-  :root:not([data-theme="dark"]) {
-    --color-page: #f5f7fa;
-    --color-sidebar: #ffffff;
-    --color-surface: #ffffff;
-    --color-sunken: #f0f3f7;
-    --color-track: #e3e8ef;
-    --color-range-active: #e8edf4;
-    --color-line: rgba(15, 23, 42, 0.1);
-    --color-line-strong: rgba(15, 23, 42, 0.12);
-    --color-line-subtle: rgba(15, 23, 42, 0.08);
-    --color-line-row: rgba(15, 23, 42, 0.07);
-    --color-line-input: rgba(15, 23, 42, 0.14);
-    --color-ink: #0f172a;
-    --color-ink-body: #1e293b;
-    --color-ink-2: #334155;
-    --color-ink-muted: #64748b;
-    --color-ink-dim: #94a3b8;
-    --color-ink-faint: #a8b2c1;
-    --color-ink-nav: #475569;
-    --color-on-accent: #ffffff;
-  }
-}
-
-:root[data-theme="light"] {
-  --color-page: #f5f7fa;
-  --color-sidebar: #ffffff;
-  --color-surface: #ffffff;
-  --color-sunken: #f0f3f7;
-  --color-track: #e3e8ef;
-  --color-line: rgba(15, 23, 42, 0.1);
-  --color-line-strong: rgba(15, 23, 42, 0.12);
-  --color-line-subtle: rgba(15, 23, 42, 0.08);
-  --color-line-row: rgba(15, 23, 42, 0.07);
-  --color-line-input: rgba(15, 23, 42, 0.14);
-  --color-ink: #0f172a;
-  --color-ink-body: #1e293b;
-  --color-ink-2: #334155;
-  --color-ink-muted: #64748b;
-  --color-ink-dim: #94a3b8;
-  --color-ink-faint: #a8b2c1;
-  --color-ink-nav: #475569;
-  --color-on-accent: #ffffff;
+  --shadow-card: 0 1px 2px rgba(0, 0, 0, 0.3);
+  --shadow-pop: 0 8px 24px rgba(0, 0, 0, 0.5), 0 2px 6px rgba(0, 0, 0, 0.35);
 }
 
 html,
@@ -120,31 +174,39 @@ body {
 
 body {
   font-family: var(--font-sans);
+  font-size: var(--text-base);
+  line-height: 1.5;
   /* Non-negotiable in BI: every figure must line up in its column. */
   font-variant-numeric: tabular-nums;
   -webkit-font-smoothing: antialiased;
 }
 
+/* Keyboard focus is visible everywhere, in the brand colour. */
+:where(a, button, input, select, textarea, [tabindex]):focus-visible {
+  outline: 2px solid var(--color-accent-deep);
+  outline-offset: 2px;
+}
+
 ::-webkit-scrollbar {
-  width: 8px;
-  height: 8px;
+  width: 10px;
+  height: 10px;
 }
 ::-webkit-scrollbar-thumb {
-  background: rgba(255, 255, 255, 0.12);
-  border-radius: 8px;
+  background: var(--color-line-strong);
+  border-radius: 10px;
 }
 ::-webkit-scrollbar-track {
   background: transparent;
 }
 
 a {
-  color: var(--color-accent);
+  color: var(--color-accent-ink);
 }
 a:hover {
-  color: var(--color-accent-hover);
+  color: var(--color-accent-deep);
 }
 
-@keyframes dataeffi-pulse {
+@keyframes masterdata-pulse {
   0%,
   100% {
     opacity: 1;
@@ -156,13 +218,13 @@ a:hover {
 
 .skeleton {
   background: var(--color-track);
-  border-radius: 6px;
-  animation: dataeffi-pulse 1.6s ease-in-out infinite;
+  border-radius: 8px;
+  animation: masterdata-pulse 1.6s ease-in-out infinite;
 }
 
-/* Chrome paints autofilled inputs with its own near-white background, which on a
- * dark surface looks like a rendering bug. There is no property to override it;
- * a large inset shadow is the accepted way to repaint the field. */
+/* Chrome paints autofilled inputs with its own pale yellow background. There
+ * is no property to override it; a large inset shadow is the accepted way to
+ * repaint the field in the surface colour of the current theme. */
 input:-webkit-autofill,
 input:-webkit-autofill:hover,
 input:-webkit-autofill:focus {

@@ -152,7 +152,7 @@ export default function OnboardingPage() {
                 La pantalla de carga acepta varios archivos a la vez.
               </p>
               <Link href="/ingest" className="no-underline">
-                <Button>Ir a Master Data</Button>
+                <Button>Ir a Cargar datos</Button>
               </Link>
             </div>
           </Card>

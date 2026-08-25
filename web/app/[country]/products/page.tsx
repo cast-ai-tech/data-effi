@@ -428,7 +428,7 @@ function ProductsScreen() {
                     href={`/${countryCode.toLowerCase()}/cargar`}
                     className="rounded-[8px] bg-accent px-3.5 py-1.5 text-[12px] font-semibold text-on-accent no-underline hover:bg-accent-hover"
                   >
-                    Master Data
+                    Cargar datos
                   </Link>
                   {canEdit && (
                     <Button

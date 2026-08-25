@@ -50,7 +50,7 @@ export default function CapitalInStreet({ countryCode, country }: WidgetProps) {
       <Card title={TITLE} subtitle={SUBTITLE}>
         <EmptyState
           title="Todavía no hay guías en la calle"
-          instruction="Sube un reporte de guías desde Master Data. Con la primera guía abierta ya se puede calcular cuánto capital tuyo está viajando."
+          instruction="Sube un reporte de guías desde Cargar datos. Con la primera guía abierta ya se puede calcular cuánto capital tuyo está viajando."
         />
       </Card>
     );

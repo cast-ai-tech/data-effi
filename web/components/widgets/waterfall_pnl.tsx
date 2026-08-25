@@ -135,7 +135,7 @@ export default function WaterfallPnl({ countryCode, country }: WidgetProps) {
       <Card title="Del recaudo a la contribución">
         <EmptyState
           title="No hay movimientos de dinero en este rango"
-          instruction="Conecta la plataforma de recaudo o sube el archivo de movimientos desde Master Data para descomponer el recaudo en producto, flete, comisiones y pauta."
+          instruction="Conecta la plataforma de recaudo o sube el archivo de movimientos desde Cargar datos para descomponer el recaudo en producto, flete, comisiones y pauta."
         />
       </Card>
     );
