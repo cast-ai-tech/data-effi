@@ -58,6 +58,11 @@ services:
         value: '^https://masterdataweb(-[a-z0-9-]+)?\.vercel\.app$'
       - key: PROXY_SHARED_SECRET
         sync: false
+      # Número de WhatsApp del asesor comercial (planes a la medida y cobro
+      # manual). Con indicativo, solo dígitos: 573001234567. Vacío = el botón
+      # de contacto no aparece.
+      - key: ADVISOR_WHATSAPP
+        sync: false
 
       # --- valores fijos del despliegue gratuito ---
       - key: ENVIRONMENT

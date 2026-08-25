@@ -243,6 +243,7 @@ healthcheck en `/health`, y **`autoDeploy: false`**.
 | `PROXY_SHARED_SECRET` | Generado; el mismo va en Vercel (sección 4) |
 | `PUBLIC_API_URL` | La URL pública de este servicio, sin barra final (`https://master-data-api.onrender.com`) |
 | `CORS_ORIGINS` | Los dominios de la web, separados por coma, sin barra final. Hoy: la URL de producción en Vercel **y** la de Netlify mientras siga de respaldo |
+| `ADVISOR_WHATSAPP` | WhatsApp del asesor que activa planes y arma los «a la medida». Con indicativo y solo dígitos (`573001234567`). Si lo dejas vacío, la pantalla de planes no muestra el botón de contacto |
 | `AI_ENABLED`, `GEMINI_API_KEY`, `AI_MODEL` | Solo si vas a activar el copiloto de IA. Se gestionan desde el panel, no desde el Blueprint |
 
 Las demás (`ENVIRONMENT`, `API_HOST`, `API_PORT`, `LOG_LEVEL`,
