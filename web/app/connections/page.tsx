@@ -322,7 +322,7 @@ export default function ConnectionsPage() {
               <SectionTitle hint={CATEGORY_HINTS[category]}>
                 {CATEGORY_LABELS[category]}
               </SectionTitle>
-              <div className="grid items-stretch gap-3 sm:grid-cols-2 xl:grid-cols-3">
+              <div className="grid items-stretch gap-3 sm:grid-cols-2 lg:grid-cols-3">
                 {items.map((platform) => (
                   <PlatformCard
                     key={platform.platform_code}
@@ -1089,7 +1089,7 @@ function WebhookPanel({
             </li>
             <li>
               Cuerpo en JSON. Cada fila usa los mismos nombres de columna de tus reportes:
-              <pre className="mt-1.5 overflow-x-auto rounded-md bg-page px-2.5 py-2 font-mono text-xs leading-relaxed text-ink-2">
+              <pre className="mt-1.5 data-table rounded-md bg-page px-2.5 py-2 font-mono text-xs leading-relaxed text-ink-2">
                 {bodyExample}
               </pre>
             </li>

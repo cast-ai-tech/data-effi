@@ -102,7 +102,7 @@ export default function OrganizacionPage() {
 
           <div className="grid gap-4 xl:grid-cols-[1.35fr_1fr]">
             <Card title="Por empresa" subtitle="Entra a una empresa para ver su detalle">
-              <div className="overflow-x-auto">
+              <div className="data-table">
                 <table className="w-full min-w-[560px] border-collapse text-sm">
                   <thead>
                     <tr className="border-b border-line-subtle text-left text-xs uppercase tracking-[0.06em] text-ink-faint">

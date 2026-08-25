@@ -310,7 +310,7 @@ export default function CarrierTable({ countryCode, country }: WidgetProps) {
       subtitle="Entrega, devoluciones y contribución. Haz clic en una columna para ordenar."
       bodyClassName="p-0"
     >
-      <div className="overflow-x-auto">
+      <div className="data-table">
         <table className="w-full min-w-[820px] border-collapse text-sm">
           <thead>
             {table.getHeaderGroups().map((headerGroup) => (

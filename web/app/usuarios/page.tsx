@@ -588,7 +588,7 @@ function EditRow({
 }) {
   return (
     <div className="flex flex-col gap-1.5 sm:flex-row sm:items-start sm:gap-3">
-      <span className="w-[120px] shrink-0 pt-1.5 text-xs font-semibold uppercase tracking-[0.06em] text-ink-faint">
+      <span className="w-[96px] shrink-0 pt-1.5 sm:w-[120px] text-xs font-semibold uppercase tracking-[0.06em] text-ink-faint">
         {label}
       </span>
       <div className="min-w-0 flex-1">{children}</div>

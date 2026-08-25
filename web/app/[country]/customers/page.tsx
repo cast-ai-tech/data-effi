@@ -229,7 +229,7 @@ function CustomersScreen() {
         )}
 
         {!loading && !error && rows.length > 0 && country && (
-          <div className="overflow-x-auto">
+          <div className="data-table">
             <table className="w-full min-w-[1020px] border-collapse text-sm">
               <thead>
                 <tr>

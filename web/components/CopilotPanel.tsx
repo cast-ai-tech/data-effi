@@ -279,7 +279,7 @@ function AskBlock({ countryCode }: { countryCode: string | null }) {
                 {showSql ? "Ocultar consulta" : "Ver consulta"}
               </button>
               {showSql && (
-                <pre className="mt-2 overflow-x-auto rounded-control bg-sunken p-2.5 text-xs leading-[1.5] text-ink-muted">
+                <pre className="mt-2 data-table rounded-control bg-sunken p-2.5 text-xs leading-[1.5] text-ink-muted">
                   {result.sql}
                 </pre>
               )}

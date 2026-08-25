@@ -189,7 +189,7 @@ export function DailyStatusTable({
   const cell = cx("px-2.5 text-right tabular-nums", compact ? "py-1" : "py-1.5");
 
   return (
-    <div className="overflow-x-auto">
+    <div className="data-table">
       <table className="w-full min-w-[720px] border-collapse text-sm">
         <thead>
           <tr className="text-xs font-semibold uppercase tracking-[0.06em] text-ink-dim">
@@ -338,7 +338,7 @@ export function BlockSummary({
       </div>
       <div className="flex items-center gap-1.5">
         <dt className="text-ink-dim">% devolución</dt>
-        <dd className="w-[120px]">
+        <dd className="w-[96px] sm:w-[120px]">
           <MicroBar
             value={totals.pctDevolucionTotal}
             max={100}
@@ -416,7 +416,7 @@ export function DailyStatusMatrix({
     );
 
   return (
-    <div className="overflow-x-auto">
+    <div className="data-table">
       <table className="w-full min-w-[640px] border-collapse">
         <thead>
           <tr className={cx("text-xs font-bold uppercase tracking-[0.05em] text-on-solid", accentClass)}>

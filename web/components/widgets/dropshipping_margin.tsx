@@ -270,7 +270,7 @@ export default function DropshippingMargin({ countryCode, country }: WidgetProps
       subtitle={SUBTITLE}
       bodyClassName="p-0"
     >
-      <div className="overflow-x-auto">
+      <div className="data-table">
         <table className="w-full min-w-[1040px] border-collapse text-sm">
           <thead>
             {table.getHeaderGroups().map((headerGroup) => (

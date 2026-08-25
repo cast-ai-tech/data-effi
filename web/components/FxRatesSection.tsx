@@ -64,7 +64,7 @@ export function FxRatesSection({ onError }: { onError: (message: string) => void
       )}
 
       {!loading && rates && rates.length > 0 && (
-        <div className="overflow-x-auto">
+        <div className="data-table">
           <table className="w-full min-w-[640px] border-collapse text-sm">
             <thead>
               <tr className="border-b border-line-subtle text-left text-xs uppercase tracking-wide text-ink-dim">

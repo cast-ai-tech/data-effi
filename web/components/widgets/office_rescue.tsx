@@ -250,7 +250,7 @@ export default function OfficeRescue({ countryCode, country }: WidgetProps) {
         })}
       </ul>
 
-      <div className="mt-4 overflow-x-auto border-t border-line-subtle pt-3">
+      <div className="mt-4 data-table border-t border-line-subtle pt-3">
         <table className="w-full min-w-[420px] border-collapse text-sm">
           <caption className="mb-2 text-left text-xs text-ink-dim">
             Ciudades ordenadas por el recaudo que tienen detenido. Empieza por arriba.

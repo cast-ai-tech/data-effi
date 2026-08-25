@@ -223,7 +223,7 @@ export default function ProductTable({ countryCode, country }: WidgetProps) {
       }
       bodyClassName="p-0"
     >
-      <div className="overflow-x-auto">
+      <div className="data-table">
         <table className="w-full border-collapse">
           <thead>
             {table.getHeaderGroups().map((headerGroup) => (

@@ -149,9 +149,9 @@ export default function GlobalSummary({ country }: WidgetProps) {
 
       <div className="flex items-center gap-3 px-4 pb-2 pt-3 text-xs font-bold uppercase tracking-[0.06em] text-ink-faint">
         <span className="min-w-0 flex-1">País</span>
-        <span className="w-[132px] shrink-0 text-right">Contribución local</span>
-        <span className="w-[128px] shrink-0 text-right">En dólares</span>
-        <span className="w-[126px] shrink-0 pl-[52px]">% entrega</span>
+        <span className="w-[96px] shrink-0 text-right sm:w-[132px]">Contribución local</span>
+        <span className="hidden w-[128px] shrink-0 text-right sm:block">En dólares</span>
+        <span className="w-[104px] shrink-0 pl-[52px] sm:w-[126px]">% entrega</span>
         <span className="w-[76px] shrink-0 text-right">Guías</span>
       </div>
 
@@ -188,12 +188,12 @@ export default function GlobalSummary({ country }: WidgetProps) {
               </span>
 
               <span
-                className={`w-[132px] shrink-0 text-right text-sm ${contributionTone}`}
+                className={`w-[96px] shrink-0 text-right text-sm sm:w-[132px] ${contributionTone}`}
               >
                 {formatMoney(row.contribution, local)}
               </span>
 
-              <span className="flex w-[128px] shrink-0 justify-end text-sm">
+              <span className="hidden w-[128px] shrink-0 justify-end text-sm sm:flex">
                 {row.fx_missing || row.contribution_usd === null ? (
                   <Chip tone="warning">sin tasa de cambio</Chip>
                 ) : (
@@ -207,7 +207,7 @@ export default function GlobalSummary({ country }: WidgetProps) {
                 )}
               </span>
 
-              <span className="w-[126px] shrink-0">
+              <span className="w-[104px] shrink-0 sm:w-[126px]">
                 <MicroBar
                   value={row.delivery_rate_pct}
                   max={100}

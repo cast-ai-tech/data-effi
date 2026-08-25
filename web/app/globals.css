@@ -198,6 +198,41 @@ body {
   }
 }
 
+/* A wide table on a narrow screen: it scrolls sideways, the edges fade to
+ * say so, and the first column (the name) stays put while you scroll. */
+.data-table {
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+  background:
+    linear-gradient(to right, var(--color-surface) 40%, transparent),
+    linear-gradient(to left, var(--color-surface) 40%, transparent),
+    linear-gradient(to right, rgba(15, 23, 42, 0.12), transparent),
+    linear-gradient(to left, rgba(15, 23, 42, 0.12), transparent);
+  background-position:
+    left,
+    right,
+    left,
+    right;
+  background-repeat: no-repeat;
+  background-size:
+    48px 100%,
+    48px 100%,
+    16px 100%,
+    16px 100%;
+  background-attachment: local, local, scroll, scroll;
+}
+.data-table th:first-child,
+.data-table td:first-child {
+  position: sticky;
+  left: 0;
+  z-index: 1;
+  background: var(--color-surface);
+}
+.data-table th,
+.data-table td {
+  white-space: nowrap;
+}
+
 /* Keyboard focus is visible everywhere, in the brand colour. */
 :where(a, button, input, select, textarea, [tabindex]):focus-visible {
   outline: 2px solid var(--color-accent-deep);

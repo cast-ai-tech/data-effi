@@ -221,7 +221,7 @@ export default function PlatformSplit({ countryCode, country }: WidgetProps) {
               </span>
             </span>
 
-            <span className="w-[130px] shrink-0">
+            <span className="w-[104px] shrink-0 sm:w-[130px]">
               <MicroBar
                 value={row.pct_entrega_cerradas}
                 max={100}
@@ -233,7 +233,7 @@ export default function PlatformSplit({ countryCode, country }: WidgetProps) {
               </span>
             </span>
 
-            <span className="w-[130px] shrink-0">
+            <span className="w-[104px] shrink-0 sm:w-[130px]">
               <MicroBar
                 value={row.pct_devolucion_total}
                 max={100}

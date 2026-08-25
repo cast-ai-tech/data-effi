@@ -125,7 +125,7 @@ export function OrgStructure({ user, orgName }: { user: User | null; orgName: st
                   className="absolute left-[16.6%] right-[16.6%] top-0 h-px bg-line-strong"
                 />
               )}
-              <ul className="grid gap-3 pt-4 sm:grid-cols-2 xl:grid-cols-3">
+              <ul className="grid gap-3 pt-4 sm:grid-cols-2 lg:grid-cols-3">
                 {companies.map((company) => (
                   <li key={company.tenant_id} className="relative">
                     <div

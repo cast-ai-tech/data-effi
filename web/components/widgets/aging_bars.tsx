@@ -102,7 +102,7 @@ export default function AgingBars({ countryCode, country }: WidgetProps) {
               <span className="w-[64px] shrink-0 text-right text-sm font-semibold text-ink-2">
                 {formatNumber(bucket.shipments, country, 0)}
               </span>
-              <span className="w-[104px] shrink-0 text-right text-sm text-ink-muted">
+              <span className="w-[80px] shrink-0 text-right text-sm text-ink-muted sm:w-[104px]">
                 {formatMoney(bucket.value_at_risk, country)}
               </span>
             </li>

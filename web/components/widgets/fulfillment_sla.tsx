@@ -318,7 +318,7 @@ export default function FulfillmentSla({ countryCode, country }: WidgetProps) {
         </span>
       </div>
 
-      <div className="mt-4 overflow-x-auto border-t border-line-subtle pt-3">
+      <div className="mt-4 data-table border-t border-line-subtle pt-3">
         <table className="w-full min-w-[520px] border-collapse text-sm">
           <thead>
             <tr>

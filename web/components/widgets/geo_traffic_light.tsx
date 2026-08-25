@@ -184,7 +184,7 @@ export default function GeoTrafficLight({ countryCode, country }: WidgetProps) {
                 <span className="min-w-0 flex-1 truncate text-base font-semibold text-ink">
                   {group.name}
                 </span>
-                <span className="w-[130px] shrink-0">
+                <span className="w-[104px] shrink-0 sm:w-[130px]">
                   <MicroBar
                     value={group.deliveryRate}
                     max={100}
@@ -225,7 +225,7 @@ export default function GeoTrafficLight({ countryCode, country }: WidgetProps) {
                       <span className="min-w-0 flex-1 truncate text-sm text-ink-2">
                         {city.city_name || "Sin ciudad"}
                       </span>
-                      <span className="w-[130px] shrink-0">
+                      <span className="w-[104px] shrink-0 sm:w-[130px]">
                         <MicroBar
                           value={city.delivery_rate_pct}
                           max={100}
@@ -260,7 +260,7 @@ function ColumnHeader({ level1Label }: { level1Label: string }) {
     <div className="flex items-center gap-3 border-b border-line-subtle pb-2 text-xs font-bold uppercase tracking-[0.06em] text-ink-faint">
       <span className="w-[14px] shrink-0" aria-hidden />
       <span className="min-w-0 flex-1 truncate">{level1Label}</span>
-      <span className="w-[130px] shrink-0 pl-[52px]">% entrega</span>
+      <span className="w-[104px] shrink-0 pl-[52px] sm:w-[130px]">% entrega</span>
       <span className="w-[74px] shrink-0 text-right">Guías</span>
       <span className="w-[16px] shrink-0" aria-hidden />
     </div>

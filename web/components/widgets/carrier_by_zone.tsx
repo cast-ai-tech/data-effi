@@ -129,7 +129,7 @@ export default function CarrierByZone({ countryCode, country }: WidgetProps) {
         </select>
       }
     >
-      <div className="overflow-x-auto">
+      <div className="data-table">
         <table className="w-full min-w-[720px] border-collapse text-sm">
           <thead>
             <tr>

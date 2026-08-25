@@ -44,7 +44,7 @@ export function BatchHistory({ countryCode }: { countryCode?: string | null }) {
       )}
 
       {!loading && (data?.items ?? []).length > 0 && (
-        <div className="overflow-x-auto">
+        <div className="data-table">
           <table className="w-full min-w-[720px] text-sm">
             <thead>
               <tr className="text-xs uppercase tracking-wide text-ink-dim">

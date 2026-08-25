@@ -160,7 +160,7 @@ function OrdersScreen() {
             onChange={(event) => setSearch(event.target.value)}
             placeholder="Número de guía…"
             aria-label="Buscar por número de guía"
-            className="w-[220px] rounded-control border border-line-input bg-surface px-3 py-1.5 text-base"
+            className="w-full rounded-control border border-line-input bg-surface px-3 py-1.5 text-base sm:w-[260px]"
           />
         </label>
 
@@ -258,7 +258,7 @@ function OrdersScreen() {
         )}
 
         {!loading && !error && rows.length > 0 && country && (
-          <div className="overflow-x-auto">
+          <div className="data-table">
             <table className="w-full min-w-[980px] border-collapse text-sm">
               <thead>
                 <tr>

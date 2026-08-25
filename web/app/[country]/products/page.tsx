@@ -459,7 +459,7 @@ function ProductsScreen() {
         )}
 
         {!loading && !error && visible.length > 0 && (
-          <div className="overflow-x-auto">
+          <div className="data-table">
             <table className="w-full min-w-[940px] border-collapse text-sm">
               <thead>
                 <tr>

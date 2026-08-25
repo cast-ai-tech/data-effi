@@ -16,7 +16,7 @@ import { DateRangePicker } from "@/components/DateRangePicker";
 import { PlatformPicker } from "@/components/PlatformPicker";
 import { NotificationBell } from "@/components/NotificationBell";
 import { BrandMark } from "@/components/BrandMark";
-import { Chip, StatusDot, ThemeToggle, cx } from "@/components/ui";
+import { Button, Chip, Drawer, StatusDot, ThemeToggle, cx } from "@/components/ui";
 import { api, signOut as endSession } from "@/lib/api";
 import { PLANS_PATH, shouldRedirectToPlans, subscriptionBanner } from "@/lib/billing";
 import { DEFAULT_FIELD, useDateRange } from "@/lib/date-range";
@@ -42,6 +42,9 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   // Below the `md` breakpoint the sidebar is a drawer: hidden until the
   // hamburger opens it, closed again by a tap outside or by navigating.
   const [drawerOpen, setDrawerOpen] = useState(false);
+  // On a phone the three pickers do not fit in the header: they live in a
+  // panel behind one "Filtros" button instead.
+  const [filtersOpen, setFiltersOpen] = useState(false);
   useEffect(() => {
     setDrawerOpen(false);
   }, [pathname]);
@@ -182,7 +185,8 @@ export function AppShell({ children }: { children: React.ReactNode }) {
           drawerOpen ? "translate-x-0" : "-translate-x-full",
           // The collapsed rail only makes sense on a wide screen; the drawer
           // is always full width when it is open.
-          collapsed ? "w-[232px] md:w-[64px]" : "w-[232px]",
+          "pt-[env(safe-area-inset-top)]",
+          collapsed ? "w-[264px] md:w-[64px]" : "w-[264px]",
         )}
         aria-label="Menú principal"
       >
@@ -315,7 +319,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
           <button
             type="button"
             onClick={() => setCollapsed(!collapsed)}
-            className="hidden w-full items-center gap-2.5 rounded-control px-2.5 py-2 text-sm text-ink-muted hover:bg-hover md:flex"
+            className="hidden min-h-11 w-full items-center gap-3 rounded-control px-3 text-sm text-ink-muted hover:bg-hover md:flex"
             aria-label={rail ? "Expandir menú" : "Colapsar menú"}
           >
             <span aria-hidden>{rail ? "»" : "«"}</span>
@@ -324,7 +328,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
           <button
             type="button"
             onClick={signOut}
-            className="flex w-full items-center gap-2.5 rounded-control px-2.5 py-2 text-sm text-ink-muted hover:bg-hover"
+            className="flex min-h-11 w-full items-center gap-3 rounded-control px-3 text-sm text-ink-muted hover:bg-hover"
           >
             <span aria-hidden>⏻</span>
             {!rail && <span>Cerrar sesión</span>}
@@ -333,14 +337,14 @@ export function AppShell({ children }: { children: React.ReactNode }) {
       </aside>
 
       <div className="flex min-w-0 flex-1 flex-col">
-        <header className="app-header flex h-14 shrink-0 items-center justify-between gap-4 border-b border-line-strong bg-page px-4 md:px-5">
+        <header className="app-header flex min-h-16 shrink-0 items-center justify-between gap-3 border-b border-line-strong bg-page px-4 sm:px-6 lg:px-8">
           <div className="flex min-w-0 items-center gap-2">
             <button
               type="button"
               onClick={() => setDrawerOpen(true)}
               aria-label="Abrir menú"
               aria-expanded={drawerOpen}
-              className="flex size-9 items-center justify-center rounded-control border border-line-strong text-ink-muted md:hidden"
+              className="flex size-11 items-center justify-center rounded-control border border-line-strong bg-surface text-ink-muted md:hidden"
             >
               <span aria-hidden className="text-lg leading-none">☰</span>
             </button>
@@ -354,9 +358,22 @@ export function AppShell({ children }: { children: React.ReactNode }) {
               <>
                 {/* Effi, Dropi or all of them (migrations 040/041). Which
                     cards obeyed is reported on each card, like the date. */}
-                <PlatformPicker countryCode={currentCountry} />
-                <DateFieldPicker />
-                <DateRangePicker country={formatCountry} />
+                <div className="hidden items-center gap-2.5 md:flex">
+                  <PlatformPicker countryCode={currentCountry} />
+                  <DateFieldPicker />
+                  <DateRangePicker country={formatCountry} />
+                </div>
+                <Button
+                  variant="ghost"
+                  size="md"
+                  className="md:hidden"
+                  onClick={() => setFiltersOpen(true)}
+                  aria-haspopup="dialog"
+                  aria-expanded={filtersOpen}
+                >
+                  <FilterIcon />
+                  Filtros
+                </Button>
               </>
             )}
 
@@ -369,7 +386,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
 
             <Link
               href="/connections"
-              className="flex items-center gap-1.5 rounded-full border border-line-strong bg-surface px-2.5 py-1 text-xs no-underline"
+              className="hidden min-h-9 items-center gap-1.5 rounded-full border border-line-strong bg-surface px-3 text-xs no-underline sm:flex"
               title={health.detail}
             >
               <StatusDot tone={health.tone} />
@@ -402,7 +419,11 @@ export function AppShell({ children }: { children: React.ReactNode }) {
             )}
           </div>
         )}
-        <main className="flex-1 overflow-y-auto px-4 py-4 md:px-5 md:py-5">{children}</main>
+        <main className="flex-1 overflow-y-auto">
+          <div className="mx-auto w-full max-w-[1440px] px-4 py-4 pb-24 sm:px-6 lg:px-8 lg:py-6">
+            {children}
+          </div>
+        </main>
       </div>
 
       {/* The copilot answers questions about the numbers, so it belongs to
@@ -413,7 +434,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
           <button
             type="button"
             onClick={() => setCopilotOpen(true)}
-            className="fixed bottom-6 right-6 z-40 flex size-12 items-center justify-center rounded-full bg-accent text-on-accent shadow-pop transition-transform hover:scale-105"
+            className="fixed bottom-[calc(1rem+env(safe-area-inset-bottom))] right-4 z-40 flex size-14 items-center justify-center rounded-full bg-accent text-on-accent shadow-pop transition-transform hover:scale-105 sm:bottom-6 sm:right-6"
             aria-label="Abrir copiloto"
           >
             <SparkIcon />
@@ -425,6 +446,29 @@ export function AppShell({ children }: { children: React.ReactNode }) {
             countryCode={currentCountry}
           />
         </>
+      )}
+
+      {filtersOpen && rangeApplies && (
+        <Drawer
+          onClose={() => setFiltersOpen(false)}
+          title="Filtros"
+          subtitle="Plataforma, fecha y rango. Aplican a todo el tablero."
+        >
+          <div className="flex flex-col gap-5">
+            <FilterRow label="Plataforma">
+              <PlatformPicker countryCode={currentCountry} />
+            </FilterRow>
+            <FilterRow label="Fecha sobre la que se mide">
+              <DateFieldPicker />
+            </FilterRow>
+            <FilterRow label="Rango">
+              <DateRangePicker country={formatCountry} />
+            </FilterRow>
+            <Button size="lg" onClick={() => setFiltersOpen(false)}>
+              Listo
+            </Button>
+          </div>
+        </Drawer>
       )}
     </div>
   );
@@ -659,13 +703,13 @@ function NavItem({
       href={href}
       title={collapsed ? label : undefined}
       className={cx(
-        "flex items-center gap-2.5 rounded-control px-2.5 py-2 text-base no-underline transition-colors",
+        "flex min-h-11 items-center gap-3 rounded-control px-3 text-base no-underline transition-colors",
         active
           ? "bg-accent/[0.12] font-semibold text-accent-ink"
           : "text-ink-nav hover:bg-hover hover:text-ink-2",
       )}
     >
-      <span className="flex size-4 shrink-0 items-center justify-center">{icon}</span>
+      <span className="flex size-5 shrink-0 items-center justify-center [&>svg]:size-5">{icon}</span>
       {!collapsed && <span className="truncate">{label}</span>}
     </Link>
   );
@@ -710,6 +754,28 @@ function summariseHealth(connections: Connection[]): {
     label: newest ? `Sincronizado ${formatRelative(newest)}` : "Al día",
     detail: "Todas las conexiones respondieron",
   };
+}
+
+function FilterRow({ label, children }: { label: string; children: React.ReactNode }) {
+  return (
+    <div className="flex flex-col gap-2">
+      <span className="text-xs font-bold uppercase tracking-[0.06em] text-ink-muted">{label}</span>
+      <div className="flex flex-wrap items-center gap-2">{children}</div>
+    </div>
+  );
+}
+
+function FilterIcon() {
+  return (
+    <svg viewBox="0 0 20 20" fill="none" className="size-5" aria-hidden>
+      <path
+        d="M3 5h14M5.5 10h9M8 15h4"
+        stroke="currentColor"
+        strokeWidth="1.8"
+        strokeLinecap="round"
+      />
+    </svg>
+  );
 }
 
 function GridIcon() {
