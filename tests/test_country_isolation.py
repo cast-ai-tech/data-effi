@@ -259,6 +259,27 @@ def test_the_product_catalogue_hides_what_only_costa_rica_sold(client, partner, 
     assert {"Producto solo GT", "Producto solo HN"} <= names
 
 
+def test_alerts_and_recommendations_without_a_country_are_trimmed(client, partner, owner, guides):
+    """`country` is optional here, so the door guard sees nothing: the rows
+    themselves must be cut to the scope."""
+    for path in ("/ai/alerts", "/ai/recommendations"):
+        response = client.get(path, headers=auth(partner["access_token"]))
+        assert response.status_code == 200, (path, response.text)
+        body = response.json()
+        items = body.get("alerts") if "alerts" in body else body.get("recommendations", [])
+        for item in items:
+            assert item["country_code"] in SCOPE, (path, item)
+
+
+def test_a_product_only_sold_in_costa_rica_is_not_found_by_id(client, partner, owner, guides):
+    everything = client.get("/products", headers=auth(owner["access_token"])).json()
+    by_name = {row["product_name"]: row["product_id"] for row in everything}
+    foreign = client.get(f"/products/{by_name['Producto solo CR']}", headers=auth(partner["access_token"]))
+    assert foreign.status_code == 404, foreign.text
+    mine = client.get(f"/products/{by_name['Producto solo GT']}", headers=auth(partner["access_token"]))
+    assert mine.status_code == 200, mine.text
+
+
 def test_the_copilot_demands_one_of_her_countries(client, partner, guides):
     headers = auth(partner["access_token"])
     without = client.post("/ai/ask", json={"question": "¿Cuántas guías entregué?"}, headers=headers)

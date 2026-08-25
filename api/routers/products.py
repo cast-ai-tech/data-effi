@@ -118,6 +118,17 @@ def list_products(
 )
 def get_product(product_id: UUID, conn: DbDep, user: CurrentUserDep) -> ProductDetail:
     product = _catalogue_row(conn, product_id, missing="Ese producto no existe en tu workspace")
+    # Same rule as the list: a limited membership only knows the products its
+    # countries shipped, and the answer for anything else is 404, not 403.
+    if user.countries is not None:
+        seen = fetch_one(
+            conn,
+            "SELECT 1 FROM core.shipment s WHERE s.product_id = %s "
+            "  AND upper(s.country_code) = ANY(%s) LIMIT 1",
+            (product_id, list(user.countries)),
+        )
+        if seen is None:
+            raise NotFound("Ese producto no existe en tu workspace")
 
     history = fetch_all(
         conn,

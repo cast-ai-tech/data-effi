@@ -124,7 +124,8 @@ PRECIOS DE PROVEEDOR` → costo, `COMISION`. `GANANCIA` es derivada (valor − p
 flete − comisión − devolución en 470/470 filas) y no se guarda. Nombre, teléfono,
 documento y dirección van cifrados a `core.shipment` y como hash al archivo crudo.
 **No hay fecha de entrega en el export**: las entregadas quedan sin `delivered_at`.
-`CONTADOR DE INDEMNIZACIONES > 0` marca la guía como `compensated`.
+`CONTADOR DE INDEMNIZACIONES > 0` marca la guía como `compensated`. En una DEVOLUCION el
+flete de ida no se guarda: la cartera real cobra solo `COSTO DEVOLUCION FLETE` (87/87).
 
 Estados crudos (8, todos reconocidos): ENTREGADO → delivered · DEVOLUCION → returning ·
 INCIDENCIA EN RUTA → delivery_issue · EN RUTA → in_transit · RECOLECTADO → picked_up ·

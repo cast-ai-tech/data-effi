@@ -232,6 +232,9 @@ def test_the_money_columns_land_where_the_engine_computes_from(pii_salt, orders_
 
     returned = store.shipments[(CONNECTION_ID, "FD10000003")]
     assert returned.return_freight_cost == Decimal("31.86")
+    # The wallet charges a return ONLY the return freight (87/87 real rows), so
+    # the outbound freight is not stored: it would be charged twice.
+    assert returned.freight_cost is None
     assert returned.created_date == date(2026, 8, 22)
     # No delivery date in the export: an honest None, never a guess.
     assert delivered.delivered_at is None

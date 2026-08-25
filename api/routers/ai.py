@@ -45,6 +45,23 @@ logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/ai", tags=["ai"])
 
+
+def _only_scoped(items: list[dict], user) -> list[dict]:
+    """Cut a list of findings to the caller's country scope.
+
+    `country` is optional on these endpoints, so the door guard cannot help
+    when it is omitted: a limited membership would get every country's
+    alerts. A finding that names no country cannot be attributed and is
+    dropped for them too.
+    """
+    if user.countries is None:
+        return items
+    allowed = {c.upper() for c in user.countries}
+    return [
+        item for item in items
+        if item.get("country_code") and str(item["country_code"]).upper() in allowed
+    ]
+
 CountryQuery = Annotated[str, Query(min_length=2, max_length=2)]
 OptionalCountryQuery = Annotated[str | None, Query(min_length=2, max_length=2)]
 
@@ -98,7 +115,7 @@ def alerts(
     """
     from ai.features import collect_alerts
 
-    found = collect_alerts(conn, country)
+    found = _only_scoped(collect_alerts(conn, country), user)
     return AlertsResponse(
         country_code=country.upper() if country else None,
         alerts=[AlertResponse(**alert) for alert in found],
@@ -240,7 +257,7 @@ async def recommendations(
     from ai.recommendations import detect, narrate
 
     country_code = country.upper() if country else None
-    found = await asyncio.to_thread(detect, conn, country_code)
+    found = _only_scoped(await asyncio.to_thread(detect, conn, country_code), user)
 
     paragraph: str | None = None
     degraded = False

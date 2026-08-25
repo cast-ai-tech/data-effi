@@ -680,6 +680,15 @@ def transform_dropi_order(mapped: dict[str, Any]) -> dict[str, Any]:
         out["status_raw"] = clean_text(mapped.get("status_raw"))
         out["status_detail"] = clean_text(mapped.get("status_detail"))
 
+    # A return costs the seller ONLY the return charge: in the real wallet,
+    # every DEVOLUCION was debited exactly COSTO DEVOLUCION FLETE (87/87) and
+    # never the outbound freight, and GANANCIA (which subtracts PRECIO FLETE)
+    # is absent on returns. Leaving PRECIO FLETE on a returned order would
+    # charge it twice. The column stays in the raw archive.
+    status_key = normalize_text(out.get("status_raw")) or ""
+    if status_key.startswith("devolucion") or status_key.startswith("devuelt"):
+        out["freight_cost"] = None
+
     # One product per order in this export, quantity unknown: one, not zero.
     out.setdefault("quantity", 1)
     return out
