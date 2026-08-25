@@ -668,15 +668,20 @@ def invite(
         execute(
             conn,
             """
-            INSERT INTO core.membership (user_id, tenant_id, role, country_scope, share_pct)
-            VALUES (%s, %s, %s, %s, %s)
+            INSERT INTO core.membership
+                (user_id, tenant_id, role, country_scope, share_pct, business_model)
+            VALUES (%s, %s, %s, %s, %s, %s)
             ON CONFLICT (user_id, tenant_id) DO UPDATE
                 SET role = EXCLUDED.role,
                     country_scope = EXCLUDED.country_scope,
                     share_pct = EXCLUDED.share_pct,
+                    business_model = EXCLUDED.business_model,
                     is_active = true
             """,
-            (person["id"], tenant_id, payload.role, scope, payload.share_pct),
+            (
+                person["id"], tenant_id, payload.role, scope, payload.share_pct,
+                payload.business_model,
+            ),
         )
         logger.info("existing user granted membership on tenant %s", tenant_id)
         return InviteResponse(
@@ -688,6 +693,7 @@ def invite(
             already_registered=True,
             country_scope=scope,
             share_pct=payload.share_pct,
+            business_model=payload.business_model,
         )
 
     # A pending invitation for the same company is replaced, not duplicated:
@@ -705,9 +711,10 @@ def invite(
         conn,
         """
         INSERT INTO core.invitation
-            (tenant_id, email, role, token_hash, invited_by, expires_at, country_scope, share_pct)
-        VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
-        RETURNING id, email, role, expires_at, country_scope, share_pct
+            (tenant_id, email, role, token_hash, invited_by, expires_at, country_scope,
+             share_pct, business_model)
+        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
+        RETURNING id, email, role, expires_at, country_scope, share_pct, business_model
         """,
         (
             tenant_id,
@@ -718,6 +725,7 @@ def invite(
             expires_at,
             scope,
             payload.share_pct,
+            payload.business_model,
         ),
     )
     return InviteResponse(**row, invitation_token=token, already_registered=False)
@@ -739,7 +747,7 @@ def accept_invite(
         conn,
         """
         SELECT i.id, i.tenant_id, i.email, i.role, i.expires_at, i.accepted_at,
-               i.country_scope, i.share_pct, t.org_id
+               i.country_scope, i.share_pct, i.business_model, t.org_id
         FROM core.invitation i
         JOIN core.tenant t ON t.id = i.tenant_id
         WHERE i.token_hash = %s
@@ -777,12 +785,14 @@ def accept_invite(
     execute(
         conn,
         """
-        INSERT INTO core.membership (user_id, tenant_id, role, country_scope, share_pct)
-        VALUES (%s, %s, %s, %s, %s)
+        INSERT INTO core.membership
+            (user_id, tenant_id, role, country_scope, share_pct, business_model)
+        VALUES (%s, %s, %s, %s, %s, %s)
         ON CONFLICT (user_id, tenant_id) DO UPDATE
             SET role = EXCLUDED.role,
                 country_scope = EXCLUDED.country_scope,
                 share_pct = EXCLUDED.share_pct,
+                business_model = EXCLUDED.business_model,
                 is_active = true
         """,
         (
@@ -791,6 +801,7 @@ def accept_invite(
             invitation["role"],
             invitation["country_scope"],
             invitation["share_pct"],
+            invitation["business_model"],
         ),
     )
     execute(

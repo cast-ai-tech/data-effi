@@ -34,6 +34,8 @@ CatalogueStatus = Literal["sin_costo", "sin_revisar", "costo_desactualizado", "o
 # Whether a percentage was measured or merely computed. Below ten terminal
 # guides a delivery rate is arithmetic, not evidence - see migration 021.
 SampleQuality = Literal["suficiente", "muestra_corta"]
+# Which side of the business a person is on inside a company (migration 046).
+BusinessModel = Literal["ecommerce", "proveeduria"]
 
 # Which date a number is anchored to. Defined up here rather than beside the KPI
 # models because the organization roll-up - the first models in this file - also
@@ -251,6 +253,9 @@ class InviteRequest(BaseModel):
     share_pct: float | None = Field(
         default=None, gt=0, le=100, description="Participación del socio (informativa)"
     )
+    business_model: BusinessModel | None = Field(
+        default=None, description="ecommerce | proveeduria. Informativo."
+    )
 
 
 class InviteResponse(BaseModel):
@@ -268,6 +273,7 @@ class InviteResponse(BaseModel):
     )
     country_scope: list[str] | None = None
     share_pct: float | None = None
+    business_model: BusinessModel | None = None
 
 
 class AcceptInviteRequest(BaseModel):
@@ -396,6 +402,12 @@ class MemberRow(BaseModel):
     role: Role
     country_scope: list[str] | None = None
     share_pct: float | None = None
+    # Informative: never changes what the person may see (migration 046).
+    business_model: BusinessModel | None = None
+    # The company this access belongs to, so a list of accesses never has to
+    # be read next to a header to know which company each row is about.
+    tenant_id: UUID | None = None
+    tenant_name: str | None = None
     is_active: bool = True
     last_login_at: datetime | None = None
 
@@ -408,6 +420,7 @@ class MemberUpdateRequest(BaseModel):
     # Explicitly widening a limited membership back to the whole company.
     clear_country_scope: bool = False
     share_pct: float | None = Field(default=None, gt=0, le=100)
+    business_model: BusinessModel | None = None
     is_active: bool | None = None
 
 

@@ -22,7 +22,7 @@ from uuid import UUID
 from fastapi import APIRouter, Query
 
 from api.deps import CurrentUserDep, DbDep, SettingsDep, tenant_of
-from api.errors import NotFound
+from api.errors import Forbidden, NotFound
 from api.schemas import (
     AlertResponse,
     AlertsResponse,
@@ -113,6 +113,21 @@ async def ask(
     from ai.features import ask_data
     from ai.nl2sql import REJECTION_SUGGESTIONS
 
+    # The question travels in the body, so the door guard never sees a
+    # `country`. A limited membership must name one of its countries, and the
+    # rows that come back are cut to the scope besides: the generated SQL is
+    # not trusted to have honoured the hint.
+    if user.countries is not None:
+        if not payload.country_code:
+            raise Forbidden(
+                f"Elige un país para preguntar. Tu usuario solo tiene acceso a: "
+                f"{', '.join(user.countries)}."
+            )
+        if not user.may_read_country(payload.country_code):
+            raise Forbidden(
+                f"Tu usuario solo tiene acceso a: {', '.join(user.countries)}."
+            )
+
     try:
         result = await asyncio.to_thread(
             ask_data,
@@ -136,7 +151,44 @@ async def ask(
             suggestions=REJECTION_SUGGESTIONS,
         )
 
+    if user.countries is not None and result.get("rows"):
+        result = _cut_rows_to_scope(result, user.countries)
     return AskResponse(**result)
+
+
+def _cut_rows_to_scope(result: dict, countries: tuple[str, ...]) -> dict:
+    """Keep only the rows a limited membership may read.
+
+    A row that names its country is kept when the country is in scope. A
+    result with no country column at all cannot be attributed, so a limited
+    membership does not get it - the answer says why instead of showing
+    numbers that may include another country.
+    """
+    columns = [str(c) for c in result.get("columns", [])]
+    rows = result.get("rows", [])
+    if "country_code" not in columns:
+        return {
+            **result,
+            "rows": [],
+            "row_count": 0,
+            "answer": (
+                "Esa respuesta mezcla países y tu usuario solo tiene acceso a "
+                f"{', '.join(countries)}. Pregunta nombrando el país."
+            ),
+        }
+    index = columns.index("country_code")
+
+    def country_of(row: object) -> str | None:
+        if isinstance(row, dict):
+            value = row.get("country_code")
+        elif isinstance(row, list | tuple) and index < len(row):
+            value = row[index]
+        else:
+            value = None
+        return str(value).upper() if value is not None else None
+
+    kept = [row for row in rows if country_of(row) in countries]
+    return {**result, "rows": kept, "row_count": len(kept)}
 
 
 @router.get(

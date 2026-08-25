@@ -66,6 +66,7 @@ _NOT_NULL_FIELDS = ("name", "is_active")
 @router.get("", response_model=list[ProductCatalogueRow], summary="Catálogo de productos")
 def list_products(
     conn: DbDep,
+    user: CurrentUserDep,
     catalogue_status: Annotated[
         CatalogueStatus | None,
         Query(alias="status", description="sin_costo | sin_revisar | costo_desactualizado | ok"),
@@ -88,6 +89,17 @@ def list_products(
     if search:
         clauses.append("(product_name ILIKE %(search)s OR sku ILIKE %(search)s)")
         params["search"] = f"%{search}%"
+    # No `country` parameter, so the door guard never sees this endpoint. The
+    # catalogue is per company, not per country, so the cut is by what the
+    # scoped countries actually shipped: a product only ever sold in Costa
+    # Rica does not exist for the person who may read Guatemala and Honduras.
+    if user.countries is not None:
+        clauses.append(
+            "product_id IN (SELECT s.product_id FROM core.shipment s "
+            "               WHERE s.product_id IS NOT NULL "
+            "                 AND upper(s.country_code) = ANY(%(scope)s))"
+        )
+        params["scope"] = list(user.countries)
 
     where = f"WHERE {' AND '.join(clauses)}" if clauses else ""
     rows = fetch_all(

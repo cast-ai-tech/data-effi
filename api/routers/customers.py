@@ -215,6 +215,13 @@ def get_customer(
     if country:
         clauses.append("c.country_code = %(country)s")
         params["country"] = country.upper()
+    # Without `country` the door guard has nothing to check, and "the country
+    # where they order most" could be one this membership may not read. The
+    # scope is applied here too, so the answer is 404 - never another
+    # country's row.
+    if user.countries is not None:
+        clauses.append("upper(c.country_code) = ANY(%(scope)s)")
+        params["scope"] = list(user.countries)
 
     row = fetch_one(
         conn,

@@ -823,9 +823,11 @@ def _member_row(conn, tenant_id: UUID, user_id: UUID) -> MemberRow:
         conn,
         """
         SELECT u.id AS user_id, u.email, u.full_name, m.role, m.country_scope,
-               m.share_pct, m.is_active, u.last_login_at
+               m.share_pct, m.business_model, m.tenant_id, t.name AS tenant_name,
+               m.is_active, u.last_login_at
         FROM core.membership m
         JOIN core.app_user u ON u.id = m.user_id
+        JOIN core.tenant t ON t.id = m.tenant_id
         WHERE m.user_id = %s AND m.tenant_id = %s
         """,
         (user_id, tenant_id),
@@ -839,6 +841,9 @@ def _member_row(conn, tenant_id: UUID, user_id: UUID) -> MemberRow:
         role=row["role"],
         country_scope=list(row["country_scope"]) if row["country_scope"] else None,
         share_pct=float(row["share_pct"]) if row["share_pct"] is not None else None,
+        business_model=row["business_model"],
+        tenant_id=row["tenant_id"],
+        tenant_name=row["tenant_name"],
         is_active=row["is_active"],
         last_login_at=row["last_login_at"],
     )
@@ -886,9 +891,11 @@ def list_members(tenant_id: UUID, conn: UnscopedDbDep, user: OrgUser) -> list[Me
         conn,
         """
         SELECT u.id AS user_id, u.email, u.full_name, m.role, m.country_scope,
-               m.share_pct, m.is_active, u.last_login_at
+               m.share_pct, m.business_model, m.tenant_id, t.name AS tenant_name,
+               m.is_active, u.last_login_at
         FROM core.membership m
         JOIN core.app_user u ON u.id = m.user_id
+        JOIN core.tenant t ON t.id = m.tenant_id
         WHERE m.tenant_id = %s
         ORDER BY u.email
         """,
@@ -902,6 +909,9 @@ def list_members(tenant_id: UUID, conn: UnscopedDbDep, user: OrgUser) -> list[Me
             role=row["role"],
             country_scope=list(row["country_scope"]) if row["country_scope"] else None,
             share_pct=float(row["share_pct"]) if row["share_pct"] is not None else None,
+            business_model=row["business_model"],
+            tenant_id=row["tenant_id"],
+            tenant_name=row["tenant_name"],
             is_active=row["is_active"],
             last_login_at=row["last_login_at"],
         )
@@ -944,7 +954,10 @@ def update_member(
 
     if not any(
         value is not None
-        for value in (payload.role, payload.country_scope, payload.share_pct, payload.is_active)
+        for value in (
+            payload.role, payload.country_scope, payload.share_pct,
+            payload.business_model, payload.is_active,
+        )
     ) and not payload.clear_country_scope:
         raise ApiError("nothing_to_update", "No enviaste ningún cambio")
 
@@ -963,11 +976,13 @@ def update_member(
                                 ELSE COALESCE(%(scope)s, country_scope)
                             END,
             share_pct     = COALESCE(%(share)s, share_pct),
+            business_model = COALESCE(%(business_model)s, business_model),
             is_active     = COALESCE(%(active)s, is_active)
         WHERE user_id = %(user_id)s AND tenant_id = %(tenant_id)s
         """,
         {
             "role": payload.role,
+            "business_model": payload.business_model,
             "clear_scope": payload.clear_country_scope,
             "scope": [c.upper() for c in payload.country_scope]
             if payload.country_scope

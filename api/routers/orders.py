@@ -27,7 +27,7 @@ from uuid import UUID
 from fastapi import APIRouter, Depends, Query
 
 from api.db import fetch_all, fetch_one
-from api.deps import CurrentUserDep, DbDep, client_ip_inet
+from api.deps import CurrentUserDep, DbDep, client_ip_inet, country_scope_sql
 from api.errors import NotFound
 from api.pii import (
     ORDER_CONTACT,
@@ -177,11 +177,16 @@ def get_order(
     share a date, and reading the payout first makes the card look like the
     money arrived before the parcel did.
     """
+    # No `country` in the URL, so the door guard cannot help here: a limited
+    # membership must not read a guide from a country outside its scope, and
+    # the answer is 404, not 403 - that a guide exists elsewhere is not
+    # something they may learn either.
+    scope_sql, scope_params = country_scope_sql(user, "o.country_code")
     row = fetch_one(
         conn,
         f"SELECT {_ORDER_COLUMNS}, o.customer_address_enc, o.customer_document_enc "
-        "FROM mart.v_orders o WHERE o.shipment_id = %s",
-        (shipment_id,),
+        f"FROM mart.v_orders o WHERE o.shipment_id = %s{scope_sql}",
+        (shipment_id, *scope_params),
     )
     if row is None:
         raise NotFound("Esa guía no existe en tu workspace")

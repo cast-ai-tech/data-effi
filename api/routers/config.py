@@ -741,9 +741,11 @@ def list_users(
         conn,
         """
         SELECT u.id AS user_id, u.email, u.full_name, m.role, m.country_scope,
-               m.share_pct, m.is_active, u.last_login_at
+               m.share_pct, m.business_model, m.tenant_id, t.name AS tenant_name,
+               m.is_active, u.last_login_at
         FROM core.membership m
         JOIN core.app_user u ON u.id = m.user_id
+        JOIN core.tenant t ON t.id = m.tenant_id
         WHERE m.tenant_id = %s AND m.is_active
         ORDER BY u.email
         """,
@@ -757,6 +759,9 @@ def list_users(
             role=row["role"],
             country_scope=list(row["country_scope"]) if row["country_scope"] else None,
             share_pct=float(row["share_pct"]) if row["share_pct"] is not None else None,
+            business_model=row["business_model"],
+            tenant_id=row["tenant_id"],
+            tenant_name=row["tenant_name"],
             is_active=row["is_active"],
             last_login_at=row["last_login_at"],
         )

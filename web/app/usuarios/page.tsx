@@ -1,13 +1,21 @@
 "use client";
 
 /**
- * Who may enter THIS company, as what, and limited to which countries.
+ * Who may enter THIS company, as what, on which side of the business, and
+ * limited to which countries.
  *
  * The screen is written around the operator's own sentence: "a cada socio y a
  * cada empleado le creamos usuario con permisos específicos - este solo ve
- * Colombia, este solo carga y no ve resultados". So the invite form asks three
- * things in that order (quién, qué puede hacer, qué países) and the list
- * answers them back for everyone already inside.
+ * Guatemala y Honduras, este solo carga y no ve resultados, este es de
+ * proveeduría". So the invite form asks four things in that order (quién, qué
+ * puede hacer, de qué lado está, qué países) and the list answers them back
+ * for everyone already inside - including WHICH COMPANY each access belongs
+ * to, because a person may hold access in several and a row read without its
+ * company is a row that can be misread.
+ *
+ * COUNTRIES ARE FLAGS YOU CLICK. One click adds a country, a second click
+ * removes it. Selecting none - or all - means "every country of the company",
+ * which the API expresses as clearing the scope (see lib/members.ts).
  *
  * TWO OUTCOMES OF AN INVITATION, AND WHY THE UI SAYS WHICH
  * If the email is new, the API returns a one-time link the person uses to set
@@ -22,10 +30,21 @@ import { useMemo, useState } from "react";
 
 import { AppShell } from "@/components/AppShell";
 import { ConfirmDialog } from "@/components/ConfirmDialog";
+import {
+  BusinessModelPicker,
+  CountryFlagPicker,
+  type CountryOption,
+} from "@/components/MemberPickers";
 import { Card, Chip, EmptyState, SkeletonRows, cx } from "@/components/ui";
 import { ApiError, api } from "@/lib/api";
 import { countryFlag, formatRelative } from "@/lib/format";
 import { useApi } from "@/lib/hooks";
+import {
+  type BusinessModel,
+  businessModelLabel,
+  scopePayload,
+  visibleCountries,
+} from "@/lib/members";
 import type { Country, InviteResult, Member, Role, User } from "@/lib/types";
 
 const ROLES: { value: Role; label: string; detail: string }[] = [
@@ -41,7 +60,10 @@ export default function UsuariosPage() {
   const { data: countries } = useApi<Country[]>("/config/countries");
 
   const activeCountries = useMemo(
-    () => (countries ?? []).filter((country) => country.is_active).map((c) => c.code),
+    () =>
+      (countries ?? [])
+        .filter((country) => country.is_active)
+        .map((c) => ({ code: c.code, name: c.name })),
     [countries],
   );
 
@@ -53,8 +75,8 @@ export default function UsuariosPage() {
       <header className="mb-5">
         <h1 className="text-[22px] font-bold tracking-tight">Usuarios</h1>
         <p className="mt-1 text-[12px] text-ink-dim">
-          Quién entra a <strong>{user?.tenant_name ?? "esta sociedad"}</strong> y qué
-          puede hacer. Cada sociedad tiene su propia lista.
+          Quién entra a <strong>{user?.tenant_name ?? "esta sociedad"}</strong>, qué
+          puede hacer y qué países ve. Cada sociedad tiene su propia lista.
         </p>
       </header>
 
@@ -68,7 +90,7 @@ export default function UsuariosPage() {
       )}
 
       {canAdminister && (
-        <div className="grid gap-4 xl:grid-cols-[1fr_360px]">
+        <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_360px]">
           <Card title="Personas con acceso" subtitle={`${members?.length ?? 0} en total`}>
             {loading && <SkeletonRows rows={3} />}
             {!loading && (members?.length ?? 0) === 0 && (
@@ -81,6 +103,7 @@ export default function UsuariosPage() {
                     key={member.user_id}
                     member={member}
                     tenantId={tenantId}
+                    tenantName={user?.tenant_name ?? null}
                     countries={activeCountries}
                     isMe={member.user_id === user?.id}
                     onChanged={reload}
@@ -105,11 +128,12 @@ function InviteForm({
   countries,
   onInvited,
 }: {
-  countries: string[];
+  countries: readonly CountryOption[];
   onInvited: () => void;
 }) {
   const [email, setEmail] = useState("");
   const [role, setRole] = useState<Role>("viewer");
+  const [businessModel, setBusinessModel] = useState<BusinessModel | null>(null);
   const [scope, setScope] = useState<string[]>([]);
   const [share, setShare] = useState("");
   const [busy, setBusy] = useState(false);
@@ -119,6 +143,7 @@ function InviteForm({
   // An uploader never reads a number, so limiting them to a country would
   // restrict nothing. Asking anyway is a question with no consequence.
   const scopeApplies = role !== "uploader";
+  const codes = countries.map((c) => c.code);
 
   async function submit(event: React.FormEvent) {
     event.preventDefault();
@@ -127,12 +152,16 @@ function InviteForm({
     setResult(null);
     try {
       const body: Record<string, unknown> = { email: email.trim(), role };
-      if (scopeApplies && scope.length > 0) body.country_scope = scope;
+      if (businessModel) body.business_model = businessModel;
+      if (scopeApplies && scope.length > 0 && !codes.every((c) => scope.includes(c))) {
+        body.country_scope = scope;
+      }
       if (scopeApplies && share.trim()) body.share_pct = Number(share);
       setResult(await api.post<InviteResult>("/auth/invite", body));
       setEmail("");
       setScope([]);
       setShare("");
+      setBusinessModel(null);
       onInvited();
     } catch (err) {
       setError(err instanceof ApiError ? err.message : "No se pudo crear el acceso");
@@ -184,38 +213,21 @@ function InviteForm({
           </div>
         </Field>
 
+        <Field
+          label="Modelo de negocio"
+          hint="De qué lado está esta persona. Opcional; no cambia lo que ve."
+        >
+          <BusinessModelPicker value={businessModel} onChange={setBusinessModel} disabled={busy} />
+        </Field>
+
         {scopeApplies && countries.length > 1 && (
-          <Field
-            label="Países que puede ver"
-            hint="Ninguno marcado = todos los de la sociedad"
-          >
-            <div className="flex flex-wrap gap-1.5">
-              {countries.map((code) => (
-                <label
-                  key={code}
-                  className={cx(
-                    "cursor-pointer rounded-full border px-2.5 py-1 text-[11.5px]",
-                    scope.includes(code)
-                      ? "border-accent/60 bg-accent/15 text-ink"
-                      : "border-line-strong text-ink-muted",
-                  )}
-                >
-                  <input
-                    type="checkbox"
-                    className="sr-only"
-                    checked={scope.includes(code)}
-                    onChange={() =>
-                      setScope((current) =>
-                        current.includes(code)
-                          ? current.filter((item) => item !== code)
-                          : [...current, code],
-                      )
-                    }
-                  />
-                  {countryFlag(code)} {code}
-                </label>
-              ))}
-            </div>
+          <Field label="Países que puede ver">
+            <CountryFlagPicker
+              countries={countries}
+              selected={scope}
+              onChange={setScope}
+              disabled={busy}
+            />
           </Field>
         )}
 
@@ -297,13 +309,15 @@ function InviteOutcome({ result }: { result: InviteResult }) {
 function MemberItem({
   member,
   tenantId,
+  tenantName,
   countries,
   isMe,
   onChanged,
 }: {
   member: Member;
   tenantId: string | null;
-  countries: string[];
+  tenantName: string | null;
+  countries: readonly CountryOption[];
   isMe: boolean;
   onChanged: () => void;
 }) {
@@ -313,6 +327,9 @@ function MemberItem({
 
   const roleLabel =
     ROLES.find((option) => option.value === member.role)?.label ?? member.role;
+  const codes = countries.map((c) => c.code);
+  const shown = visibleCountries(member.country_scope, codes);
+  const companyName = member.tenant_name ?? tenantName ?? "esta sociedad";
 
   async function patch(body: Record<string, unknown>) {
     if (!tenantId) return;
@@ -348,21 +365,20 @@ function MemberItem({
   return (
     <li className="border-b border-line-subtle/60 py-3 last:border-0">
       <div className="flex flex-wrap items-start justify-between gap-3">
-        <div className="min-w-0">
+        <div className="min-w-0 flex-1">
           <p className="text-[12.5px] font-semibold">
             {member.full_name ?? member.email}
             {isMe && <span className="ml-1.5 text-[10.5px] text-ink-dim">(tú)</span>}
           </p>
           <p className="truncate text-[11px] text-ink-dim">{member.email}</p>
           <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
+            <Chip tone="accent">{companyName}</Chip>
             <Chip tone={member.role === "uploader" ? "warning" : "neutral"}>
               {roleLabel}
             </Chip>
-            {member.country_scope ? (
-              <Chip tone="accent">solo {member.country_scope.join(", ")}</Chip>
-            ) : (
-              <Chip tone="neutral">todos los países</Chip>
-            )}
+            <Chip tone={member.business_model ? "positive" : "neutral"}>
+              {businessModelLabel(member.business_model)}
+            </Chip>
             {member.share_pct != null && <Chip tone="neutral">{member.share_pct}%</Chip>}
             <span className="text-[10.5px] text-ink-faint">
               {member.last_login_at
@@ -370,6 +386,32 @@ function MemberItem({
                 : "nunca ha entrado"}
             </span>
           </div>
+          {member.role !== "uploader" && (
+            <p
+              className="mt-1.5 flex flex-wrap items-center gap-1 text-[12px]"
+              aria-label={
+                member.country_scope
+                  ? `Solo ve ${member.country_scope.join(", ")}`
+                  : "Ve todos los países"
+              }
+            >
+              <span className="text-[10.5px] uppercase tracking-[0.06em] text-ink-faint">
+                {member.country_scope ? "Solo" : "Todos los países"}
+              </span>
+              {shown.map((code) => (
+                <span
+                  key={code}
+                  title={countries.find((c) => c.code === code)?.name ?? code}
+                  className="inline-flex items-center gap-0.5 rounded-full bg-sunken px-1.5 py-0.5 text-[11px]"
+                >
+                  <span aria-hidden className="text-[14px] leading-none">
+                    {countryFlag(code)}
+                  </span>
+                  {code}
+                </span>
+              ))}
+            </p>
+          )}
         </div>
 
         <div className="flex shrink-0 gap-1.5">
@@ -394,53 +436,51 @@ function MemberItem({
       </div>
 
       {editing && (
-        <div className="mt-3 flex flex-col gap-2.5 rounded-[8px] border border-line-strong bg-page p-3">
-          <div className="flex flex-wrap gap-1.5">
-            {ROLES.map((option) => (
-              <button
-                key={option.value}
-                type="button"
-                disabled={busy || option.value === member.role}
-                onClick={() => patch({ role: option.value })}
-                className={cx(
-                  "rounded-full border px-2.5 py-1 text-[11.5px] disabled:opacity-40",
-                  option.value === member.role
-                    ? "border-accent/60 bg-accent/15"
-                    : "border-line-strong",
-                )}
-              >
-                {option.label}
-              </button>
-            ))}
-          </div>
+        <div className="mt-3 flex flex-col gap-3 rounded-[8px] border border-line-strong bg-page p-3">
+          <EditRow label="Rol">
+            <div className="flex flex-wrap gap-1.5">
+              {ROLES.map((option) => (
+                <button
+                  key={option.value}
+                  type="button"
+                  disabled={busy || option.value === member.role}
+                  onClick={() => patch({ role: option.value })}
+                  className={cx(
+                    "rounded-full border px-2.5 py-1 text-[11.5px] disabled:opacity-40",
+                    option.value === member.role
+                      ? "border-accent/60 bg-accent/15"
+                      : "border-line-strong",
+                  )}
+                >
+                  {option.label}
+                </button>
+              ))}
+            </div>
+          </EditRow>
+
+          <EditRow label="Modelo de negocio">
+            <BusinessModelPicker
+              value={member.business_model}
+              disabled={busy}
+              onChange={(next) => {
+                // The API keeps an omitted field as it was, so "sin modelo" is
+                // only reachable while nothing was ever set; a set model can be
+                // switched, never blanked, which is the honest reading of a
+                // partner who IS on one side of the business.
+                if (next) patch({ business_model: next });
+              }}
+            />
+          </EditRow>
 
           {countries.length > 1 && member.role !== "uploader" && (
-            <div className="flex flex-wrap items-center gap-1.5">
-              <span className="text-[11px] text-ink-dim">Países:</span>
-              {countries.map((code) => {
-                const only =
-                  member.country_scope?.length === 1 && member.country_scope[0] === code;
-                return (
-                  <button
-                    key={code}
-                    type="button"
-                    disabled={busy || only}
-                    onClick={() => patch({ country_scope: [code] })}
-                    className="rounded-full border border-line-strong px-2.5 py-1 text-[11.5px] disabled:opacity-40"
-                  >
-                    solo {countryFlag(code)} {code}
-                  </button>
-                );
-              })}
-              <button
-                type="button"
-                disabled={busy || member.country_scope === null}
-                onClick={() => patch({ clear_country_scope: true })}
-                className="rounded-full border border-line-strong px-2.5 py-1 text-[11.5px] disabled:opacity-40"
-              >
-                todos
-              </button>
-            </div>
+            <EditRow label="Países">
+              <CountryFlagPicker
+                countries={countries}
+                selected={member.country_scope ?? []}
+                disabled={busy}
+                onChange={(next) => patch(scopePayload(next, codes))}
+              />
+            </EditRow>
           )}
 
           {member.role !== "uploader" && (
@@ -463,6 +503,7 @@ function MemberItem({
           details={[
             { label: "Persona", value: member.full_name ?? member.email },
             { label: "Correo", value: member.email },
+            { label: "Empresa", value: companyName },
             { label: "Rol", value: roleLabel },
           ]}
           consequence="Deja de ver esta sociedad de inmediato. Sus otras sociedades y su cuenta no se tocan; se le puede volver a invitar."
@@ -472,10 +513,21 @@ function MemberItem({
             setConfirmingRevoke(false);
           }}
         >
-          {member.email} perderá el acceso a esta sociedad.
+          {member.email} perderá el acceso a {companyName}.
         </ConfirmDialog>
       )}
     </li>
+  );
+}
+
+function EditRow({ label, children }: { label: string; children: React.ReactNode }) {
+  return (
+    <div className="flex flex-col gap-1.5 sm:flex-row sm:items-start sm:gap-3">
+      <span className="w-[120px] shrink-0 pt-1.5 text-[11px] font-semibold uppercase tracking-[0.06em] text-ink-faint">
+        {label}
+      </span>
+      <div className="min-w-0 flex-1">{children}</div>
+    </div>
   );
 }
 
@@ -491,27 +543,28 @@ function SharePctEditor({
   const [value, setValue] = useState(member.share_pct?.toString() ?? "");
 
   return (
-    <div className="flex items-center gap-2">
-      <span className="text-[11px] text-ink-dim">Participación %:</span>
-      <input
-        type="number"
-        aria-label="Participación en porcentaje"
-        min="0.01"
-        max="100"
-        step="0.01"
-        value={value}
-        onChange={(event) => setValue(event.target.value)}
-        className="w-24 rounded-[7px] border border-line-strong bg-surface px-2 py-1 text-[11.5px] outline-none focus:border-accent"
-      />
-      <button
-        type="button"
-        disabled={busy || !value.trim()}
-        onClick={() => onSave(Number(value))}
-        className="rounded-[7px] border border-line-strong px-2.5 py-1 text-[11.5px] disabled:opacity-40"
-      >
-        Guardar
-      </button>
-    </div>
+    <EditRow label="Participación %">
+      <div className="flex items-center gap-2">
+        <input
+          type="number"
+          aria-label="Participación en porcentaje"
+          min="0.01"
+          max="100"
+          step="0.01"
+          value={value}
+          onChange={(event) => setValue(event.target.value)}
+          className="w-24 rounded-[7px] border border-line-strong bg-surface px-2 py-1 text-[11.5px] outline-none focus:border-accent"
+        />
+        <button
+          type="button"
+          disabled={busy || !value.trim()}
+          onClick={() => onSave(Number(value))}
+          className="rounded-[7px] border border-line-strong px-2.5 py-1 text-[11.5px] disabled:opacity-40"
+        >
+          Guardar
+        </button>
+      </div>
+    </EditRow>
   );
 }
 
@@ -525,12 +578,12 @@ function Field({
   children: React.ReactNode;
 }) {
   return (
-    <label className="flex flex-col gap-1.5">
+    <div className="flex flex-col gap-1.5">
       <span className="text-[11px] font-semibold uppercase tracking-[0.06em] text-ink-faint">
         {label}
       </span>
       {hint && <span className="-mt-1 text-[11px] text-ink-dim">{hint}</span>}
       {children}
-    </label>
+    </div>
   );
 }

@@ -255,6 +255,11 @@ export interface Member {
   role: Role;
   country_scope: string[] | null;
   share_pct: number | null;
+  /** ecommerce | proveeduria, or null while the admin has not said (migration 046). */
+  business_model: "ecommerce" | "proveeduria" | null;
+  /** The company this access belongs to. */
+  tenant_id: string | null;
+  tenant_name: string | null;
   is_active: boolean;
   last_login_at: string | null;
 }
