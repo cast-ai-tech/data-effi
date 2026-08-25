@@ -1,3 +1,5 @@
+import type { CompanyType } from "@/lib/company";
+
 import type { StatusGroup } from "@/lib/status";
 
 /**
@@ -102,6 +104,8 @@ export interface Workspace {
   /** If set, the only countries THIS person may read there. */
   country_scope: string[] | null;
   share_pct: number | null;
+  /** Tienda (dropshipping / propia / mixta) o proveedor; null = sin definir. */
+  company_type?: CompanyType | null;
 }
 
 export interface Tokens {
@@ -288,6 +292,7 @@ export interface TenantRow {
   countries: string[];
   member_count: number;
   notes: string | null;
+  company_type?: CompanyType | null;
   created_at: string;
 }
 

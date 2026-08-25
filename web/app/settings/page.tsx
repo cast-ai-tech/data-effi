@@ -11,13 +11,15 @@ import Link from "next/link";
 import { useState } from "react";
 
 import { AppShell } from "@/components/AppShell";
+import { CompanyTypePicker } from "@/components/CompanyTypePicker";
 import { FxRatesSection } from "@/components/FxRatesSection";
 import { Button, Card, Chip, SkeletonRows } from "@/components/ui";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { ApiError, api } from "@/lib/api";
+import { type CompanyType, companyTypeLabel } from "@/lib/company";
 import { countryFlag } from "@/lib/format";
 import { useApi } from "@/lib/hooks";
-import type { Country, User } from "@/lib/types";
+import type { Country, TenantRow, User } from "@/lib/types";
 
 export default function SettingsPage() {
   const [error, setError] = useState<string | null>(null);
@@ -37,12 +39,55 @@ export default function SettingsPage() {
 
       <div className="space-y-4">
         <CountriesSection onError={setError} />
+        <CompanyTypeSection onError={setError} />
         <FxRatesSection onError={setError} />
         <ConnectionsLink />
         <UsersSection />
         <Tier3Notice />
       </div>
     </AppShell>
+  );
+}
+
+function CompanyTypeSection({ onError }: { onError: (message: string) => void }) {
+  // "¿Tienda o proveedor?" - asked when the company was created (050); here
+  // is where it gets corrected. Only an org admin may change it.
+  const { data: user, reload } = useApi<User>("/auth/me");
+  const [busy, setBusy] = useState(false);
+  const current = user?.workspaces?.find((ws) => ws.tenant_id === user.tenant_id) ?? null;
+  const value = current?.company_type ?? null;
+  const canEdit = Boolean(user?.is_org_admin && user?.tenant_id);
+
+  async function choose(next: CompanyType) {
+    if (!user?.tenant_id || next === value) return;
+    setBusy(true);
+    try {
+      await api.patch<TenantRow>(`/org/tenants/${user.tenant_id}`, { company_type: next });
+      await reload();
+    } catch (err) {
+      onError(err instanceof ApiError ? err.message : "No se pudo guardar el tipo de empresa");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <Card
+      title="Tipo de empresa"
+      subtitle={
+        value
+          ? `Hoy: ${companyTypeLabel(value)}. Define cómo se leen los datos.`
+          : "Todavía no está definido: marca si esta empresa es tienda o proveedor."
+      }
+    >
+      {!user && <SkeletonRows rows={2} />}
+      {user && canEdit && <CompanyTypePicker value={value} onChange={choose} disabled={busy} />}
+      {user && !canEdit && (
+        <p className="text-sm text-ink-dim">
+          {companyTypeLabel(value)}. Solo el administrador de la organización puede cambiarlo.
+        </p>
+      )}
+    </Card>
   );
 }
 

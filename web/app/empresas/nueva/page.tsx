@@ -18,9 +18,11 @@ import { useRouter } from "next/navigation";
 import { useMemo, useState } from "react";
 
 import { AppShell } from "@/components/AppShell";
+import { CompanyTypePicker } from "@/components/CompanyTypePicker";
 import { Card, ErrorState, SkeletonRows, cx } from "@/components/ui";
 import { ApiError, api } from "@/lib/api";
 import { PLANS_PATH } from "@/lib/billing";
+import type { CompanyType } from "@/lib/company";
 import { countryFlag } from "@/lib/format";
 import { useApi } from "@/lib/hooks";
 import type { SupportedCountry, TenantRow, Tokens, User } from "@/lib/types";
@@ -32,6 +34,7 @@ export default function NuevaEmpresaPage() {
 
   const [name, setName] = useState("");
   const [country, setCountry] = useState<string | null>(null);
+  const [companyType, setCompanyType] = useState<CompanyType | null>(null);
   const [busy, setBusy] = useState(false);
   const [failure, setFailure] = useState<{ message: string; plan: boolean } | null>(null);
 
@@ -51,12 +54,17 @@ export default function NuevaEmpresaPage() {
       setFailure({ message: "Elige el país de la empresa.", plan: false });
       return;
     }
+    if (!companyType) {
+      setFailure({ message: "Marca si la empresa es tienda o proveedor.", plan: false });
+      return;
+    }
     setBusy(true);
     setFailure(null);
     try {
       const tenant = await api.post<TenantRow>("/org/tenants", {
         name: name.trim(),
         countries: [country],
+        company_type: companyType,
       });
       // Stand in the new company: the proxy rotates the session cookies.
       await api.post<Tokens>("/auth/switch", { tenant_id: tenant.tenant_id });
@@ -86,7 +94,7 @@ export default function NuevaEmpresaPage() {
           </h1>
           <p className="mt-1 text-sm text-ink-dim">
             {first
-              ? "Un nombre y el país donde opera. Después conectas Effi o Dropi y subes tus reportes."
+              ? "Un nombre, el país donde opera y si es tienda o proveedor. Después conectas Effi o Dropi y subes tus reportes."
               : "Cada empresa opera en un país y tiene sus propios usuarios y reportes."}
           </p>
           {subscription && subscription.max_tenants != null && (
@@ -167,6 +175,17 @@ export default function NuevaEmpresaPage() {
                 )}
               </div>
 
+              <div>
+                <span className="mb-1.5 block text-xs font-semibold uppercase tracking-[0.06em] text-ink-faint">
+                  ¿Tienda o proveedor?
+                </span>
+                <p className="mb-2 text-xs text-ink-dim">
+                  Define cómo se leen tus datos: una tienda de dropshipping no mide lo mismo que
+                  una con mercancía propia ni que un proveedor.
+                </p>
+                <CompanyTypePicker value={companyType} onChange={setCompanyType} disabled={busy} />
+              </div>
+
               {failure && (
                 <p role="alert" className="rounded-control border border-negative/30 bg-negative/[0.08] px-3 py-2 text-sm text-negative-ink">
                   {failure.message}{" "}
@@ -180,7 +199,7 @@ export default function NuevaEmpresaPage() {
 
               <button
                 type="submit"
-                disabled={busy || !name.trim() || !country}
+                disabled={busy || !name.trim() || !country || !companyType}
                 className="rounded-control bg-accent px-3.5 py-2.5 text-base font-semibold text-on-accent disabled:opacity-50"
               >
                 {busy ? "Creando…" : "Crear empresa y conectar"}

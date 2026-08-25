@@ -609,7 +609,7 @@ def list_tenants(conn: UnscopedDbDep, user: OrgUser) -> list[TenantRow]:
         for row in fetch_all(
             conn,
             """
-            SELECT t.id, t.notes, t.created_at,
+            SELECT t.id, t.notes, t.company_type, t.created_at,
                    (SELECT count(*) FROM core.membership m
                      WHERE m.tenant_id = t.id AND m.is_active) AS member_count
             FROM core.tenant t WHERE t.id = ANY(%s)
@@ -629,6 +629,7 @@ def list_tenants(conn: UnscopedDbDep, user: OrgUser) -> list[TenantRow]:
                 countries=_active_countries(conn, tenant["tenant_id"]),
                 member_count=int(extra.get("member_count", 0) or 0),
                 notes=extra.get("notes"),
+                company_type=extra.get("company_type"),
                 created_at=extra["created_at"],
             )
         )
@@ -680,9 +681,9 @@ def create_tenant(payload: TenantCreateRequest, conn: UnscopedDbDep, user: OrgAd
 
     tenant = fetch_required(
         conn,
-        "INSERT INTO core.tenant (slug, name, org_id, notes) VALUES (%s, %s, %s, %s) "
-        "RETURNING id, slug, name, notes, created_at",
-        (slug, payload.name, user.org_id, payload.notes),
+        "INSERT INTO core.tenant (slug, name, org_id, notes, company_type) "
+        "VALUES (%s, %s, %s, %s, %s) RETURNING id, slug, name, notes, company_type, created_at",
+        (slug, payload.name, user.org_id, payload.notes, payload.company_type),
     )
 
     execute(
@@ -712,6 +713,7 @@ def create_tenant(payload: TenantCreateRequest, conn: UnscopedDbDep, user: OrgAd
         countries=[c.upper() for c in payload.countries],
         member_count=1,
         notes=tenant["notes"],
+        company_type=tenant["company_type"],
         created_at=tenant["created_at"],
     )
 
@@ -738,6 +740,12 @@ def update_tenant(
     if "notes" in fields:
         execute(
             conn, "UPDATE core.tenant SET notes = %s WHERE id = %s", (fields["notes"], tenant_id)
+        )
+    if fields.get("company_type"):
+        execute(
+            conn,
+            "UPDATE core.tenant SET company_type = %s WHERE id = %s",
+            (fields["company_type"], tenant_id),
         )
 
     if "countries" in fields:
@@ -780,7 +788,7 @@ def _tenant_row(conn, tenant_id: UUID) -> TenantRow:
     row = fetch_required(
         conn,
         """
-        SELECT t.id, t.name, t.slug, t.notes, t.created_at,
+        SELECT t.id, t.name, t.slug, t.notes, t.company_type, t.created_at,
                (SELECT count(*) FROM core.membership m
                  WHERE m.tenant_id = t.id AND m.is_active) AS member_count
         FROM core.tenant t WHERE t.id = %s
@@ -794,6 +802,7 @@ def _tenant_row(conn, tenant_id: UUID) -> TenantRow:
         countries=_active_countries(conn, tenant_id),
         member_count=int(row["member_count"] or 0),
         notes=row["notes"],
+        company_type=row["company_type"],
         created_at=row["created_at"],
     )
 

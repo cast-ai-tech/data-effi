@@ -240,6 +240,7 @@ def _issue_tokens(conn, settings, user: dict, *, tenant_id: UUID | None = None) 
                 countries=list(ws["countries"] or []),
                 country_scope=list(ws["country_scope"]) if ws["country_scope"] else None,
                 share_pct=ws["share_pct"],
+                company_type=ws.get("company_type"),
             )
             for ws in workspaces
         ],
@@ -489,6 +490,7 @@ def me(user: CurrentUserDep, conn: UnscopedDbDep) -> UserResponse:
                 countries=list(ws["countries"] or []),
                 country_scope=list(ws["country_scope"]) if ws["country_scope"] else None,
                 share_pct=ws["share_pct"],
+                company_type=ws.get("company_type"),
             )
             for ws in workspaces
         ],

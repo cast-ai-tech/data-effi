@@ -15,6 +15,7 @@ import { AppShell } from "@/components/AppShell";
 import { Card, Chip, EmptyState, SkeletonRows, cx } from "@/components/ui";
 import { ApiError, api } from "@/lib/api";
 import { PLANS_PATH } from "@/lib/billing";
+import { companyTypeLabel } from "@/lib/company";
 import { countryFlag } from "@/lib/format";
 import { useApi } from "@/lib/hooks";
 import type { Role, Tokens, User, Workspace } from "@/lib/types";
@@ -122,7 +123,8 @@ export default function EmpresasPage() {
                         {workspace.name}
                       </span>
                       <span className="block text-xs text-ink-dim">
-                        {countries.join(", ") || "Sin país"} · {ROLE_LABEL[workspace.role] ?? workspace.role}
+                        {countries.join(", ") || "Sin país"} · {companyTypeLabel(workspace.company_type)} ·{" "}
+                        {ROLE_LABEL[workspace.role] ?? workspace.role}
                       </span>
                     </span>
                     {current && <Chip tone="accent">estás aquí</Chip>}

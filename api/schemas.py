@@ -36,6 +36,8 @@ CatalogueStatus = Literal["sin_costo", "sin_revisar", "costo_desactualizado", "o
 SampleQuality = Literal["suficiente", "muestra_corta"]
 # Which side of the business a person is on inside a company (migration 046).
 BusinessModel = Literal["ecommerce", "proveeduria"]
+# What kind of company (050): three kinds of store, or a supplier.
+CompanyType = Literal["dropshipping", "own_stock", "mixed", "supplier"]
 
 # Which date a number is anchored to. Defined up here rather than beside the KPI
 # models because the organization roll-up - the first models in this file - also
@@ -93,6 +95,9 @@ class WorkspaceSummary(BaseModel):
     )
     share_pct: float | None = Field(
         default=None, description="Participación del socio, solo informativa"
+    )
+    company_type: CompanyType | None = Field(
+        default=None, description="Tienda (dropshipping / propia / mixta) o proveedor"
     )
 
 
@@ -403,6 +408,11 @@ class TenantCreateRequest(BaseModel):
     countries: list[CountryCode] = Field(
         default_factory=list, description="País (o países) en que opera la empresa"
     )
+    # Optional on the wire: the org chart may create a company without it and
+    # Configuración asks later. The "Crea tu empresa" screen always sends it.
+    company_type: CompanyType | None = Field(
+        default=None, description="Tienda de dropshipping, con mercancía propia, mixta, o proveedor"
+    )
     notes: str | None = Field(default=None, max_length=500)
 
 
@@ -413,6 +423,7 @@ class TenantRow(BaseModel):
     countries: list[str] = Field(default_factory=list)
     member_count: int = 0
     notes: str | None = None
+    company_type: CompanyType | None = None
     created_at: datetime
 
 
@@ -428,6 +439,9 @@ class TenantUpdateRequest(BaseModel):
     notes: str | None = Field(default=None, max_length=500)
     countries: list[CountryCode] | None = Field(
         default=None, description="Todos los países en los que opera la empresa"
+    )
+    company_type: CompanyType | None = Field(
+        default=None, description="Tienda (dropshipping / propia / mixta) o proveedor"
     )
 
 
