@@ -7,8 +7,11 @@
 # API refuses to start with a placeholder secret rather than starting insecure.
 
 x-app-env: &app-env
-  DATABASE_URL: postgresql://norte_app:${POSTGRES_APP_PASSWORD:?POSTGRES_APP_PASSWORD is required}@db:5432/${POSTGRES_DB:-norte}
-  DATABASE_URL_READONLY: postgresql://norte_readonly:${POSTGRES_READONLY_PASSWORD:-}@db:5432/${POSTGRES_DB:-norte}
+  # DATABASE_URL in .env wins. Leave it empty (or unset) and the API talks to
+  # the `db` container; point it at Supabase and localhost works on the real
+  # data - the same one production reads.
+  DATABASE_URL: ${DATABASE_URL:-postgresql://norte_app:${POSTGRES_APP_PASSWORD:?POSTGRES_APP_PASSWORD is required}@db:5432/${POSTGRES_DB:-norte}}
+  DATABASE_URL_READONLY: ${DATABASE_URL_READONLY-postgresql://norte_readonly:${POSTGRES_READONLY_PASSWORD:-}@db:5432/${POSTGRES_DB:-norte}}
   POSTGRES_ADMIN_URL: postgresql://${POSTGRES_USER:-norte}:${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}@db:5432/${POSTGRES_DB:-norte}
   POSTGRES_APP_PASSWORD: ${POSTGRES_APP_PASSWORD}
   POSTGRES_READONLY_PASSWORD: ${POSTGRES_READONLY_PASSWORD:-}
@@ -71,10 +74,19 @@ services:
     depends_on:
       db:
         condition: service_healthy
+    # Migrates ONLY the local `db` container. Against an external database
+    # (Supabase) it does nothing: production is migrated by hand, one file at a
+    # time, because its ledger predates scripts.migrate and a full re-run would
+    # drop views that carry data. See DEPLOY.md.
     command: >
       sh -c "
-        python -m scripts.migrate &&
-        python -m scripts.setup_roles
+        case \"$$DATABASE_URL\" in
+          *@db:5432/*)
+            python -m scripts.migrate &&
+            python -m scripts.setup_roles ;;
+          *)
+            echo 'DATABASE_URL apunta a una base externa: no se migra desde aquí.' ;;
+        esac
       "
     restart: "no"
 
