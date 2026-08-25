@@ -29,7 +29,7 @@ import { useParams } from "next/navigation";
 import { useMemo } from "react";
 
 import { AppShell } from "@/components/AppShell";
-import { DateBasisFrame } from "@/components/DateBasisNote";
+import { BasisBand, BasisCaption, useDateBasisNote } from "@/components/DateBasisNote";
 import { Card, EmptyState, ErrorState, SkeletonRows, cx } from "@/components/ui";
 import {
   DailyStatusMatrix,
@@ -117,6 +117,9 @@ export default function DailyReportPage() {
 
   const printedOn = useMemo(() => new Date(), []);
   const periodLabel = formatRangeLabel(range, country ?? undefined);
+  // The basis the server actually applied, said once for the whole report:
+  // both endpoints take the same range, so one note covers both.
+  const basisNote = useDateBasisNote(daily.dateBasis);
 
   return (
     <AppShell>
@@ -179,13 +182,15 @@ export default function DailyReportPage() {
 
       {!loading && !error && country && blocks.length > 0 && (
         <div className="mt-4 space-y-4">
+          {basisNote?.kind === "band" && <BasisBand note={basisNote} standalone />}
+
           {blocks.map((block) => (
             <section key={block.code} className="report-block">
-              <DateBasisFrame>
-                <PlatformReport block={block} country={country} fillDays={fillDays} />
-              </DateBasisFrame>
+              <PlatformReport block={block} country={country} fillDays={fillDays} />
             </section>
           ))}
+
+          {basisNote?.kind === "caption" && <BasisCaption note={basisNote} />}
 
           {platformRows.length > 0 && (
             <section className="report-block">
