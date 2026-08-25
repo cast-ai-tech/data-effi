@@ -206,7 +206,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
               active={pathname.startsWith("/organizacion")}
               collapsed={rail}
               icon={<GridIcon />}
-              label="Global · todas las empresas"
+              label="Global"
             />
           </div>
         )}
