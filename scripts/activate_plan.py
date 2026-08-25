@@ -15,9 +15,11 @@ from __future__ import annotations
 import argparse
 import sys
 
+import psycopg
+
 from api.billing import activate_plan, expire_subscription
 from api.db import fetch_all, fetch_one
-from pipeline.dbconn import connect as db_connect
+from api.settings import get_settings
 
 
 def main() -> int:
@@ -33,7 +35,7 @@ def main() -> int:
     parser.add_argument("--list", action="store_true", help="Ver todas las organizaciones")
     args = parser.parse_args()
 
-    with db_connect() as conn:
+    with psycopg.connect(get_settings().database_url) as conn:
         if args.list:
             rows = fetch_all(
                 conn,
