@@ -19,7 +19,7 @@ from dataclasses import dataclass, field
 from typing import Any
 
 from pipeline.models import BatchKind
-from pipeline.normalize import clean_text, normalize_text
+from pipeline.normalize import clean_text, normalize_text, parse_decimal
 
 
 @dataclass(frozen=True, slots=True)
@@ -686,11 +686,22 @@ def transform_dropi_order(mapped: dict[str, Any]) -> dict[str, Any]:
 
 
 def transform_dropi_movement(mapped: dict[str, Any]) -> dict[str, Any]:
-    """Turn a mapped Dropi wallet row into engine fields."""
+    """Turn a mapped Dropi wallet row into engine fields.
+
+    `MONTO` is always a positive magnitude and `TIPO` says the direction. The
+    engine reads direction off the sign of the amount (and reports a row whose
+    sign contradicts its type), so a SALIDA is handed over negative - the same
+    shape Effi's wallet already has.
+    """
     out = dict(mapped)
     code, recognized = resolve_dropi_movement_type(mapped.get("description"))
     out["_movement_type_code"] = code
     out["_movement_type_recognized"] = recognized
+
+    direction = normalize_text(mapped.get("direction_raw"))
+    amount = parse_decimal(mapped.get("amount"))
+    if amount is not None and direction == "salida" and amount > 0:
+        out["amount"] = -amount
     return out
 
 
