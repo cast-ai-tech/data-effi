@@ -212,7 +212,7 @@ export default function FulfillmentSla({ countryCode, country }: WidgetProps) {
       <Card title="Alistamiento y cumplimiento" subtitle={SUBTITLE}>
         <EmptyState
           title="Todavía no se puede partir el reloj de entrega"
-          instruction="Sube un reporte de guías que incluya la fecha de relación de despacho desde Cargar datos. Sin esa fecha no se sabe cuándo salió el paquete, y no se puede separar tu tiempo del de la transportadora."
+          instruction="Sube un reporte de guías que incluya la fecha de relación de despacho desde Master Data. Sin esa fecha no se sabe cuándo salió el paquete, y no se puede separar tu tiempo del de la transportadora."
         />
       </Card>
     );

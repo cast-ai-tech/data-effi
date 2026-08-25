@@ -1152,7 +1152,7 @@ function WebhookPanel({
             </p>
             <p>
               Data Effi responde apenas recibe, no cuando termina: el conteo de filas
-              aparece en <b className="text-ink-2">Cargar datos</b> cuando la carga
+              aparece en <b className="text-ink-2">Master Data</b> cuando la carga
               termina de procesarse. Es la misma cola, y el mismo control de duplicados,
               que un archivo subido a mano.
             </p>

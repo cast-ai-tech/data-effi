@@ -64,20 +64,31 @@ ASK_TTL_HOURS = 1
 # quietly consume the token budget that the actual numbers need.
 CONTEXT_MESSAGES = 6
 
-ANALYST_SYSTEM_PROMPT = """Eres un analista de operaciones de ecommerce contraentrega (COD)
-en Latinoamérica. Escribes para el dueño de la operación, que no es técnico y tiene 30 segundos.
+ANALYST_SYSTEM_PROMPT = """Eres un analista de negocio que le habla al dueño de una operación
+de ecommerce contraentrega (COD) en Latinoamérica. No es técnico, no sabe de bases de datos
+y tiene 30 segundos. Le hablas como un socio que ya miró los números por él.
 
 CÓMO ESCRIBES:
-- Entre 3 y 5 frases. Nada de listas, nada de encabezados, nada de emojis.
-- Cada afirmación va con su cifra. "La efectividad cayó" no sirve; "la efectividad cayó de
-  71% a 63%" sí.
-- Cuando puedas, traduce el problema a dinero.
+- Entre 3 y 4 frases, salvo que pidan detalle. Nada de listas, encabezados ni emojis.
+- Cada cifra con su contexto: "despachaste 513 guías y se entregó el 75%", no "75%" a secas.
+- Traduce el problema a plata siempre que puedas, con la moneda del país (por ejemplo
+  "USD 1.240", "COP 3.500.000", "GTQ 8.900"). Nunca un monto sin moneda.
 - Máximo UNA recomendación, al final, concreta y accionable.
-- Español latinoamericano, tono sobrio y directo. Sin entusiasmo, sin felicitaciones.
+- Español latinoamericano, directo y simple. Sin entusiasmo, sin felicitaciones, sin
+  jerga.
 
-VOCABULARIO OBLIGATORIO:
-- Nunca digas "ventas". En contraentrega una venta no es dinero hasta que se entrega.
-  Di "despachos", "entregas", "recaudo" o "contribución".
+PROHIBIDO EL LENGUAJE TÉCNICO. El dueño no sabe qué es una consulta ni una tabla. Nunca
+digas: "query", "consulta", "dataset", "registros", "filas", "columna", "campo", "tabla",
+"vista", "SQL", "base de datos", "null", "porcentaje calculado sobre". Nunca escribas
+nombres internos como mart.v_algo, delivery_rate_pct, capital_in_street o similares:
+tradúcelos a palabras ("efectividad de entrega", "plata en la calle", "días para
+cobrar"). Si el resultado trae códigos o nombres técnicos, di lo que significan, no
+el código.
+
+VOCABULARIO DEL NEGOCIO:
+- Nunca digas "ventas". En contraentrega una venta no es plata hasta que se entrega.
+  Di "despachos", "guías", "entregas", "recaudo" o "contribución".
+- Estados de una guía: entregada, en tránsito, con novedad, devuelta, indemnizada.
 - "Devolución" es una pérdida real: se pagó flete de ida y de vuelta sin recaudar nada.
 
 CONTRIBUCIÓN NETA: NUNCA LA LLAMES PÉRDIDA.
@@ -86,9 +97,9 @@ nada hasta que se entrega. Mientras haya guías abiertas, la contribución neta 
 costo de guías jóvenes contra el recaudo de guías viejas y sale negativa aunque la
 operación sea rentable. Decir "estás perdiendo dinero" en ese caso es falso y lleva al
 dueño a recortar justo cuando debería reponer inventario.
-- Si tienes `mart.v_contribution_split`, úsala: informa `realised_contribution` (lo que
-  ya cerró) y `capital_in_street` (costo ya pagado de guías que aún no entregan) por
-  separado, y menciona `maturity_pct`.
+- Si tienes la contribución separada, informa lo que ya cerró (contribución realizada) y
+  lo que sigue en la calle (costo ya pagado de guías que aún no entregan) por separado, y
+  di qué parte de las guías ya maduró.
 - Si solo tienes la contribución neta y hay guías abiertas, di que es una cifra a mitad
   de camino y explica por qué, en vez de declarar una pérdida.
 
@@ -97,6 +108,16 @@ QUÉ NO HACER:
 - Si los datos son escasos, dilo en una frase en vez de rellenar.
 - No repitas los números en el mismo orden en que te los di: cuenta qué significan.
 """
+
+
+def _country_currency(conn: psycopg.Connection, country: str | None) -> str | None:
+    """The currency the answer must quote amounts in. None when no country is set."""
+    if not country:
+        return None
+    with conn.cursor() as cur:
+        cur.execute("SELECT currency_code FROM core.country WHERE code = %s", (country.upper(),))
+        row = cur.fetchone()
+    return row[0] if row else None
 
 
 def _decimal_to_float(value: Any) -> Any:
@@ -677,7 +698,11 @@ def ask_data(
     if not rows:
         return _finish(
             {
-                "answer": "La consulta corrió bien pero no devolvió filas para ese filtro.",
+                "answer": (
+                    "No encontré guías ni movimientos que respondan eso con los datos "
+                    "cargados. Prueba con otro rango de fechas, otro país u otra "
+                    "transportadora."
+                ),
                 "sql": validation.sql,
                 "columns": columns,
                 "rows": [],
@@ -688,6 +713,11 @@ def ask_data(
             tokens=sql_response.input_tokens + sql_response.output_tokens,
         )
 
+    currency = _country_currency(conn, country)
+    currency_hint = (
+        f" Todo monto va con la moneda {currency}." if currency
+        else " Todo monto va con la moneda del país al que pertenece."
+    )
     try:
         prose = call_llm(
             settings,
@@ -695,10 +725,11 @@ def ask_data(
                 block for block in (ANALYST_SYSTEM_PROMPT, memory, history) if block
             ),
             user_message=(
-                f"Pregunta original: {question}\n\n"
-                f"Resultado de la consulta ({len(rows)} filas):\n{_as_readable(rows[:40])}\n\n"
-                f"Responde la pregunta en 2 a 4 frases usando estas cifras. No inventes nada "
-                f"que no esté aquí."
+                f"Pregunta del dueño: {question}\n\n"
+                f"Cifras ya calculadas ({len(rows)} resultados):\n{_as_readable(rows[:40])}\n\n"
+                f"Responde en 3 a 4 frases, en lenguaje de negocio, usando solo estas cifras y "
+                f"dándoles contexto (qué se despachó, qué se entregó, qué se devolvió, cuánto "
+                f"es en plata). No menciones cómo se obtuvieron ni nombres técnicos.{currency_hint}"
             ),
             max_tokens=500,
         )

@@ -218,7 +218,7 @@ export default function KpiContribution({ countryCode, country }: WidgetProps) {
       <Card>
         <EmptyState
           title="Todavía no hay guías en este rango"
-          instruction="Sube un archivo de guías desde Cargas, o amplía el rango de fechas: los KPIs se calculan sobre los despachos del periodo seleccionado."
+          instruction="Sube un archivo de guías desde Master Data, o amplía el rango de fechas: los KPIs se calculan sobre los despachos del periodo seleccionado."
         />
       </Card>
     );

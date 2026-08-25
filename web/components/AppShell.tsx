@@ -531,7 +531,7 @@ function CountryNav({
     // Each country loads its own files and names the platform they come from
     // (migration 042). There is no global upload entry any more.
     ...(canIngest
-      ? [{ match: `${base}/cargar`, href: `${base}/cargar`, label: "Cargar datos", icon: <UploadIcon />, exact: false }]
+      ? [{ match: `${base}/cargar`, href: `${base}/cargar`, label: "Master Data", icon: <UploadIcon />, exact: false }]
       : []),
   ];
 

@@ -41,7 +41,7 @@ export default function IngestForwardPage() {
   return (
     <AppShell>
       <header className="mb-5">
-        <h1 className="text-[22px] font-bold tracking-tight">Cargar datos</h1>
+        <h1 className="text-[22px] font-bold tracking-tight">Master Data</h1>
         <p className="mt-1 text-[12px] text-ink-dim">
           Cada país tiene su propia carga: ahí eliges de qué plataforma es el archivo.
         </p>

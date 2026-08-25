@@ -258,7 +258,7 @@ export default function DropshippingMargin({ countryCode, country }: WidgetProps
       <Card title="Cadena de márgenes" subtitle={SUBTITLE}>
         <EmptyState
           title="Todavía no hay productos con despachos"
-          instruction="Sube un reporte de guías desde Cargar datos. Los productos aparecen solos con el primer archivo, y el margen se calcula apenas cada uno tenga su costo cargado en Productos."
+          instruction="Sube un reporte de guías desde Master Data. Los productos aparecen solos con el primer archivo, y el margen se calcula apenas cada uno tenga su costo cargado en Productos."
         />
       </Card>
     );
