@@ -229,6 +229,8 @@ export function AppShell({ children }: { children: React.ReactNode }) {
               pathname={pathname}
               rangeSuffix={rangeSuffix}
               canIngest={can("ingest")}
+              canRead={can("read")}
+              canManage={can("manage")}
             />
           ))}
 
@@ -237,33 +239,8 @@ export function AppShell({ children }: { children: React.ReactNode }) {
           {/* No global "Cargar datos" any more: every file belongs to a country
               and names its platform, so the entry lives under each country
               (CountryNav). `/ingest` still exists and forwards there. */}
-          {can("read") && (
-            <NavItem
-              href="/connections"
-              active={pathname.startsWith("/connections")}
-              collapsed={rail}
-              icon={<PlugIcon />}
-              label="Conexiones"
-            />
-          )}
-          {can("read") && (
-            <NavItem
-              href="/settings"
-              active={pathname.startsWith("/settings")}
-              collapsed={rail}
-              icon={<GearIcon />}
-              label="Configuración"
-            />
-          )}
-          {can("manage") && (
-            <NavItem
-              href="/usuarios"
-              active={pathname.startsWith("/usuarios")}
-              collapsed={rail}
-              icon={<PeopleIcon />}
-              label="Usuarios"
-            />
-          )}
+          {/* Conexiones, Usuarios and Configuración belong to the company and
+              live inside its block above (CountryNav): every company has its own. */}
           {user && (
             <NavItem
               href="/empresas"
@@ -642,6 +619,8 @@ function CountryNav({
   pathname,
   rangeSuffix,
   canIngest,
+  canRead,
+  canManage,
 }: {
   country: Country;
   open: boolean;
@@ -651,6 +630,9 @@ function CountryNav({
   rangeSuffix: string;
   /** Whether this person may upload at all; a viewer gets no upload entry. */
   canIngest: boolean;
+  /** Reads numbers (connections and settings show); manages people (users show). */
+  canRead: boolean;
+  canManage: boolean;
 }) {
   const base = `/${country.code.toLowerCase()}`;
 
@@ -665,6 +647,17 @@ function CountryNav({
     // (migration 042). There is no global upload entry any more.
     ...(canIngest
       ? [{ match: `${base}/cargar`, href: `${base}/cargar`, label: "Cargar datos", icon: <UploadIcon />, exact: false }]
+      : []),
+    // The company's own plumbing. These routes are company-scoped (not
+    // country-prefixed): a company lives in one country, so they sit here.
+    ...(canRead
+      ? [{ match: "/connections", href: "/connections", label: "Conexiones", icon: <PlugIcon />, exact: false }]
+      : []),
+    ...(canManage
+      ? [{ match: "/usuarios", href: "/usuarios", label: "Usuarios", icon: <PeopleIcon />, exact: false }]
+      : []),
+    ...(canRead
+      ? [{ match: "/settings", href: "/settings", label: "Configuración", icon: <GearIcon />, exact: false }]
       : []),
   ];
 

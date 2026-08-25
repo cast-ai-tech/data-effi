@@ -26,7 +26,7 @@ export default function SettingsPage() {
     <AppShell>
       <PageHeader
         title="Configuración"
-        subtitle="Países, personas y cuántos días esperar antes de dar una guía por cerrada."
+        subtitle="El país de esta empresa, sus tasas, sus personas y cuántos días esperar antes de dar una guía por cerrada."
       />
 
       {error && (
@@ -48,18 +48,10 @@ export default function SettingsPage() {
 
 function CountriesSection({ onError }: { onError: (message: string) => void }) {
   const { data, loading, reload } = useApi<Country[]>("/config/countries");
-
-  async function toggle(country: Country, active: boolean) {
-    try {
-      await api.put("/config/countries", {
-        country_code: country.code,
-        is_active: active,
-      });
-      reload();
-    } catch (err) {
-      onError(err instanceof ApiError ? err.message : "No se pudo guardar");
-    }
-  }
+  // A company lives in one country (chosen when it was created), so this is
+  // not a list to activate things in: it shows that country and lets the
+  // measured maturation window be applied.
+  const active = (data ?? []).filter((country) => country.is_active);
 
   async function applyMaturation(country: Country) {
     if (!country.maturation_days_suggested) return;
@@ -76,10 +68,13 @@ function CountriesSection({ onError }: { onError: (message: string) => void }) {
   }
 
   return (
-    <Card title="Países" subtitle="Cada país trae su moneda, sus formatos y sus plataformas">
-      {loading && <SkeletonRows rows={4} />}
+    <Card title="País de la empresa" subtitle="Moneda, formato de fechas y ventana de maduración">
+      {loading && <SkeletonRows rows={1} />}
+      {!loading && active.length === 0 && (
+        <p className="text-sm text-ink-dim">Esta empresa todavía no tiene país.</p>
+      )}
       {!loading &&
-        (data ?? []).map((country) => (
+        active.map((country) => (
           <div
             key={country.code}
             className="flex flex-wrap items-center justify-between gap-3 border-t border-line-row py-3 first:border-t-0"
@@ -91,35 +86,23 @@ function CountriesSection({ onError }: { onError: (message: string) => void }) {
                   {country.currency_code} · {country.date_format}
                 </span>
               </p>
-              {country.is_active && (
-                <p className="mt-0.5 text-xs text-ink-dim">
-                  Maduración: {country.maturation_days ?? 21} días
-                  {country.maturation_days_suggested &&
-                    country.maturation_days_suggested !== country.maturation_days && (
-                      <span className="ml-2 text-warning-ink">
-                        medimos {country.maturation_days_suggested}
-                      </span>
-                    )}
-                </p>
-              )}
+              <p className="mt-0.5 text-xs text-ink-dim">
+                Maduración: {country.maturation_days ?? 21} días
+                {country.maturation_days_suggested &&
+                  country.maturation_days_suggested !== country.maturation_days && (
+                    <span className="ml-2 text-warning-ink">
+                      medimos {country.maturation_days_suggested}
+                    </span>
+                  )}
+              </p>
             </div>
 
-            <div className="flex items-center gap-2">
-              {country.is_active &&
-                country.maturation_days_suggested &&
-                country.maturation_days_suggested !== country.maturation_days && (
-                  <Button size="sm" variant="ghost" onClick={() => applyMaturation(country)}>
-                    Aplicar {country.maturation_days_suggested} días
-                  </Button>
-                )}
-              <Button
-                size="sm"
-                variant={country.is_active ? "ghost" : "primary"}
-                onClick={() => toggle(country, !country.is_active)}
-              >
-                {country.is_active ? "Desactivar" : "Activar"}
-              </Button>
-            </div>
+            {country.maturation_days_suggested &&
+              country.maturation_days_suggested !== country.maturation_days && (
+                <Button size="sm" variant="ghost" onClick={() => applyMaturation(country)}>
+                  Aplicar {country.maturation_days_suggested} días
+                </Button>
+              )}
           </div>
         ))}
     </Card>
@@ -160,7 +143,7 @@ function UsersSection() {
   };
 
   return (
-    <Card title="Personas" subtitle="Se entra por invitación; no hay registro abierto">
+    <Card title="Personas" subtitle="Se invitan desde Usuarios; cada empresa tiene su propia lista">
       {loading && <SkeletonRows rows={2} />}
       {(data ?? []).map((user) => (
         <div

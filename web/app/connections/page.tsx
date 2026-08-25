@@ -280,7 +280,7 @@ export default function ConnectionsPage() {
           href="/settings"
           className="inline-flex shrink-0 items-center gap-1.5 rounded-control border border-line-input px-3 py-1.5 text-sm font-semibold text-ink-2 no-underline transition-colors hover:border-accent hover:text-accent-ink"
         >
-          Países y personas
+          Configuración
         </Link>
       </header>
 
