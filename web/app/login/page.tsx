@@ -68,7 +68,7 @@ function LoginForm() {
     mode === "login"
       ? "Analítica de contraentrega para tus países, tus transportadoras y tus productos."
       : mode === "register"
-        ? "Crea tu cuenta y, en el siguiente paso, tu empresa. Un mes gratis, sin tarjeta."
+        ? "Crea tu cuenta; en el siguiente paso, tu primera empresa y sus conexiones. Un mes gratis, sin tarjeta."
         : "Escribe tu nombre y elige una contraseña. El correo ya viene en la invitación.";
   const submitLabel =
     mode === "login" ? "Entrar" : mode === "register" ? "Iniciar gratis" : "Crear mi cuenta";

@@ -61,7 +61,9 @@ export default function NuevaEmpresaPage() {
       // Stand in the new company: the proxy rotates the session cookies.
       await api.post<Tokens>("/auth/switch", { tenant_id: tenant.tenant_id });
       await reloadUser();
-      router.push(`/${country.toLowerCase()}`);
+      // Next step: connect Effi / Dropi for this company. The dashboard is
+      // empty until a report is loaded, so it is not where to land.
+      router.push("/connections");
       router.refresh();
     } catch (err) {
       const status = err instanceof ApiError ? err.status : 0;
@@ -80,11 +82,11 @@ export default function NuevaEmpresaPage() {
       <div className="mx-auto w-full max-w-[640px]">
         <header className="mb-5">
           <h1 className="text-2xl font-bold tracking-tight">
-            {first ? "Crea tu empresa" : "Nueva empresa"}
+            {first ? "Crea tu primera empresa" : "Nueva empresa"}
           </h1>
           <p className="mt-1 text-sm text-ink-dim">
             {first
-              ? "Un nombre y el país donde opera. Después subes tus reportes de Effi o Dropi."
+              ? "Un nombre y el país donde opera. Después conectas Effi o Dropi y subes tus reportes."
               : "Cada empresa opera en un país y tiene sus propios usuarios y reportes."}
           </p>
           {subscription && subscription.max_tenants != null && (
@@ -181,7 +183,7 @@ export default function NuevaEmpresaPage() {
                 disabled={busy || !name.trim() || !country}
                 className="rounded-control bg-accent px-3.5 py-2.5 text-base font-semibold text-on-accent disabled:opacity-50"
               >
-                {busy ? "Creando…" : "Crear empresa"}
+                {busy ? "Creando…" : "Crear empresa y conectar"}
               </button>
             </form>
           </Card>
