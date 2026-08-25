@@ -71,7 +71,7 @@ export function CountryFlagPicker({
       </div>
       <p className="text-xs text-ink-dim">
         {allSelected
-          ? "Ninguno marcado = ve todos los países de la sociedad."
+          ? "Ninguno marcado = ve todos los países de la empresa."
           : `Solo ${selected.join(", ")}. Haz clic en una bandera para agregar o quitar.`}
       </p>
     </div>

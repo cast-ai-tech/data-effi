@@ -66,7 +66,7 @@ const tenants: TenantRow[] = [
 function user(overrides: Partial<User>): User {
   return {
     id: "u-1",
-    email: "jefe@dataeffi.co",
+    email: "jefe@masterdata.app",
     full_name: "Jefe",
     role: "owner",
     tenant_id: "t-1",

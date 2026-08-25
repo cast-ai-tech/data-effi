@@ -91,8 +91,8 @@ export default function UsuariosPage() {
       <header className="mb-5">
         <h1 className="text-2xl font-bold tracking-tight">Usuarios</h1>
         <p className="mt-1 text-sm text-ink-dim">
-          Quién entra a <strong>{user?.tenant_name ?? "esta sociedad"}</strong>,
-          qué puede hacer y qué países ve. Cada sociedad tiene su propia lista.
+          Quién entra a <strong>{user?.tenant_name ?? "esta empresa"}</strong>,
+          qué puede hacer. Cada empresa tiene su propia lista.
         </p>
       </header>
 
@@ -100,7 +100,7 @@ export default function UsuariosPage() {
         <Card>
           <EmptyState
             title="Solo el propietario administra usuarios"
-            instruction="Pídele acceso a quien creó la sociedad, o cambia a una sociedad donde seas propietario."
+            instruction="Pídele acceso a quien creó la empresa, o cambia a una empresa donde seas propietario."
           />
         </Card>
       )}
@@ -202,7 +202,7 @@ function InviteForm({
   return (
     <Card
       title="Dar acceso a alguien"
-      subtitle="Se agrega solo a esta sociedad"
+      subtitle="Se agrega solo a esta empresa"
     >
       <form onSubmit={submit} className="flex flex-col gap-3.5">
         <Field label="Correo" htmlFor="invite-email">
@@ -318,8 +318,8 @@ function InviteOutcome({ result }: { result: InviteResult }) {
       <div className="rounded-control border border-line-strong bg-page px-3 py-2.5 text-sm">
         <p className="font-semibold">{result.email} ya puede entrar</p>
         <p className="mt-0.5 text-ink-dim">
-          Ya tenía cuenta en otra de tus sociedades: entra con su misma
-          contraseña y elige esta sociedad en el selector de arriba a la
+          Ya tenía cuenta en otra de tus empresas: entra con su misma
+          contraseña y elige esta empresa en el selector de arriba a la
           izquierda.
         </p>
       </div>
@@ -376,7 +376,7 @@ function MemberItem({
     ROLES.find((option) => option.value === member.role)?.label ?? member.role;
   const codes = countries.map((c) => c.code);
   const shown = visibleCountries(member.country_scope, codes);
-  const companyName = member.tenant_name ?? tenantName ?? "esta sociedad";
+  const companyName = member.tenant_name ?? tenantName ?? "esta empresa";
 
   async function patch(body: Record<string, unknown>) {
     if (!tenantId) return;
@@ -553,7 +553,7 @@ function MemberItem({
 
       {confirmingRevoke && (
         <ConfirmDialog
-          title="Quitar el acceso a esta sociedad"
+          title="Quitar el acceso a esta empresa"
           confirmLabel="Quitar acceso"
           pending={busy}
           details={[
@@ -562,7 +562,7 @@ function MemberItem({
             { label: "Empresa", value: companyName },
             { label: "Rol", value: roleLabel },
           ]}
-          consequence="Deja de ver esta sociedad de inmediato. Sus otras sociedades y su cuenta no se tocan; se le puede volver a invitar."
+          consequence="Deja de ver esta empresa de inmediato. Sus otras empresas y su cuenta no se tocan; se le puede volver a invitar."
           onCancel={() => setConfirmingRevoke(false)}
           onConfirm={async () => {
             await revoke();

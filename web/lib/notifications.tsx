@@ -52,7 +52,7 @@ export const BACKOFF_MAX_MS = 30_000;
 /** Several events from one load collapse into a single refetch. */
 export const REVISION_DEBOUNCE_MS = 500;
 /** Survives a reload, not a new tab: events missed while reloading still arrive. */
-export const CURSOR_STORAGE_KEY = "dataeffi.events.cursor";
+export const CURSOR_STORAGE_KEY = "masterdata.events.cursor";
 
 /** The events that mean "the numbers changed": every widget refetches. */
 const REVISION_EVENTS = new Set(["batch.finished", "job_run.finished", "fx.refreshed"]);

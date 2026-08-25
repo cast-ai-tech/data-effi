@@ -149,7 +149,7 @@ export function JobRow({
           </p>
           {onReprocess && (
             <p className="text-sm leading-relaxed text-ink-dim">
-              Si Data Effi cambió desde entonces —por ejemplo al corregir cómo se lee una
+              Si Master Data cambió desde entonces —por ejemplo al corregir cómo se lee una
               columna— el mismo archivo puede producir datos distintos.{" "}
               <button
                 type="button"

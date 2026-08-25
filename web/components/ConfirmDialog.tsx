@@ -7,7 +7,7 @@
  * an operating-system box in the middle of a screen that was designed, it
  * freezes the page thread so Playwright and any browser tooling hang on it,
  * and it can only hold one line of plain text - which is not enough to say
- * WHICH connection is about to die and WHAT breaks outside Data Effi when it
+ * WHICH connection is about to die and WHAT breaks outside Master Data when it
  * does.
  *
  * The information is deliberately ranked: title (what), body (what happens),

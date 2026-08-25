@@ -560,7 +560,7 @@ function ThresholdsView({ countryCode }: { countryCode: string | null }) {
   return (
     <div className="flex-1 space-y-4 overflow-y-auto p-4">
       <p className="text-sm leading-relaxed text-ink-dim">
-        Data Effi aprende estos valores de tus propias guías. Escribe uno para
+        Master Data aprende estos valores de tus propias guías. Escribe uno para
         fijarlo; déjalo vacío y se sigue aprendiendo solo.
       </p>
 

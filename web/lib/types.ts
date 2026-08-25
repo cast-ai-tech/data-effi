@@ -21,7 +21,7 @@ export type TrafficLight = "verde" | "amarillo" | "rojo" | "sin_datos";
 /** Fewer than ten closed guides behind a percentage: an estimate, not a measure. */
 export type SampleQuality = "suficiente" | "muestra_corta";
 
-/** `/ingest/detect`: what Data Effi understood about a file before storing it. */
+/** `/ingest/detect`: what Master Data understood about a file before storing it. */
 export interface DetectResult {
   filename: string;
   format: string;

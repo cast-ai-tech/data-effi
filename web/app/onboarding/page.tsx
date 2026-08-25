@@ -10,6 +10,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useMemo, useState } from "react";
 
+import { BrandMark } from "@/components/BrandMark";
 import { Button, Card, Chip, SkeletonRows, cx } from "@/components/ui";
 import { ApiError, api } from "@/lib/api";
 import { countryFlag } from "@/lib/format";
@@ -39,12 +40,7 @@ export default function OnboardingPage() {
   return (
     <main className="mx-auto min-h-screen w-full max-w-[860px] px-6 py-10">
       <div className="mb-8">
-        <div className="mb-2 flex items-center gap-2.5">
-          <div className="flex size-7 items-center justify-center rounded-control bg-accent text-md font-extrabold text-on-accent">
-            DE
-          </div>
-          <span className="text-lg font-bold tracking-tight">Data Effi</span>
-        </div>
+        <BrandMark className="mb-2" />
 
         <div className="mt-5 flex items-center gap-2">
           {STEPS.map((label, index) => (
@@ -337,7 +333,7 @@ function CalibrationStep({
     <section>
       <h1 className="text-xl font-bold">Calibración de maduración</h1>
       <p className="mt-1.5 text-base leading-relaxed text-ink-dim">
-        Una cohorte de guías tarda días en estabilizar su porcentaje de entrega. Data Effi
+        Una cohorte de guías tarda días en estabilizar su porcentaje de entrega. Master Data
         mide el p90 real de tu operación y te propone la ventana; no la cambia solo,
         porque eso decide cómo se mide todo lo demás.
       </p>

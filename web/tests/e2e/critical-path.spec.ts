@@ -5,16 +5,16 @@ import { expect, test, type Page } from "@playwright/test";
  * see a blocked widget still on screen, and reach the upload page.
  *
  * The suite skips itself when the API is not answering, so `npm run test:e2e`
- * on a laptop without docker compose up reports "skipped" rather than a wall of
+ * on a laptop without the API running reports "skipped" rather than a wall of
  * red that trains everyone to ignore it.
  */
 
-const API_HEALTH_URL = process.env.DATAEFFI_API_URL
-  ? `${process.env.DATAEFFI_API_URL}/health`
+const API_HEALTH_URL = process.env.MASTERDATA_API_URL
+  ? `${process.env.MASTERDATA_API_URL}/health`
   : "http://localhost:8000/health";
 
-const DEMO_EMAIL = process.env.DATAEFFI_DEMO_EMAIL ?? "demo@dataeffi.co";
-const DEMO_PASSWORD = process.env.DATAEFFI_DEMO_PASSWORD ?? "demo-dataeffi-2026";
+const DEMO_EMAIL = process.env.MASTERDATA_DEMO_EMAIL ?? "demo@masterdata.app";
+const DEMO_PASSWORD = process.env.MASTERDATA_DEMO_PASSWORD ?? "demo-masterdata-2026";
 
 let stackIsUp = false;
 
@@ -33,7 +33,7 @@ test.beforeAll(async () => {
 test.beforeEach(() => {
   test.skip(
     !stackIsUp,
-    `La API no responde en ${API_HEALTH_URL}. Levanta el stack (docker compose up) para correr estas pruebas.`,
+    `La API no responde en ${API_HEALTH_URL}. Levanta la API (uvicorn api.main:app --port 8000) para correr estas pruebas.`,
   );
 });
 

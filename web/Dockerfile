@@ -1,4 +1,4 @@
-# Data Effi web. Multi-stage: the runtime image carries no source and no toolchain.
+# Master Data web. Multi-stage: the runtime image carries no source and no toolchain.
 
 FROM node:22-alpine AS deps
 WORKDIR /app
@@ -27,13 +27,13 @@ ENV NODE_ENV=production \
     NEXT_TELEMETRY_DISABLED=1 \
     PORT=3000
 
-RUN addgroup -g 10001 -S dataeffi && adduser -u 10001 -S dataeffi -G dataeffi
+RUN addgroup -g 10001 -S masterdata && adduser -u 10001 -S masterdata -G masterdata
 
 COPY --from=builder /app/public ./public
-COPY --from=builder --chown=dataeffi:dataeffi /app/.next/standalone ./
-COPY --from=builder --chown=dataeffi:dataeffi /app/.next/static ./.next/static
+COPY --from=builder --chown=masterdata:masterdata /app/.next/standalone ./
+COPY --from=builder --chown=masterdata:masterdata /app/.next/static ./.next/static
 
-USER dataeffi
+USER masterdata
 EXPOSE 3000
 
 HEALTHCHECK --interval=15s --timeout=5s --start-period=20s --retries=5 \

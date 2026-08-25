@@ -187,7 +187,7 @@ function Tier3Notice() {
       <div className="space-y-2 text-sm leading-relaxed text-ink-2">
         <p>
           Una conexión Tier 3 entra con <b>tu sesión</b> a una plataforma que no publica
-          API. Data Effi se identifica, espera entre peticiones y se detiene apenas la
+          API. Master Data se identifica, espera entre peticiones y se detiene apenas la
           plataforma rechaza la sesión: nunca disfraza el tráfico.
         </p>
         <p>

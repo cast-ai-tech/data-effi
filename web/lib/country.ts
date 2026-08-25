@@ -22,7 +22,9 @@ import { useApi, usePersistentState } from "@/lib/hooks";
 import type { Country } from "@/lib/types";
 
 /** Where a country-less URL sends the operator back to. */
-export const LAST_COUNTRY_KEY = "dataeffi.country.last";
+export const LAST_COUNTRY_KEY = "masterdata.country.last";
+/** Pre-rebrand name, migrated on first read. TODO(rebrand): retirar después de 2026-09-15. */
+export const LEGACY_LAST_COUNTRY_KEY = "dataeffi.country.last";
 
 export interface RouteCountry {
   /** Uppercased code from the path segment. "" when the route has none. */
@@ -60,7 +62,11 @@ export function useRouteCountry(): RouteCountry {
   // Remembered so that a country-less link - a bookmark from before the routes
   // moved, or a shared /orders URL - lands where this operator actually works
   // instead of on whichever country sorts first.
-  const [, setLastCountry] = usePersistentState<string | null>(LAST_COUNTRY_KEY, null);
+  const [, setLastCountry] = usePersistentState<string | null>(
+    LAST_COUNTRY_KEY,
+    null,
+    LEGACY_LAST_COUNTRY_KEY,
+  );
   useEffect(() => {
     if (country) setLastCountry(country.code);
     // `setLastCountry` is stable per key; listing it would re-run this on every

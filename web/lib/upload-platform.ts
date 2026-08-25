@@ -2,7 +2,7 @@
  * Which platform a file belongs to, decided BEFORE it is uploaded.
  *
  * The rule the per-country upload screen follows (migration 042): the operator
- * says which platform's export this is; if Data Effi recognises the report
+ * says which platform's export this is; if Master Data recognises the report
  * shape and it belongs to a different platform, the upload is refused here,
  * not discovered on the dashboard weeks later as Effi's guides counted under
  * Dropi. Pure functions, so the rule is testable without a browser.

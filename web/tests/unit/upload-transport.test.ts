@@ -16,7 +16,7 @@ function jwtWithExp(exp: number): string {
 
 describe("apiOrigin", () => {
   it("reduces the public API URL to its origin for the CSP", () => {
-    expect(apiOrigin("https://data-effi-api.onrender.com/")).toBe("https://data-effi-api.onrender.com");
+    expect(apiOrigin("https://master-data-api.onrender.com/")).toBe("https://master-data-api.onrender.com");
     expect(apiOrigin("http://localhost:8000")).toBe("http://localhost:8000");
   });
 

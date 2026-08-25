@@ -24,8 +24,12 @@ import { apiOrigin } from "@/lib/upload-transport";
  */
 
 const PUBLIC_PATHS = ["/login", "/register"];
-const ACCESS_COOKIE = "dataeffi_access";
-const REFRESH_COOKIE = "dataeffi_refresh";
+// Keep in sync with app/api/backend/[...path]/route.ts.
+const ACCESS_COOKIE = "masterdata_access";
+const REFRESH_COOKIE = "masterdata_refresh";
+// TODO(rebrand): retirar LEGACY_* después de 2026-09-15 (REFRESH_TTL de 14 días).
+const LEGACY_ACCESS_COOKIE = "dataeffi_access";
+const LEGACY_REFRESH_COOKIE = "dataeffi_refresh";
 
 // The one exception to "the browser only talks to this origin": file uploads
 // go straight to the API (lib/api.ts `upload`), because the proxy runs as a
@@ -71,7 +75,10 @@ export function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
 
   const hasSession =
-    request.cookies.has(ACCESS_COOKIE) || request.cookies.has(REFRESH_COOKIE);
+    request.cookies.has(ACCESS_COOKIE) ||
+    request.cookies.has(REFRESH_COOKIE) ||
+    request.cookies.has(LEGACY_ACCESS_COOKIE) ||
+    request.cookies.has(LEGACY_REFRESH_COOKIE);
   const isPublic = PUBLIC_PATHS.some((path) => pathname.startsWith(path));
 
   if (!hasSession && !isPublic) {

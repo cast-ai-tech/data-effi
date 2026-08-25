@@ -92,17 +92,29 @@ export function useApi<T>(path: string | null, deps: unknown[] = []): AsyncState
 export function usePersistentState<T>(
   key: string,
   initial: T,
+  /**
+   * A previous name for the same preference. Read once, copied under `key`
+   * and removed, so a rename does not silently reset what the reader chose.
+   */
+  legacyKey?: string,
 ): [T, (value: T) => void] {
   const [value, setValue] = useState<T>(initial);
 
   useEffect(() => {
     try {
-      const stored = window.localStorage.getItem(key);
+      let stored = window.localStorage.getItem(key);
+      if (stored === null && legacyKey) {
+        stored = window.localStorage.getItem(legacyKey);
+        if (stored !== null) {
+          window.localStorage.setItem(key, stored);
+          window.localStorage.removeItem(legacyKey);
+        }
+      }
       if (stored !== null) setValue(JSON.parse(stored) as T);
     } catch {
       // A corrupt entry must not break the page.
     }
-  }, [key]);
+  }, [key, legacyKey]);
 
   const update = useCallback(
     (next: T) => {

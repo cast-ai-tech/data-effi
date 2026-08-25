@@ -15,6 +15,7 @@ import { DateFieldPicker, ExcludedByFieldBand } from "@/components/DateFieldPick
 import { DateRangePicker } from "@/components/DateRangePicker";
 import { PlatformPicker } from "@/components/PlatformPicker";
 import { NotificationBell } from "@/components/NotificationBell";
+import { BrandMark } from "@/components/BrandMark";
 import { Chip, StatusDot, ThemeToggle, cx } from "@/components/ui";
 import { api, signOut as endSession } from "@/lib/api";
 import { PLANS_PATH, shouldRedirectToPlans, subscriptionBanner } from "@/lib/billing";
@@ -32,7 +33,11 @@ import type { Capability, Connection, Country, Tokens, User } from "@/lib/types"
 export function AppShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const router = useRouter();
-  const [collapsed, setCollapsed] = usePersistentState("dataeffi.sidebar.collapsed", false);
+  const [collapsed, setCollapsed] = usePersistentState(
+    "masterdata.sidebar.collapsed",
+    false,
+    "dataeffi.sidebar.collapsed", // LEGACY_KEY: migrado por usePersistentState
+  );
   const [copilotOpen, setCopilotOpen] = useState(false);
   // Below the `md` breakpoint the sidebar is a drawer: hidden until the
   // hamburger opens it, closed again by a tap outside or by navigating.
@@ -144,6 +149,20 @@ export function AppShell({ children }: { children: React.ReactNode }) {
     }
   }, [subscription, pathname, router]);
 
+  // A person with no company yet (just registered) has nothing to look at but
+  // the screen that creates one. Plans and the account stay reachable.
+  const noCompany = Boolean(user) && (user?.workspaces?.length ?? 0) === 0 && !user?.tenant_id;
+  useEffect(() => {
+    if (
+      noCompany &&
+      !pathname.startsWith("/empresas") &&
+      !pathname.startsWith(PLANS_PATH) &&
+      !pathname.startsWith("/cuenta")
+    ) {
+      router.replace("/empresas/nueva");
+    }
+  }, [noCompany, pathname, router]);
+
   return (
     <div className="flex h-screen w-full overflow-hidden bg-page text-ink">
       {drawerOpen && (
@@ -164,13 +183,8 @@ export function AppShell({ children }: { children: React.ReactNode }) {
         )}
         aria-label="Menú principal"
       >
-        <div className="flex items-center gap-2.5 border-b border-line-subtle px-[18px] py-5">
-          <div className="flex size-7 shrink-0 items-center justify-center rounded-control bg-accent text-md font-extrabold text-on-accent">
-            DE
-          </div>
-          {!rail && (
-            <span className="text-lg font-bold tracking-tight">Data Effi</span>
-          )}
+        <div className="border-b border-line-subtle px-4 py-5">
+          <BrandMark wordmark={!rail} />
         </div>
 
         {/* Which company you are standing in. Above everything else in the menu
@@ -189,7 +203,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
               active={pathname.startsWith("/organizacion")}
               collapsed={rail}
               icon={<StackIcon />}
-              label="Organización"
+              label="Consolidado"
             />
           )}
 
@@ -200,7 +214,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
               collapsed={rail}
               icon={<GridIcon />}
               label={
-                (user?.workspaces?.length ?? 0) > 1 ? "Esta sociedad" : "Global"
+                (user?.workspaces?.length ?? 0) > 1 ? "Esta empresa" : "Resumen"
               }
             />
           )}
@@ -252,6 +266,15 @@ export function AppShell({ children }: { children: React.ReactNode }) {
               collapsed={rail}
               icon={<PeopleIcon />}
               label="Usuarios"
+            />
+          )}
+          {user && (
+            <NavItem
+              href="/empresas"
+              active={pathname.startsWith("/empresas")}
+              collapsed={rail}
+              icon={<StackIcon />}
+              label="Mis empresas"
             />
           )}
           {(can("manage") || user?.is_org_admin) && (
@@ -460,7 +483,7 @@ function WorkspacePicker({ user, collapsed }: { user: User; collapsed: boolean }
         <button
           type="button"
           onClick={() => setOpen(!open)}
-          title={current?.name ?? "Cambiar de sociedad"}
+          title={current?.name ?? "Cambiar de empresa"}
           className="flex size-9 items-center justify-center rounded-control border border-line-strong bg-surface text-sm font-bold text-ink-2"
         >
           {(current?.name ?? "?").slice(0, 2).toUpperCase()}
@@ -479,10 +502,10 @@ function WorkspacePicker({ user, collapsed }: { user: User; collapsed: boolean }
       >
         <span className="min-w-0">
           <span className="block text-xs font-bold uppercase tracking-[0.08em] text-ink-faint">
-            Sociedad
+            Empresa
           </span>
           <span className="block truncate text-base font-semibold text-ink-2">
-            {current?.name ?? "Sin sociedad"}
+            {current?.name ?? "Sin empresa"}
           </span>
         </span>
         <span aria-hidden className="text-xs text-ink-dim">

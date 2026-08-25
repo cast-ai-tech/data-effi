@@ -78,7 +78,7 @@ export default function PlanesPage() {
 
           {!data.can_choose && (
             <p className="text-sm text-ink-dim">
-              Solo el administrador de la organización puede elegir el plan.
+              Solo el administrador de la cuenta puede elegir el plan.
             </p>
           )}
         </div>

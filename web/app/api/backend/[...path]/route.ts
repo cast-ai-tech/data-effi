@@ -32,8 +32,15 @@ const API_URL = (
   "http://localhost:8000"
 ).replace(/\/$/, "");
 
-const ACCESS_COOKIE = "dataeffi_access";
-const REFRESH_COOKIE = "dataeffi_refresh";
+// Keep in sync with middleware.ts.
+const ACCESS_COOKIE = "masterdata_access";
+const REFRESH_COOKIE = "masterdata_refresh";
+// The pre-rebrand names are still read for one release so nobody is logged
+// out by the rename: the first silent refresh rewrites the session under the
+// new names and expires the old ones.
+// TODO(rebrand): retirar LEGACY_* después de 2026-09-15 (REFRESH_TTL de 14 días).
+const LEGACY_ACCESS_COOKIE = "dataeffi_access";
+const LEGACY_REFRESH_COOKIE = "dataeffi_refresh";
 const REFRESH_TTL_SECONDS = 60 * 60 * 24 * 14;
 // An upload credential must outlive the upload it is handed out for.
 const UPLOAD_CREDENTIAL_MIN_TTL_SECONDS = 120;
@@ -84,11 +91,18 @@ function setSessionCookies(response: NextResponse, request: NextRequest, tokens:
       cookieOptions(request, REFRESH_TTL_SECONDS),
     );
   }
+  // Once the session is written under the new names, the old ones go.
+  if (request.cookies.has(LEGACY_ACCESS_COOKIE) || request.cookies.has(LEGACY_REFRESH_COOKIE)) {
+    response.cookies.set(LEGACY_ACCESS_COOKIE, "", cookieOptions(request, 0));
+    response.cookies.set(LEGACY_REFRESH_COOKIE, "", cookieOptions(request, 0));
+  }
 }
 
 function clearSessionCookies(response: NextResponse, request: NextRequest): void {
   response.cookies.set(ACCESS_COOKIE, "", cookieOptions(request, 0));
   response.cookies.set(REFRESH_COOKIE, "", cookieOptions(request, 0));
+  response.cookies.set(LEGACY_ACCESS_COOKIE, "", cookieOptions(request, 0));
+  response.cookies.set(LEGACY_REFRESH_COOKIE, "", cookieOptions(request, 0));
 }
 
 function stripTokens(body: TokenBody): Record<string, unknown> {
@@ -174,8 +188,14 @@ async function passThrough(upstream: Response): Promise<NextResponse> {
 async function handle(request: NextRequest, context: { params: Promise<{ path: string[] }> }) {
   const { path: segments } = await context.params;
   const path = segments.join("/");
-  const accessToken = request.cookies.get(ACCESS_COOKIE)?.value ?? null;
-  const refreshToken = request.cookies.get(REFRESH_COOKIE)?.value ?? null;
+  const accessToken =
+    request.cookies.get(ACCESS_COOKIE)?.value ??
+    request.cookies.get(LEGACY_ACCESS_COOKIE)?.value ??
+    null;
+  const refreshToken =
+    request.cookies.get(REFRESH_COOKIE)?.value ??
+    request.cookies.get(LEGACY_REFRESH_COOKIE)?.value ??
+    null;
 
   // Logout: the refresh token lives only here, so the page cannot send it.
   if (path === "auth/logout") {

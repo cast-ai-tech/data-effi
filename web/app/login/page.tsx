@@ -3,6 +3,7 @@
 import { useRouter, useSearchParams } from "next/navigation";
 import { Suspense, useState } from "react";
 
+import { BrandMark } from "@/components/BrandMark";
 import { Button } from "@/components/ui";
 import { ApiError, api } from "@/lib/api";
 import { safeNextPath } from "@/lib/safe-next";
@@ -20,7 +21,6 @@ function LoginForm() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [fullName, setFullName] = useState("");
-  const [tenantName, setTenantName] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [pending, setPending] = useState(false);
 
@@ -36,7 +36,7 @@ function LoginForm() {
       } else if (mode === "register") {
         await api.post<Tokens>(
           "/auth/register",
-          { email, password, full_name: fullName, tenant_name: tenantName },
+          { email, password, full_name: fullName },
           { auth: false },
         );
       } else {
@@ -47,7 +47,7 @@ function LoginForm() {
         );
       }
 
-      router.push(mode === "register" ? "/onboarding" : next);
+      router.push(mode === "register" ? "/empresas/nueva" : next);
       router.refresh();
     } catch (err) {
       setError(
@@ -63,12 +63,12 @@ function LoginForm() {
       ? "Entra a tu operación"
       : mode === "register"
         ? "Inicia gratis 1 mes"
-        : "Te invitaron a Data Effi";
+        : "Te invitaron a Master Data";
   const lead =
     mode === "login"
       ? "Analítica de contraentrega para tus países, tus transportadoras y tus productos."
       : mode === "register"
-        ? "Crea tu cuenta y tu empresa. Un mes gratis para 1 empresa, sin tarjeta. Después eliges un plan."
+        ? "Crea tu cuenta y, en el siguiente paso, tu empresa. Un mes gratis, sin tarjeta."
         : "Escribe tu nombre y elige una contraseña. El correo ya viene en la invitación.";
   const submitLabel =
     mode === "login" ? "Entrar" : mode === "register" ? "Iniciar gratis" : "Crear mi cuenta";
@@ -76,12 +76,7 @@ function LoginForm() {
   return (
     <main className="flex min-h-screen items-center justify-center bg-page px-4">
       <div className="w-full max-w-[380px]">
-        <div className="mb-7 flex items-center gap-2.5">
-          <div className="flex size-8 items-center justify-center rounded-control bg-accent text-lg font-extrabold text-on-accent">
-            DE
-          </div>
-          <span className="text-xl font-bold tracking-tight">Data Effi</span>
-        </div>
+        <BrandMark size="md" className="mb-7" />
 
         <h1 className="text-xl font-bold leading-tight">{title}</h1>
         <p className="mt-1.5 text-base leading-relaxed text-ink-dim">{lead}</p>
@@ -94,15 +89,6 @@ function LoginForm() {
               onChange={setFullName}
               autoComplete="name"
               minLength={2}
-              required
-            />
-          )}
-          {mode === "register" && (
-            <Field
-              label="Nombre de tu empresa"
-              value={tenantName}
-              onChange={setTenantName}
-              placeholder="Mi empresa"
               required
             />
           )}

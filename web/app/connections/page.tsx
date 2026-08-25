@@ -153,7 +153,7 @@ interface WebhookReveal {
 /**
  * Something destructive, waiting for a deliberate yes.
  *
- * Both of these reach outside Data Effi - deleting a connection stops a feed,
+ * Both of these reach outside Master Data - deleting a connection stops a feed,
  * revoking a webhook breaks whatever automation is posting to it - so neither
  * runs until the operator confirms in the dialog.
  */
@@ -285,7 +285,7 @@ export default function ConnectionsPage() {
         <div className="min-w-0">
           <h1 className="text-2xl font-bold tracking-tight">Conexiones</h1>
           <p className="mt-1 max-w-2xl text-sm leading-relaxed text-ink-dim">
-            De dónde salen los números. Data Effi guarda el <b>nombre</b> de la variable
+            De dónde salen los números. Master Data guarda el <b>nombre</b> de la variable
             donde vive cada credencial, nunca la credencial.
           </p>
         </div>
@@ -319,7 +319,7 @@ export default function ConnectionsPage() {
       {!loading && !loadError && sections.length === 0 && (
         <EmptyState
           title="El catálogo llegó vacío"
-          instruction="Ninguna integración está publicada para tu espacio. Vuelve a cargar; si sigue vacío, avísale a quien administra Data Effi."
+          instruction="Ninguna integración está publicada para tu espacio. Vuelve a cargar; si sigue vacío, avísale a quien administra Master Data."
           action={
             <Button size="sm" variant="ghost" onClick={reload}>
               Reintentar
@@ -420,7 +420,7 @@ export default function ConnectionsPage() {
         >
           {confirming.kind === "delete" ? (
             <p>
-              Data Effi dejará de leer esta fuente. Los datos que ya cargó se quedan
+              Master Data dejará de leer esta fuente. Los datos que ya cargó se quedan
               donde están: los tableros siguen mostrando lo que llegó hasta hoy, pero
               no entrará nada nuevo.
             </p>
@@ -921,7 +921,7 @@ function ConnectPanel({
                 className={`${FIELD_CLASS} font-mono`}
               />
               <p className="mt-1 text-xs leading-relaxed text-ink-dim">
-                Escribe el <b>nombre</b> de la variable, no la clave. Data Effi nunca
+                Escribe el <b>nombre</b> de la variable, no la clave. Master Data nunca
                 guarda credenciales: cada vez que sincroniza las lee del servidor usando
                 este nombre. Si lo dejas vacío lo puedes llenar después.
               </p>
@@ -950,7 +950,7 @@ function ConnectPanel({
               <p className="mt-1 text-xs leading-relaxed text-ink-dim">
                 Si eliges uno, tu automatización puede mandar solo las filas. Si lo dejas
                 en «lo dirá cada envío», cada llamada tiene que decir de qué tipo es o
-                Data Effi la rechaza.
+                Master Data la rechaza.
               </p>
             </label>
           )}
@@ -958,7 +958,7 @@ function ConnectPanel({
           {isWebhook &&
             (isOwner ? (
               <div className="rounded-control border border-line bg-sunken px-3 py-2.5 text-sm leading-relaxed text-ink-2">
-                Al crearla, Data Effi te dará una URL con un token adentro. Se muestra{" "}
+                Al crearla, Master Data te dará una URL con un token adentro. Se muestra{" "}
                 <b>una sola vez</b> y no hay forma de volver a verla: ten a mano dónde
                 pegarla (n8n, Make o Zapier) antes de continuar.
               </div>
@@ -978,7 +978,7 @@ function ConnectPanel({
                 className="mt-0.5"
               />
               <span className="text-sm leading-relaxed text-warning-ink">
-                Entiendo que esta es una conexión <b>Tier 3</b>: Data Effi entrará con mi
+                Entiendo que esta es una conexión <b>Tier 3</b>: Master Data entrará con mi
                 sesión de usuario a {platform.platform_name}. Puede ir contra los términos
                 de esa plataforma y la responsabilidad es mía. Leí{" "}
                 <code>docs/tier3-politica.md</code>.
@@ -1071,7 +1071,7 @@ function WebhookPanel({
     <SidePanel title="Webhook listo" subtitle={reveal.connectionName} onClose={onClose}>
       <div className="space-y-4">
         <p className="rounded-control border border-warning/30 bg-warning/[0.07] px-3 py-2.5 text-sm leading-relaxed text-warning-ink">
-          Esta URL se muestra <b>una sola vez</b>. Data Effi guarda únicamente su huella,
+          Esta URL se muestra <b>una sola vez</b>. Master Data guarda únicamente su huella,
           así que no existe ninguna pantalla donde volver a verla. Cópiala ahora. Si la
           pierdes tendrás que revocarla y generar otra, y eso <b>rompe</b> la
           automatización que estuviera usando la anterior.
@@ -1095,7 +1095,7 @@ function WebhookPanel({
             Ojo: esta dirección no coincide con la dirección pública configurada de Data
             Effi. Casi siempre es que las dos configuraciones no están de acuerdo.
             Pruébala antes de guardarla en tu automatización; si no responde, avísale a
-            quien instaló Data Effi.
+            quien instaló Master Data.
           </p>
         )}
 
@@ -1151,7 +1151,7 @@ function WebhookPanel({
               arreglo suelto de filas.
             </p>
             <p>
-              Data Effi responde apenas recibe, no cuando termina: el conteo de filas
+              Master Data responde apenas recibe, no cuando termina: el conteo de filas
               aparece en <b className="text-ink-2">Cargar datos</b> cuando la carga
               termina de procesarse. Es la misma cola, y el mismo control de duplicados,
               que un archivo subido a mano.

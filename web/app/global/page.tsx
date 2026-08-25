@@ -64,14 +64,14 @@ export default function GlobalPage() {
       {!loading && active.length === 0 && (
         <Card>
           <EmptyState
-            title="Empieza por activar un país"
-            instruction="El asistente te lleva paso a paso: países, conexiones y tu primer reporte."
+            title="Crea tu primera empresa"
+            instruction="Un nombre y el país donde opera. Después subes tus reportes."
             action={
               <Link
-                href="/onboarding"
+                href="/empresas/nueva"
                 className="rounded-control bg-accent px-3.5 py-2 text-sm font-semibold text-on-accent no-underline"
               >
-                Abrir asistente
+                Crear empresa
               </Link>
             }
           />

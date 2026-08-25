@@ -11,7 +11,7 @@
  * may run Effi and Dropi while Colombia runs Dropi alone.
  *
  * THE CHECK. When a file is dropped it is first shown to `/ingest/detect`,
- * which recognises the report shapes Data Effi knows by name. If the file is
+ * which recognises the report shapes Master Data knows by name. If the file is
  * Effi's export and Dropi is selected, the upload is blocked here with both
  * names on screen - and the API refuses it too (`platform_mismatch`), so the
  * rule holds even for a caller that skips this page.

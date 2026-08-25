@@ -36,14 +36,14 @@ const ROLE_LABEL: Record<string, string> = {
 };
 
 const ORG_ROLE_LABEL: Record<string, string> = {
-  admin: "Administrador de la organización",
-  analyst: "Analista de la organización",
-  viewer: "Lectura de la organización",
+  admin: "Administrador de la cuenta",
+  analyst: "Analista de todas las empresas",
+  viewer: "Lectura de todas las empresas",
 };
 
 const ORG_ROLE_DETAIL: Record<string, string> = {
-  admin: "Crea sociedades y reparte accesos en todo el grupo.",
-  analyst: "Ve el consolidado de todas las sociedades del grupo.",
+  admin: "Crea empresas y reparte accesos en todas ellas.",
+  analyst: "Ve el consolidado de todas las empresas.",
   viewer: "Ve el consolidado del grupo, sin tocar nada.",
 };
 
@@ -140,7 +140,7 @@ function ProfileCard({ user, onSaved }: { user: User; onSaved: () => void }) {
 
         <Field
           label="Correo"
-          hint="Para cambiarlo, pídeselo a un administrador: otras sociedades ya le dieron acceso a este correo."
+          hint="Para cambiarlo, pídeselo a un administrador: otras empresas ya le dieron acceso a este correo."
         >
           <input value={user.email} disabled className={`${INPUT} opacity-60`} />
         </Field>
@@ -173,7 +173,7 @@ function AccessCard({ user }: { user: User }) {
       {orgRole && (
         <div className="mb-3 rounded-lg border border-line-subtle p-3">
           <p className="text-sm font-semibold text-ink-2">
-            {user.org_name ?? "Tu organización"}
+            {user.org_name ?? "Tu cuenta"}
           </p>
           <p className="mt-0.5 text-xs text-ink-dim">
             {ORG_ROLE_LABEL[orgRole] ?? orgRole} — {ORG_ROLE_DETAIL[orgRole] ?? ""}
@@ -183,7 +183,7 @@ function AccessCard({ user }: { user: User }) {
 
       {user.workspaces.length === 0 && (
         <EmptyState
-          title="Todavía no perteneces a ninguna sociedad"
+          title="Todavía no tienes ninguna empresa"
           instruction="Pídele a un administrador que te dé acceso a una."
         />
       )}
@@ -351,7 +351,7 @@ function SessionsCard() {
             >
               <div className="min-w-0">
                 <p className="truncate text-sm text-ink-2">
-                  {session.tenant_name ?? "Sin sociedad"}
+                  {session.tenant_name ?? "Sin empresa"}
                 </p>
                 <p className="text-xs text-ink-dim">
                   Iniciada {formatRelative(session.created_at)}
