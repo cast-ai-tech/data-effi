@@ -29,8 +29,18 @@ import { useParams } from "next/navigation";
 import { useMemo } from "react";
 
 import { AppShell } from "@/components/AppShell";
-import { BasisBand, BasisCaption, useDateBasisNote } from "@/components/DateBasisNote";
-import { Card, EmptyState, ErrorState, SkeletonRows, cx } from "@/components/ui";
+import {
+  BasisBand,
+  BasisCaption,
+  useDateBasisNote,
+} from "@/components/DateBasisNote";
+import {
+  Card,
+  EmptyState,
+  ErrorState,
+  SkeletonRows,
+  cx,
+} from "@/components/ui";
 import {
   DailyStatusMatrix,
   daysBetween,
@@ -39,7 +49,13 @@ import {
 } from "@/components/widgets/daily_status_table";
 import { combine } from "@/components/widgets/platform_split";
 import { formatRangeLabel, useDateRange, useRangedApi } from "@/lib/date-range";
-import { countryFlag, formatDate, formatNumber, formatPercent, type FormatCountry } from "@/lib/format";
+import {
+  countryFlag,
+  formatDate,
+  formatNumber,
+  formatPercent,
+  type FormatCountry,
+} from "@/lib/format";
 import { useApi } from "@/lib/hooks";
 import type { Country, DailyStatusRow, PlatformSummaryRow } from "@/lib/types";
 
@@ -67,8 +83,16 @@ interface PlatformPalette {
 }
 
 const PALETTES: Record<string, PlatformPalette> = {
-  effi: { band: "bg-[#1d5fbf]", text: "text-[#1d5fbf]", soft: "bg-[#1d5fbf]/10" },
-  dropi: { band: "bg-[#17a398]", text: "text-[#17a398]", soft: "bg-[#17a398]/10" },
+  effi: {
+    band: "bg-[#1d5fbf]",
+    text: "text-[#1d5fbf]",
+    soft: "bg-[#1d5fbf]/10",
+  },
+  dropi: {
+    band: "bg-[#17a398]",
+    text: "text-[#17a398]",
+    soft: "bg-[#17a398]/10",
+  },
 };
 
 const DEFAULT_PALETTE: PlatformPalette = {
@@ -108,7 +132,8 @@ export default function DailyReportPage() {
   // Fill the calendar only when both ends are known: "todo el histórico" has
   // no first day to start counting from.
   const fillDays = useMemo(
-    () => (range.from && range.to ? daysBetween(range.from, range.to) : undefined),
+    () =>
+      range.from && range.to ? daysBetween(range.from, range.to) : undefined,
     [range.from, range.to],
   );
 
@@ -182,11 +207,17 @@ export default function DailyReportPage() {
 
       {!loading && !error && country && blocks.length > 0 && (
         <div className="mt-4 space-y-4">
-          {basisNote?.kind === "band" && <BasisBand note={basisNote} standalone />}
+          {basisNote?.kind === "band" && (
+            <BasisBand note={basisNote} standalone />
+          )}
 
           {blocks.map((block) => (
             <section key={block.code} className="report-block">
-              <PlatformReport block={block} country={country} fillDays={fillDays} />
+              <PlatformReport
+                block={block}
+                country={country}
+                fillDays={fillDays}
+              />
             </section>
           ))}
 
@@ -200,19 +231,22 @@ export default function DailyReportPage() {
 
           <footer className="flex flex-wrap items-center justify-between gap-2 rounded-[10px] bg-sunken px-4 py-2 text-[11px] text-ink-dim">
             <span>
-              <span aria-hidden>ⓘ</span> Informe consolidado de guías y estados por plataforma
+              <span aria-hidden>ⓘ</span> Informe consolidado de guías y estados
+              por plataforma
             </span>
             <span>
-              Período: {periodLabel} · generado el {formatDate(toIso(printedOn), country)}
+              Período: {periodLabel} · generado el{" "}
+              {formatDate(toIso(printedOn), country)}
             </span>
           </footer>
 
           <p className="text-[11px] text-ink-faint">
-            «Porcentaje devoluciones» divide las devoluciones por todas las guías del día,
-            como el informe manual. Un «~» marca días con menos de 10 guías cerradas:
-            estimado, no medición. Los días sin guías aparecen en cero en vez de
-            desaparecer. Una guía cuenta como devolución cuando va de regreso, ya volvió o
-            fue cancelada; como indemnización cuando la transportadora la perdió.
+            «Porcentaje devoluciones» divide las devoluciones por todas las
+            guías del día, como el informe manual. Un «~» marca días con menos
+            de 10 guías cerradas: estimado, no medición. Los días sin guías
+            aparecen en cero en vez de desaparecer. Una guía cuenta como
+            devolución cuando va de regreso, ya volvió o fue cancelada; como
+            indemnización cuando la transportadora la perdió.
           </p>
         </div>
       )}
@@ -293,7 +327,9 @@ function PlatformReport({
           >
             📦
           </span>
-          <h2 className="text-[20px] font-extrabold uppercase tracking-[0.06em]">{block.name}</h2>
+          <h2 className="text-[20px] font-extrabold uppercase tracking-[0.06em]">
+            {block.name}
+          </h2>
         </div>
         <div className="flex flex-col gap-2.5 p-3">
           <span
@@ -305,27 +341,29 @@ function PlatformReport({
           >
             {block.name}
           </span>
-          <Figure
-            icon="📦"
-            iconClass={palette.band}
-            label="Guías totales"
-            value={formatNumber(totals.shipments, country, 0)}
-          />
-          <Figure
-            icon="↺"
-            iconClass="bg-warning"
-            label="Devoluciones totales"
-            value={formatNumber(totals.devolucion, country, 0)}
-            valueClass="text-negative"
-          />
-          <Figure
-            icon="%"
-            iconClass="bg-positive"
-            label="% devolución"
-            value={formatPercent(totals.pctDevolucionTotal, 0)}
-            valueClass="text-negative"
-            hint={`Sobre cerradas: ${formatPercent(totals.pctDevolucionCerradas, 0)}`}
-          />
+          <dl className="flex flex-col gap-2.5">
+            <Figure
+              icon="📦"
+              iconClass={palette.band}
+              label="Guías totales"
+              value={formatNumber(totals.shipments, country, 0)}
+            />
+            <Figure
+              icon="↺"
+              iconClass="bg-warning"
+              label="Devoluciones totales"
+              value={formatNumber(totals.devolucion, country, 0)}
+              valueClass="text-negative"
+            />
+            <Figure
+              icon="%"
+              iconClass="bg-positive"
+              label="% devolución"
+              value={formatPercent(totals.pctDevolucionTotal, 0)}
+              valueClass="text-negative"
+              hint={`Sobre cerradas: ${formatPercent(totals.pctDevolucionCerradas, 0)}`}
+            />
+          </dl>
         </div>
       </aside>
 
@@ -338,7 +376,12 @@ function PlatformReport({
         >
           Resumen diario por estados – {block.name}
         </h3>
-        <DailyStatusMatrix block={block} country={country} fillDays={fillDays} accentClass={palette.band} />
+        <DailyStatusMatrix
+          block={block}
+          country={country}
+          fillDays={fillDays}
+          accentClass={palette.band}
+        />
       </div>
     </div>
   );
@@ -371,8 +414,14 @@ function Figure({
         {icon}
       </span>
       <div className="min-w-0">
-        <dt className="text-[10px] font-bold uppercase tracking-[0.06em] text-ink-muted">{label}</dt>
-        <dd className={cx("text-[22px] font-extrabold leading-tight", valueClass)}>{value}</dd>
+        <dt className="text-[10px] font-bold uppercase tracking-[0.06em] text-ink-muted">
+          {label}
+        </dt>
+        <dd
+          className={cx("text-[22px] font-extrabold leading-tight", valueClass)}
+        >
+          {value}
+        </dd>
         {hint && <dd className="text-[10.5px] text-ink-dim">{hint}</dd>}
       </div>
     </div>
@@ -409,8 +458,19 @@ function ConsolidatedBand({
         </div>
 
         <dl className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-          <BandFigure icon="📦" iconClass="bg-[#1d5fbf]" label="Guías totales combinadas" value={formatNumber(total.shipments, country, 0)} />
-          <BandFigure icon="↺" iconClass="bg-warning" label="Devoluciones totales combinadas" value={formatNumber(total.devolucion, country, 0)} valueClass="text-[#ff8a80]" />
+          <BandFigure
+            icon="📦"
+            iconClass="bg-[#1d5fbf]"
+            label="Guías totales combinadas"
+            value={formatNumber(total.shipments, country, 0)}
+          />
+          <BandFigure
+            icon="↺"
+            iconClass="bg-warning"
+            label="Devoluciones totales combinadas"
+            value={formatNumber(total.devolucion, country, 0)}
+            valueClass="text-[#ff8a80]"
+          />
           <BandFigure
             icon="%"
             iconClass="bg-positive"
@@ -463,8 +523,14 @@ function BandFigure({
       >
         {icon}
       </span>
-      <dt className="mt-1.5 text-[10px] font-bold uppercase tracking-[0.06em] text-white/75">{label}</dt>
-      <dd className={cx("text-[26px] font-extrabold leading-tight", valueClass)}>{value}</dd>
+      <dt className="mt-1.5 text-[10px] font-bold uppercase tracking-[0.06em] text-white/75">
+        {label}
+      </dt>
+      <dd
+        className={cx("text-[26px] font-extrabold leading-tight", valueClass)}
+      >
+        {value}
+      </dd>
       {hint && <dd className="text-[10.5px] text-white/65">{hint}</dd>}
     </div>
   );

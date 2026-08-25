@@ -48,10 +48,26 @@ import {
 import type { Country, InviteResult, Member, Role, User } from "@/lib/types";
 
 const ROLES: { value: Role; label: string; detail: string }[] = [
-  { value: "owner", label: "Propietario", detail: "Ve todo y administra usuarios" },
-  { value: "analyst", label: "Analista", detail: "Ve todo, carga datos y ajusta configuración" },
-  { value: "viewer", label: "Solo lectura", detail: "Ve los resultados, no toca nada" },
-  { value: "uploader", label: "Solo carga", detail: "Sube archivos y NO ve los resultados" },
+  {
+    value: "owner",
+    label: "Propietario",
+    detail: "Ve todo y administra usuarios",
+  },
+  {
+    value: "analyst",
+    label: "Analista",
+    detail: "Ve todo, carga datos y ajusta configuración",
+  },
+  {
+    value: "viewer",
+    label: "Solo lectura",
+    detail: "Ve los resultados, no toca nada",
+  },
+  {
+    value: "uploader",
+    label: "Solo carga",
+    detail: "Sube archivos y NO ve los resultados",
+  },
 ];
 
 export default function UsuariosPage() {
@@ -75,8 +91,8 @@ export default function UsuariosPage() {
       <header className="mb-5">
         <h1 className="text-[22px] font-bold tracking-tight">Usuarios</h1>
         <p className="mt-1 text-[12px] text-ink-dim">
-          Quién entra a <strong>{user?.tenant_name ?? "esta sociedad"}</strong>, qué
-          puede hacer y qué países ve. Cada sociedad tiene su propia lista.
+          Quién entra a <strong>{user?.tenant_name ?? "esta sociedad"}</strong>,
+          qué puede hacer y qué países ve. Cada sociedad tiene su propia lista.
         </p>
       </header>
 
@@ -91,10 +107,15 @@ export default function UsuariosPage() {
 
       {canAdminister && (
         <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_360px]">
-          <Card title="Personas con acceso" subtitle={`${members?.length ?? 0} en total`}>
+          <Card
+            title="Personas con acceso"
+            subtitle={`${members?.length ?? 0} en total`}
+          >
             {loading && <SkeletonRows rows={3} />}
             {!loading && (members?.length ?? 0) === 0 && (
-              <p className="text-[12px] text-ink-dim">Todavía no has invitado a nadie.</p>
+              <p className="text-[12px] text-ink-dim">
+                Todavía no has invitado a nadie.
+              </p>
             )}
             {!loading && members && members.length > 0 && (
               <ul className="flex flex-col">
@@ -133,7 +154,9 @@ function InviteForm({
 }) {
   const [email, setEmail] = useState("");
   const [role, setRole] = useState<Role>("viewer");
-  const [businessModel, setBusinessModel] = useState<BusinessModel | null>(null);
+  const [businessModel, setBusinessModel] = useState<BusinessModel | null>(
+    null,
+  );
   const [scope, setScope] = useState<string[]>([]);
   const [share, setShare] = useState("");
   const [busy, setBusy] = useState(false);
@@ -153,7 +176,11 @@ function InviteForm({
     try {
       const body: Record<string, unknown> = { email: email.trim(), role };
       if (businessModel) body.business_model = businessModel;
-      if (scopeApplies && scope.length > 0 && !codes.every((c) => scope.includes(c))) {
+      if (
+        scopeApplies &&
+        scope.length > 0 &&
+        !codes.every((c) => scope.includes(c))
+      ) {
         body.country_scope = scope;
       }
       if (scopeApplies && share.trim()) body.share_pct = Number(share);
@@ -164,17 +191,23 @@ function InviteForm({
       setBusinessModel(null);
       onInvited();
     } catch (err) {
-      setError(err instanceof ApiError ? err.message : "No se pudo crear el acceso");
+      setError(
+        err instanceof ApiError ? err.message : "No se pudo crear el acceso",
+      );
     } finally {
       setBusy(false);
     }
   }
 
   return (
-    <Card title="Dar acceso a alguien" subtitle="Se agrega solo a esta sociedad">
+    <Card
+      title="Dar acceso a alguien"
+      subtitle="Se agrega solo a esta sociedad"
+    >
       <form onSubmit={submit} className="flex flex-col gap-3.5">
-        <Field label="Correo">
+        <Field label="Correo" htmlFor="invite-email">
           <input
+            id="invite-email"
             type="email"
             required
             value={email}
@@ -205,8 +238,12 @@ function InviteForm({
                   className="mt-0.5"
                 />
                 <span className="min-w-0">
-                  <span className="block text-[12.5px] font-semibold">{option.label}</span>
-                  <span className="block text-[11px] text-ink-dim">{option.detail}</span>
+                  <span className="block text-[12.5px] font-semibold">
+                    {option.label}
+                  </span>
+                  <span className="block text-[11px] text-ink-dim">
+                    {option.detail}
+                  </span>
                 </span>
               </label>
             ))}
@@ -217,7 +254,11 @@ function InviteForm({
           label="Modelo de negocio"
           hint="De qué lado está esta persona. Opcional; no cambia lo que ve."
         >
-          <BusinessModelPicker value={businessModel} onChange={setBusinessModel} disabled={busy} />
+          <BusinessModelPicker
+            value={businessModel}
+            onChange={setBusinessModel}
+            disabled={busy}
+          />
         </Field>
 
         {scopeApplies && countries.length > 1 && (
@@ -232,8 +273,13 @@ function InviteForm({
         )}
 
         {scopeApplies && (
-          <Field label="Participación %" hint="Opcional. Solo para mostrar 'su parte'">
+          <Field
+            label="Participación %"
+            hint="Opcional. Solo para mostrar 'su parte'"
+            htmlFor="invite-share"
+          >
             <input
+              id="invite-share"
               type="number"
               min="0.01"
               max="100"
@@ -272,8 +318,9 @@ function InviteOutcome({ result }: { result: InviteResult }) {
       <div className="rounded-[8px] border border-line-strong bg-page px-3 py-2.5 text-[12px]">
         <p className="font-semibold">{result.email} ya puede entrar</p>
         <p className="mt-0.5 text-ink-dim">
-          Ya tenía cuenta en otra de tus sociedades: entra con su misma contraseña y
-          elige esta sociedad en el selector de arriba a la izquierda.
+          Ya tenía cuenta en otra de tus sociedades: entra con su misma
+          contraseña y elige esta sociedad en el selector de arriba a la
+          izquierda.
         </p>
       </div>
     );
@@ -283,8 +330,8 @@ function InviteOutcome({ result }: { result: InviteResult }) {
     <div className="rounded-[8px] border border-accent/40 bg-page px-3 py-2.5 text-[12px]">
       <p className="font-semibold">Enlace de invitación para {result.email}</p>
       <p className="mt-0.5 text-ink-dim">
-        Cópialo y mándaselo. <strong>Se muestra una sola vez</strong> y vence en 7
-        días; ahí elige su propia contraseña.
+        Cópialo y mándaselo. <strong>Se muestra una sola vez</strong> y vence en
+        7 días; ahí elige su propia contraseña.
       </p>
       <code className="mt-2 block break-all rounded-[6px] bg-surface px-2 py-1.5 text-[11px]">
         {link ?? result.invitation_token}
@@ -336,7 +383,10 @@ function MemberItem({
     setBusy(true);
     setError(null);
     try {
-      await api.patch(`/org/tenants/${tenantId}/members/${member.user_id}`, body);
+      await api.patch(
+        `/org/tenants/${tenantId}/members/${member.user_id}`,
+        body,
+      );
       onChanged();
     } catch (err) {
       setError(err instanceof ApiError ? err.message : "No se pudo guardar");
@@ -356,7 +406,9 @@ function MemberItem({
       await api.delete(`/org/tenants/${tenantId}/members/${member.user_id}`);
       onChanged();
     } catch (err) {
-      setError(err instanceof ApiError ? err.message : "No se pudo quitar el acceso");
+      setError(
+        err instanceof ApiError ? err.message : "No se pudo quitar el acceso",
+      );
     } finally {
       setBusy(false);
     }
@@ -368,7 +420,9 @@ function MemberItem({
         <div className="min-w-0 flex-1">
           <p className="text-[12.5px] font-semibold">
             {member.full_name ?? member.email}
-            {isMe && <span className="ml-1.5 text-[10.5px] text-ink-dim">(tú)</span>}
+            {isMe && (
+              <span className="ml-1.5 text-[10.5px] text-ink-dim">(tú)</span>
+            )}
           </p>
           <p className="truncate text-[11px] text-ink-dim">{member.email}</p>
           <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
@@ -379,7 +433,9 @@ function MemberItem({
             <Chip tone={member.business_model ? "positive" : "neutral"}>
               {businessModelLabel(member.business_model)}
             </Chip>
-            {member.share_pct != null && <Chip tone="neutral">{member.share_pct}%</Chip>}
+            {member.share_pct != null && (
+              <Chip tone="neutral">{member.share_pct}%</Chip>
+            )}
             <span className="text-[10.5px] text-ink-faint">
               {member.last_login_at
                 ? `entró ${formatRelative(member.last_login_at)}`
@@ -520,7 +576,13 @@ function MemberItem({
   );
 }
 
-function EditRow({ label, children }: { label: string; children: React.ReactNode }) {
+function EditRow({
+  label,
+  children,
+}: {
+  label: string;
+  children: React.ReactNode;
+}) {
   return (
     <div className="flex flex-col gap-1.5 sm:flex-row sm:items-start sm:gap-3">
       <span className="w-[120px] shrink-0 pt-1.5 text-[11px] font-semibold uppercase tracking-[0.06em] text-ink-faint">
@@ -568,20 +630,33 @@ function SharePctEditor({
   );
 }
 
+/**
+ * A labelled block. With `htmlFor` the caption is a real <label> for that
+ * input; without it (the flag and model pickers are groups of buttons, not
+ * one control) the group carries its own aria-label.
+ */
 function Field({
   label,
   hint,
+  htmlFor,
   children,
 }: {
   label: string;
   hint?: string;
+  htmlFor?: string;
   children: React.ReactNode;
 }) {
+  const captionClass =
+    "text-[11px] font-semibold uppercase tracking-[0.06em] text-ink-faint";
   return (
     <div className="flex flex-col gap-1.5">
-      <span className="text-[11px] font-semibold uppercase tracking-[0.06em] text-ink-faint">
-        {label}
-      </span>
+      {htmlFor ? (
+        <label htmlFor={htmlFor} className={captionClass}>
+          {label}
+        </label>
+      ) : (
+        <span className={captionClass}>{label}</span>
+      )}
       {hint && <span className="-mt-1 text-[11px] text-ink-dim">{hint}</span>}
       {children}
     </div>
