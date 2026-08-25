@@ -2,8 +2,11 @@ import { cleanup, render, screen, within } from "@testing-library/react";
 import { afterEach, describe, expect, it } from "vitest";
 
 import {
+  DailyStatusMatrix,
   DailyStatusTable,
   groupByPlatform,
+  matrixColumns,
+  shortDayLabel,
   sumBlock,
 } from "@/components/widgets/daily_status_table";
 import { STATUS_GROUP_LABELS } from "@/lib/status";
@@ -51,6 +54,9 @@ function row(overrides: Partial<DailyStatusRow>): DailyStatusRow {
   const merged = { ...base, ...overrides };
   merged.shipments =
     merged.entregada + merged.devolucion + merged.en_transito + merged.novedad + merged.indemnizacion;
+  if (overrides.pct_devolucion_total === undefined && merged.shipments > 0) {
+    merged.pct_devolucion_total = (merged.devolucion / merged.shipments) * 100;
+  }
   return merged;
 }
 
@@ -115,5 +121,67 @@ describe("DailyStatusTable", () => {
       <DailyStatusTable block={block} country={COUNTRY} fillDays={["2026-08-01", "2026-08-02", "2026-08-03"]} />,
     );
     expect(screen.getByText("sin guías")).toBeInTheDocument();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// The matrix the printable report uses: states down, days across
+// ---------------------------------------------------------------------------
+
+describe("shortDayLabel", () => {
+  it("heads a column the way the sheet does", () => {
+    expect(shortDayLabel("2026-08-01")).toBe("1-ago");
+    expect(shortDayLabel("2026-12-25")).toBe("25-dic");
+    expect(shortDayLabel("no-es-fecha")).toBe("no-es-fecha");
+  });
+});
+
+describe("matrixColumns", () => {
+  it("uses the block's own days when no calendar is given", () => {
+    const [block] = groupByPlatform(ROWS);
+    expect(matrixColumns(block).map((c) => c.day)).toEqual(["2026-08-01", "2026-08-03"]);
+  });
+
+  it("fills a calendar with empty columns for the days without guides", () => {
+    const [block] = groupByPlatform(ROWS);
+    const columns = matrixColumns(block, ["2026-08-01", "2026-08-02", "2026-08-03"]);
+    expect(columns.map((c) => c.day)).toEqual(["2026-08-01", "2026-08-02", "2026-08-03"]);
+    expect(columns[1].row).toBeNull();
+  });
+});
+
+describe("DailyStatusMatrix", () => {
+  it("puts the five words down the side and the days across the top", () => {
+    const [block] = groupByPlatform(ROWS);
+    render(<DailyStatusMatrix block={block} country={COUNTRY} />);
+
+    const headers = screen.getAllByRole("columnheader").map((th) => th.textContent?.trim());
+    expect(headers).toEqual(["Estado", "1-ago", "3-ago", "Total general"]);
+
+    const rowHeaders = screen.getAllByRole("rowheader").map((th) => th.textContent?.trim());
+    expect(rowHeaders).toEqual([
+      STATUS_GROUP_LABELS.entregada,
+      STATUS_GROUP_LABELS.en_transito,
+      STATUS_GROUP_LABELS.novedad,
+      STATUS_GROUP_LABELS.devolucion,
+      STATUS_GROUP_LABELS.indemnizacion,
+      "Total general",
+      "Devoluciones",
+      "Porcentaje devoluciones",
+    ]);
+  });
+
+  it("closes with the totals, the returns and the return percentage per day", () => {
+    const [block] = groupByPlatform(ROWS);
+    render(<DailyStatusMatrix block={block} country={COUNTRY} />);
+
+    const foot = screen.getAllByRole("rowgroup")[2];
+    const [totalRow, returnsRow, pctRow] = within(foot).getAllByRole("row");
+    const cells = (row: HTMLElement) =>
+      within(row).getAllByRole("cell").map((td) => td.textContent?.trim());
+    expect(cells(totalRow)).toEqual(["41", "69", "110"]);
+    expect(cells(returnsRow)).toEqual(["15", "13", "28"]);
+    // 15/41 = 36,6% -> "37%"; 13/69 = 18,8% -> "19%"; 28/110 = 25,5% -> "25%".
+    expect(cells(pctRow).map((c) => c?.replace("~", ""))).toEqual(["37%", "19%", "25%"]);
   });
 });

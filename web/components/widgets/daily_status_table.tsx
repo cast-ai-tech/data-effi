@@ -358,6 +358,154 @@ export function BlockSummary({
   );
 }
 
+// ---------------------------------------------------------------------------
+// The matrix the operator's sheet prints: states down, days across
+// ---------------------------------------------------------------------------
+
+const MONTHS_SHORT = ["ene", "feb", "mar", "abr", "may", "jun", "jul", "ago", "sep", "oct", "nov", "dic"];
+
+/** "2026-08-01" -> "1-ago", the way the sheet heads its columns. */
+export function shortDayLabel(iso: string): string {
+  const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(iso);
+  if (!match) return iso;
+  return `${Number(match[3])}-${MONTHS_SHORT[Number(match[2]) - 1] ?? match[2]}`;
+}
+
+export interface MatrixColumn {
+  day: string;
+  row: DailyStatusRow | null;
+}
+
+/**
+ * The columns of the matrix: every day in `fillDays` when given (so a day
+ * without guides prints as zeros, as a column that is simply missing reads
+ * like a day that never happened), else the block's own days.
+ */
+export function matrixColumns(block: PlatformBlock, fillDays?: readonly string[]): MatrixColumn[] {
+  const byDay = new Map(block.rows.map((row) => [row.day, row]));
+  const days = fillDays && fillDays.length > 0 ? fillDays : block.rows.map((row) => row.day);
+  return days.map((day) => ({ day, row: byDay.get(day) ?? null }));
+}
+
+/**
+ * The daily table as the operator's hand-made sheet lays it out: one row per
+ * status group, one column per day, a "Total general" column at the right,
+ * and three closing rows - total guides, returns, return percentage. Pure:
+ * rows in, markup out; the printable report renders it.
+ */
+export function DailyStatusMatrix({
+  block,
+  country,
+  fillDays,
+  accentClass = "bg-accent",
+}: {
+  block: PlatformBlock;
+  country: FormatCountry;
+  fillDays?: readonly string[];
+  /** Header band colour: the platform's own, so Effi and Dropi read apart. */
+  accentClass?: string;
+}) {
+  const columns = useMemo(() => matrixColumns(block, fillDays), [block, fillDays]);
+  const { totals } = block;
+  const cell = "px-2 py-1.5 text-right tabular-nums text-[12px]";
+  const count = (value: number, group?: StatusGroup) =>
+    value > 0 ? (
+      <span className={group ? STATUS_GROUP_TEXT[group] : undefined}>{formatNumber(value, country, 0)}</span>
+    ) : (
+      <span className="text-ink-faint">{group ? "" : "0"}</span>
+    );
+
+  return (
+    <div className="overflow-x-auto">
+      <table className="w-full min-w-[640px] border-collapse">
+        <thead>
+          <tr className={cx("text-[10.5px] font-bold uppercase tracking-[0.05em] text-white", accentClass)}>
+            <th scope="col" className="px-2.5 py-2 text-left">
+              Estado
+            </th>
+            {columns.map((column) => (
+              <th key={column.day} scope="col" className="px-2 py-2 text-right" title={formatDate(column.day, country)}>
+                {shortDayLabel(column.day)}
+              </th>
+            ))}
+            <th scope="col" className="px-2.5 py-2 text-right">
+              Total general
+            </th>
+          </tr>
+        </thead>
+        <tbody>
+          {STATUS_GROUPS.map((group) => (
+            <tr key={group} className="border-t border-line-row">
+              <th
+                scope="row"
+                title={STATUS_GROUP_HINTS[group]}
+                className={cx("cursor-help px-2.5 py-1.5 text-left text-[12px] font-medium", STATUS_GROUP_TEXT[group])}
+              >
+                {STATUS_GROUP_LABELS[group]}
+              </th>
+              {columns.map((column) => (
+                <td key={column.day} className={cell}>
+                  {count(column.row?.[group] ?? 0, group)}
+                </td>
+              ))}
+              <td className={cx(cell, "font-semibold")}>{count(totals[group], group)}</td>
+            </tr>
+          ))}
+        </tbody>
+        <tfoot>
+          <tr className="border-t border-line-strong bg-sunken text-[12px] font-bold text-ink">
+            <th scope="row" className="px-2.5 py-1.5 text-left">
+              Total general
+            </th>
+            {columns.map((column) => (
+              <td key={column.day} className={cell}>
+                {formatNumber(column.row?.shipments ?? 0, country, 0)}
+              </td>
+            ))}
+            <td className={cell}>{formatNumber(totals.shipments, country, 0)}</td>
+          </tr>
+          <tr className="border-t border-line-row text-[12px] text-negative">
+            <th scope="row" className="px-2.5 py-1.5 text-left font-medium">
+              Devoluciones
+            </th>
+            {columns.map((column) => (
+              <td key={column.day} className={cell}>
+                {formatNumber(column.row?.devolucion ?? 0, country, 0)}
+              </td>
+            ))}
+            <td className={cx(cell, "font-semibold")}>{formatNumber(totals.devolucion, country, 0)}</td>
+          </tr>
+          <tr className="border-t border-line-row bg-negative/10 text-[12px] font-bold text-negative">
+            <th
+              scope="row"
+              className="px-2.5 py-1.5 text-left"
+              title="Devoluciones divididas por todas las guías del día, como en el informe manual. Un ~ marca días con menos de 10 guías cerradas."
+            >
+              Porcentaje devoluciones
+            </th>
+            {columns.map((column) => (
+              <td key={column.day} className={cell}>
+                {column.row ? (
+                  <Fragment>
+                    {formatPercent(column.row.pct_devolucion_total, 0)}
+                    {column.row.sample_quality === "muestra_corta" && <ShortSampleMark />}
+                  </Fragment>
+                ) : (
+                  "—"
+                )}
+              </td>
+            ))}
+            <td className={cell}>
+              {formatPercent(totals.pctDevolucionTotal, 0)}
+              {totals.cerradas < 10 && <ShortSampleMark />}
+            </td>
+          </tr>
+        </tfoot>
+      </table>
+    </div>
+  );
+}
+
 const TITLE = "Resumen diario por estados";
 const SUBTITLE = "Cada día con sus guías por estado, un bloque por plataforma";
 
