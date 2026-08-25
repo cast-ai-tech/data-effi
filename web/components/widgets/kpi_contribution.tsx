@@ -134,7 +134,7 @@ export default function KpiContribution({ countryCode, country }: WidgetProps) {
           : null,
         deltaSuffix: "%",
         invertDelta: false,
-        figureClass: contribution >= 0 ? "text-positive" : "text-negative",
+        figureClass: contribution >= 0 ? "text-positive-ink" : "text-negative-ink",
         stroke:
           contribution >= 0 ? "var(--color-positive)" : "var(--color-negative)",
         points: trailing(rows, (row) => row.contribution ?? 0),
@@ -228,12 +228,12 @@ export default function KpiContribution({ countryCode, country }: WidgetProps) {
     <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
       {kpis.map((kpi) => (
         <Card key={kpi.key} bodyClassName="p-4">
-          <p className="text-[10.5px] font-bold uppercase tracking-[0.08em] text-ink-faint">
+          <p className="text-xs font-bold uppercase tracking-[0.08em] text-ink-faint">
             {kpi.label}
           </p>
 
           <p
-            className={`mt-1.5 text-[30px] font-bold leading-none ${kpi.figureClass}`}
+            className={`mt-1.5 text-4xl font-bold leading-none ${kpi.figureClass}`}
           >
             {kpi.figure}
           </p>
@@ -262,7 +262,7 @@ export default function KpiContribution({ countryCode, country }: WidgetProps) {
           </div>
 
           {kpi.note && (
-            <p className="mt-2 text-[11px] leading-snug text-warning">{kpi.note}</p>
+            <p className="mt-2 text-xs leading-snug text-warning-ink">{kpi.note}</p>
           )}
         </Card>
       ))}

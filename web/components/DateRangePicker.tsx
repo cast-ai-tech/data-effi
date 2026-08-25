@@ -153,7 +153,7 @@ export function DateRangePicker({ country }: { country?: FormatCountry }) {
         aria-haspopup="dialog"
         aria-expanded={open}
         className={cx(
-          "flex items-center gap-2 rounded-[8px] border bg-surface px-3 py-1.5 text-[12px] transition-colors",
+          "flex items-center gap-2 rounded-control border bg-surface px-3 py-1.5 text-sm transition-colors",
           open ? "border-accent text-ink" : "border-line-strong text-ink-2 hover:border-accent",
         )}
       >
@@ -171,7 +171,7 @@ export function DateRangePicker({ country }: { country?: FormatCountry }) {
         <div
           role="dialog"
           aria-label="Seleccionar rango de fechas"
-          className="absolute right-0 top-[calc(100%+6px)] z-50 w-[min(92vw,600px)] overflow-hidden rounded-[12px] border border-line-strong bg-surface shadow-2xl"
+          className="absolute right-0 top-[calc(100%+6px)] z-50 w-[min(92vw,600px)] overflow-hidden rounded-card border border-line-strong bg-surface shadow-pop"
         >
           <div className="flex flex-col sm:flex-row">
             <div className="flex shrink-0 flex-col gap-0.5 border-b border-line-subtle p-2 sm:w-[176px] sm:border-b-0 sm:border-r">
@@ -203,7 +203,7 @@ export function DateRangePicker({ country }: { country?: FormatCountry }) {
                     )
                   }
                 />
-                <p className="flex-1 text-center text-[12px] font-semibold capitalize text-ink">
+                <p className="flex-1 text-center text-sm font-semibold capitalize text-ink">
                   <span>{monthTitle(viewMonth)}</span>
                   <span className="hidden sm:inline"> — {monthTitle(rightMonth)}</span>
                 </p>
@@ -247,19 +247,19 @@ export function DateRangePicker({ country }: { country?: FormatCountry }) {
             {/* States the question the CHOSEN date answers. No promise about
                 which date each card used - four endpoints have a fixed basis
                 and say so on the card itself. */}
-            <p className="text-[11px] leading-snug text-ink-dim">
+            <p className="text-xs leading-snug text-ink-dim">
               {FIELD_QUESTIONS[field]} Cada tarjeta indica debajo sobre qué fecha se
               aplicó el rango.
             </p>
 
             {error && (
-              <p role="alert" className="mt-2 text-[11.5px] font-semibold text-negative">
+              <p role="alert" className="mt-2 text-sm font-semibold text-negative-ink">
                 {error}
               </p>
             )}
 
             <div className="mt-2.5 flex items-center justify-between gap-3">
-              <span className="min-w-0 truncate text-[12px] font-medium text-ink-2">
+              <span className="min-w-0 truncate text-sm font-medium text-ink-2">
                 {draftLabel}
               </span>
               <div className="flex shrink-0 gap-2">
@@ -305,9 +305,9 @@ function PresetButton({
       onClick={onSelect}
       aria-pressed={active}
       className={cx(
-        "rounded-[6px] px-2.5 py-1.5 text-left text-[12px] transition-colors",
+        "rounded-md px-2.5 py-1.5 text-left text-sm transition-colors",
         active
-          ? "bg-accent/[0.14] font-semibold text-accent"
+          ? "bg-accent/[0.14] font-semibold text-accent-ink"
           : "text-ink-2 hover:bg-sunken hover:text-ink",
       )}
     >
@@ -333,7 +333,7 @@ function NavButton({
       onClick={onClick}
       disabled={disabled}
       aria-label={label}
-      className="rounded-[6px] border border-line-strong px-2 py-0.5 text-[12px] text-ink-2 transition-colors hover:border-accent hover:text-accent disabled:cursor-not-allowed disabled:opacity-35 disabled:hover:border-line-strong disabled:hover:text-ink-2"
+      className="rounded-md border border-line-strong px-2 py-0.5 text-sm text-ink-2 transition-colors hover:border-accent hover:text-accent-ink disabled:cursor-not-allowed disabled:opacity-35 disabled:hover:border-line-strong disabled:hover:text-ink-2"
     >
       <span aria-hidden>{glyph}</span>
     </button>
@@ -350,11 +350,11 @@ function Endpoint({
   country: FormatCountry;
 }) {
   return (
-    <div className="rounded-[8px] border border-line-input px-2.5 py-1.5">
-      <p className="text-[10px] font-bold uppercase tracking-[0.08em] text-ink-faint">
+    <div className="rounded-control border border-line-input px-2.5 py-1.5">
+      <p className="text-xs font-bold uppercase tracking-[0.08em] text-ink-faint">
         {label}
       </p>
-      <p className="text-[12px] text-ink">{value ? formatDate(value, country) : "—"}</p>
+      <p className="text-sm text-ink">{value ? formatDate(value, country) : "—"}</p>
     </div>
   );
 }
@@ -379,7 +379,7 @@ function MonthGrid({
         {WEEKDAYS.map((day) => (
           <span
             key={day}
-            className="py-1 text-center text-[10px] font-semibold uppercase text-ink-faint"
+            className="py-1 text-center text-xs font-semibold uppercase text-ink-faint"
           >
             {day}
           </span>
@@ -403,7 +403,7 @@ function MonthGrid({
               onClick={() => onPick(iso)}
               aria-pressed={isStart || isEnd}
               className={cx(
-                "h-[26px] rounded-[5px] text-[11.5px] transition-colors",
+                "h-[26px] rounded-md text-sm transition-colors",
                 isFuture && "cursor-not-allowed text-ink-faint opacity-45",
                 !isFuture && !isStart && !isEnd && !inside && "text-ink-2 hover:bg-sunken",
                 inside && "bg-accent/[0.14] text-ink",

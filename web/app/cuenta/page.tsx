@@ -53,8 +53,8 @@ export default function CuentaPage() {
   return (
     <AppShell>
       <header className="mb-5">
-        <h1 className="text-[22px] font-bold tracking-tight">Mi cuenta</h1>
-        <p className="mt-1 text-[12px] text-ink-dim">
+        <h1 className="text-2xl font-bold tracking-tight">Mi cuenta</h1>
+        <p className="mt-1 text-sm text-ink-dim">
           Tus datos, tu contraseña y a qué tienes acceso.
         </p>
       </header>
@@ -145,8 +145,8 @@ function ProfileCard({ user, onSaved }: { user: User; onSaved: () => void }) {
           <input value={user.email} disabled className={`${INPUT} opacity-60`} />
         </Field>
 
-        {error && <p className="text-[12px] text-rose-400">{error}</p>}
-        {saved && !dirty && <p className="text-[12px] text-emerald-400">Guardado.</p>}
+        {error && <p className="text-sm text-rose-400">{error}</p>}
+        {saved && !dirty && <p className="text-sm text-emerald-400">Guardado.</p>}
 
         <div>
           <Button onClick={save} disabled={!dirty || saving}>
@@ -172,10 +172,10 @@ function AccessCard({ user }: { user: User }) {
     >
       {orgRole && (
         <div className="mb-3 rounded-lg border border-line-subtle p-3">
-          <p className="text-[12px] font-semibold text-ink-2">
+          <p className="text-sm font-semibold text-ink-2">
             {user.org_name ?? "Tu organización"}
           </p>
-          <p className="mt-0.5 text-[11px] text-ink-dim">
+          <p className="mt-0.5 text-xs text-ink-dim">
             {ORG_ROLE_LABEL[orgRole] ?? orgRole} — {ORG_ROLE_DETAIL[orgRole] ?? ""}
           </p>
         </div>
@@ -199,15 +199,15 @@ function AccessCard({ user }: { user: User }) {
                 className="flex items-start justify-between gap-3 border-b border-line-subtle py-2.5 last:border-0"
               >
                 <div className="min-w-0">
-                  <p className="truncate text-[12.5px] font-semibold text-ink-2">
+                  <p className="truncate text-base font-semibold text-ink-2">
                     {workspace.name}
                     {workspace.tenant_id === user.tenant_id && (
-                      <span className="ml-2 text-[10.5px] font-normal text-ink-dim">
+                      <span className="ml-2 text-xs font-normal text-ink-dim">
                         (donde estás ahora)
                       </span>
                     )}
                   </p>
-                  <p className="mt-0.5 text-[11px] text-ink-dim">
+                  <p className="mt-0.5 text-xs text-ink-dim">
                     {ROLE_LABEL[workspace.role] ?? workspace.role}
                     {scoped ? " · solo estos países" : " · todos sus países"}
                     {workspace.share_pct !== null && workspace.share_pct !== undefined
@@ -298,8 +298,8 @@ function PasswordCard() {
           />
         </Field>
 
-        {mismatch && <p className="text-[12px] text-rose-400">Las dos no coinciden.</p>}
-        {error && <p className="text-[12px] text-rose-400">{error}</p>}
+        {mismatch && <p className="text-sm text-rose-400">Las dos no coinciden.</p>}
+        {error && <p className="text-sm text-rose-400">{error}</p>}
 
         <div>
           <Button onClick={change} disabled={!ready || saving}>
@@ -337,10 +337,10 @@ function SessionsCard() {
       {loading && <SkeletonRows rows={2} />}
 
       {!loading && (sessions?.length ?? 0) === 0 && (
-        <p className="text-[12px] text-ink-dim">No hay sesiones abiertas.</p>
+        <p className="text-sm text-ink-dim">No hay sesiones abiertas.</p>
       )}
 
-      {error && <p className="mb-2 text-[12px] text-rose-400">{error}</p>}
+      {error && <p className="mb-2 text-sm text-rose-400">{error}</p>}
 
       {!loading && sessions && sessions.length > 0 && (
         <ul className="flex flex-col">
@@ -350,17 +350,17 @@ function SessionsCard() {
               className="flex items-center justify-between gap-3 border-b border-line-subtle py-2.5 last:border-0"
             >
               <div className="min-w-0">
-                <p className="truncate text-[12px] text-ink-2">
+                <p className="truncate text-sm text-ink-2">
                   {session.tenant_name ?? "Sin sociedad"}
                 </p>
-                <p className="text-[11px] text-ink-dim">
+                <p className="text-xs text-ink-dim">
                   Iniciada {formatRelative(session.created_at)}
                 </p>
               </div>
               <button
                 type="button"
                 onClick={() => close(session.id)}
-                className="shrink-0 text-[11.5px] text-ink-dim underline hover:text-ink-2"
+                className="shrink-0 text-sm text-ink-dim underline hover:text-ink-2"
               >
                 Cerrar
               </button>
@@ -375,7 +375,7 @@ function SessionsCard() {
 // ---------------------------------------------------------------------------
 
 const INPUT =
-  "w-full rounded-lg border border-line-subtle bg-transparent px-2.5 py-1.5 text-[12.5px] text-ink outline-none focus:border-line";
+  "w-full rounded-lg border border-line-subtle bg-transparent px-2.5 py-1.5 text-base text-ink outline-none focus:border-line";
 
 function Field({
   label,
@@ -388,11 +388,11 @@ function Field({
 }) {
   return (
     <label className="flex flex-col gap-1">
-      <span className="text-[11px] font-semibold uppercase tracking-wide text-ink-dim">
+      <span className="text-xs font-semibold uppercase tracking-wide text-ink-dim">
         {label}
       </span>
       {children}
-      {hint && <span className="text-[11px] text-ink-dim">{hint}</span>}
+      {hint && <span className="text-xs text-ink-dim">{hint}</span>}
     </label>
   );
 }

@@ -181,7 +181,7 @@ export default function CsConfirmation({ countryCode, country }: WidgetProps) {
         {SERIES.map((series) => (
           <li
             key={series.key}
-            className="flex items-center gap-1.5 text-[11px] text-ink-muted"
+            className="flex items-center gap-1.5 text-xs text-ink-muted"
           >
             <span
               className="inline-block size-[7px] rounded-full"
@@ -206,11 +206,11 @@ function Headline({
 }) {
   return (
     <div>
-      <p className="text-[10.5px] font-bold uppercase tracking-[0.06em] text-ink-faint">
+      <p className="text-xs font-bold uppercase tracking-[0.06em] text-ink-faint">
         {label}
       </p>
-      <p className="mt-0.5 text-[22px] font-semibold leading-none text-ink">{value}</p>
-      <p className="mt-1 text-[11px] text-ink-dim">{hint}</p>
+      <p className="mt-0.5 text-2xl font-semibold leading-none text-ink">{value}</p>
+      <p className="mt-1 text-xs text-ink-dim">{hint}</p>
     </div>
   );
 }
@@ -235,11 +235,11 @@ function CsTooltip({
   };
 
   return (
-    <div className="rounded-[8px] border border-line-strong bg-surface px-3 py-2 shadow-lg">
-      <p className="mb-1.5 text-[12px] font-semibold text-ink">
+    <div className="rounded-control border border-line-strong bg-surface px-3 py-2 shadow-pop">
+      <p className="mb-1.5 text-sm font-semibold text-ink">
         {formatDate(row.day, country)}
       </p>
-      <dl className="space-y-0.5 text-[11.5px]">
+      <dl className="space-y-0.5 text-sm">
         {SERIES.map((series) => (
           <div key={series.key} className="flex items-baseline justify-between gap-5">
             <dt className="flex items-center gap-1.5 text-ink-dim">

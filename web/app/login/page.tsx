@@ -77,14 +77,14 @@ function LoginForm() {
     <main className="flex min-h-screen items-center justify-center bg-page px-4">
       <div className="w-full max-w-[380px]">
         <div className="mb-7 flex items-center gap-2.5">
-          <div className="flex size-8 items-center justify-center rounded-[8px] bg-accent text-[16px] font-extrabold text-on-accent">
+          <div className="flex size-8 items-center justify-center rounded-control bg-accent text-lg font-extrabold text-on-accent">
             DE
           </div>
-          <span className="text-[18px] font-bold tracking-tight">Data Effi</span>
+          <span className="text-xl font-bold tracking-tight">Data Effi</span>
         </div>
 
-        <h1 className="text-[20px] font-bold leading-tight">{title}</h1>
-        <p className="mt-1.5 text-[13px] leading-relaxed text-ink-dim">{lead}</p>
+        <h1 className="text-xl font-bold leading-tight">{title}</h1>
+        <p className="mt-1.5 text-base leading-relaxed text-ink-dim">{lead}</p>
 
         <form onSubmit={submit} className="mt-6 space-y-3">
           {mode !== "login" && (
@@ -131,7 +131,7 @@ function LoginForm() {
           {error && (
             <p
               role="alert"
-              className="rounded-[8px] border border-negative/30 bg-negative/[0.08] px-3 py-2 text-[12px] text-negative"
+              className="rounded-control border border-negative/30 bg-negative/[0.08] px-3 py-2 text-sm text-negative-ink"
             >
               {error}
             </p>
@@ -143,7 +143,7 @@ function LoginForm() {
         </form>
 
         {mode === "invite" ? (
-          <p className="mt-4 text-center text-[12px] text-ink-dim">
+          <p className="mt-4 text-center text-sm text-ink-dim">
             ¿Ya tienes cuenta con este correo?{" "}
             <button
               type="button"
@@ -151,7 +151,7 @@ function LoginForm() {
                 setMode("login");
                 setError(null);
               }}
-              className="text-ink-muted underline underline-offset-2 hover:text-accent"
+              className="text-ink-muted underline underline-offset-2 hover:text-accent-ink"
             >
               Entrar
             </button>
@@ -163,7 +163,7 @@ function LoginForm() {
               setMode(mode === "login" ? "register" : "login");
               setError(null);
             }}
-            className="mt-4 w-full text-center text-[12px] text-ink-muted hover:text-accent"
+            className="mt-4 w-full text-center text-sm text-ink-muted hover:text-accent-ink"
           >
             {mode === "login"
               ? "¿Primera vez? Inicia gratis 1 mes"
@@ -191,15 +191,15 @@ function Field({
 } & Omit<React.InputHTMLAttributes<HTMLInputElement>, "onChange" | "value" | "type">) {
   return (
     <label className="block">
-      <span className="mb-1 block text-[11.5px] font-medium text-ink-muted">{label}</span>
+      <span className="mb-1 block text-sm font-medium text-ink-muted">{label}</span>
       <input
         type={type}
         value={value}
         onChange={(event) => onChange(event.target.value)}
-        className="w-full rounded-[8px] border border-line-input bg-surface px-3 py-2.5 text-[13px] text-ink placeholder:text-ink-dim focus:border-accent focus:outline-none"
+        className="w-full rounded-control border border-line-input bg-surface px-3 py-2.5 text-base text-ink placeholder:text-ink-dim focus:border-accent focus:outline-none"
         {...props}
       />
-      {hint && <span className="mt-1 block text-[11px] text-ink-dim">{hint}</span>}
+      {hint && <span className="mt-1 block text-xs text-ink-dim">{hint}</span>}
     </label>
   );
 }

@@ -148,7 +148,7 @@ function ShortSampleMark() {
   return (
     <abbr
       title={SHORT_SAMPLE_HINT}
-      className="ml-1 cursor-help align-middle text-[10px] font-semibold text-ink-dim no-underline"
+      className="ml-1 cursor-help align-middle text-xs font-semibold text-ink-dim no-underline"
     >
       ~
     </abbr>
@@ -190,9 +190,9 @@ export function DailyStatusTable({
 
   return (
     <div className="overflow-x-auto">
-      <table className="w-full min-w-[720px] border-collapse text-[12px]">
+      <table className="w-full min-w-[720px] border-collapse text-sm">
         <thead>
-          <tr className="text-[10.5px] font-semibold uppercase tracking-[0.06em] text-ink-dim">
+          <tr className="text-xs font-semibold uppercase tracking-[0.06em] text-ink-dim">
             <th scope="col" className={cx("px-2.5 text-left", compact ? "py-1" : "py-1.5")}>
               Fecha
             </th>
@@ -236,7 +236,7 @@ export function DailyStatusTable({
               <td className={cx("px-2.5 text-left font-medium", compact ? "py-1" : "py-1.5", empty ? "text-ink-faint" : "text-ink-body")}>
                 {formatDate(row.day, country)}
                 {empty && (
-                  <span className="ml-1.5 text-[10px] font-normal uppercase tracking-wide">
+                  <span className="ml-1.5 text-xs font-normal uppercase tracking-wide">
                     sin guías
                   </span>
                 )}
@@ -270,7 +270,7 @@ export function DailyStatusTable({
         </tbody>
 
         <tfoot>
-          <tr className="border-t border-line-strong bg-sunken text-[11.5px] font-semibold text-ink">
+          <tr className="border-t border-line-strong bg-sunken text-sm font-semibold text-ink">
             <td className={cx("px-2.5 text-left", compact ? "py-1" : "py-1.5")}>TOTAL GENERAL</td>
             {COLUMNS.map((group) => (
               <td key={group} className={cx(cell, STATUS_GROUP_TEXT[group])}>
@@ -325,14 +325,14 @@ export function BlockSummary({
 }) {
   const { totals } = block;
   return (
-    <dl className="flex flex-wrap items-center gap-x-5 gap-y-1 text-[12px]">
+    <dl className="flex flex-wrap items-center gap-x-5 gap-y-1 text-sm">
       <div className="flex items-baseline gap-1.5">
         <dt className="text-ink-dim">Guías</dt>
         <dd className="font-semibold text-ink">{formatNumber(totals.shipments, country, 0)}</dd>
       </div>
       <div className="flex items-baseline gap-1.5">
         <dt className="text-ink-dim">Devoluciones</dt>
-        <dd className="font-semibold text-negative">
+        <dd className="font-semibold text-negative-ink">
           {formatNumber(totals.devolucion, country, 0)}
         </dd>
       </div>
@@ -407,7 +407,7 @@ export function DailyStatusMatrix({
 }) {
   const columns = useMemo(() => matrixColumns(block, fillDays), [block, fillDays]);
   const { totals } = block;
-  const cell = "px-2 py-1.5 text-right tabular-nums text-[12px]";
+  const cell = "px-2 py-1.5 text-right tabular-nums text-sm";
   const count = (value: number, group?: StatusGroup) =>
     value > 0 ? (
       <span className={group ? STATUS_GROUP_TEXT[group] : undefined}>{formatNumber(value, country, 0)}</span>
@@ -419,7 +419,7 @@ export function DailyStatusMatrix({
     <div className="overflow-x-auto">
       <table className="w-full min-w-[640px] border-collapse">
         <thead>
-          <tr className={cx("text-[10.5px] font-bold uppercase tracking-[0.05em] text-white", accentClass)}>
+          <tr className={cx("text-xs font-bold uppercase tracking-[0.05em] text-on-solid", accentClass)}>
             <th scope="col" className="px-2.5 py-2 text-left">
               Estado
             </th>
@@ -439,7 +439,7 @@ export function DailyStatusMatrix({
               <th
                 scope="row"
                 title={STATUS_GROUP_HINTS[group]}
-                className={cx("cursor-help px-2.5 py-1.5 text-left text-[12px] font-medium", STATUS_GROUP_TEXT[group])}
+                className={cx("cursor-help px-2.5 py-1.5 text-left text-sm font-medium", STATUS_GROUP_TEXT[group])}
               >
                 {STATUS_GROUP_LABELS[group]}
               </th>
@@ -453,7 +453,7 @@ export function DailyStatusMatrix({
           ))}
         </tbody>
         <tfoot>
-          <tr className="border-t border-line-strong bg-sunken text-[12px] font-bold text-ink">
+          <tr className="border-t border-line-strong bg-sunken text-sm font-bold text-ink">
             <th scope="row" className="px-2.5 py-1.5 text-left">
               Total general
             </th>
@@ -464,7 +464,7 @@ export function DailyStatusMatrix({
             ))}
             <td className={cell}>{formatNumber(totals.shipments, country, 0)}</td>
           </tr>
-          <tr className="border-t border-line-row text-[12px] text-negative">
+          <tr className="border-t border-line-row text-sm text-negative-ink">
             <th scope="row" className="px-2.5 py-1.5 text-left font-medium">
               Devoluciones
             </th>
@@ -475,7 +475,7 @@ export function DailyStatusMatrix({
             ))}
             <td className={cx(cell, "font-semibold")}>{formatNumber(totals.devolucion, country, 0)}</td>
           </tr>
-          <tr className="border-t border-line-row bg-negative/10 text-[12px] font-bold text-negative">
+          <tr className="border-t border-line-row bg-negative/10 text-sm font-bold text-negative-ink">
             <th
               scope="row"
               className="px-2.5 py-1.5 text-left"
@@ -548,7 +548,7 @@ export default function DailyStatusTableWidget({ countryCode, country }: WidgetP
       {blocks.map((block) => (
         <section key={block.code} className="border-b border-line-subtle last:border-b-0">
           <header className="flex flex-wrap items-center justify-between gap-3 px-4 py-2.5">
-            <h4 className="text-[12.5px] font-semibold text-ink">{block.name}</h4>
+            <h4 className="text-base font-semibold text-ink">{block.name}</h4>
             <BlockSummary block={block} country={country} />
           </header>
           <DailyStatusTable block={block} country={country} />

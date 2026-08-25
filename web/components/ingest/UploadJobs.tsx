@@ -121,8 +121,8 @@ export function JobRow({
     <div className="border-t border-line-row py-3 first:border-t-0">
       <div className="flex items-center justify-between gap-3">
         <div className="min-w-0">
-          <p className="truncate text-[12.5px] font-medium text-ink">{job.filename}</p>
-          <p className="text-[11px] text-ink-dim">
+          <p className="truncate text-base font-medium text-ink">{job.filename}</p>
+          <p className="text-xs text-ink-dim">
             {formatBytes(job.size_bytes)} · {job.kind}
           </p>
         </div>
@@ -136,25 +136,25 @@ export function JobRow({
       )}
 
       {job.status === "failed" && job.error && (
-        <p className="mt-2 rounded-[8px] border border-negative/25 bg-negative/[0.06] px-3 py-2 text-[11.5px] leading-relaxed text-negative-soft">
+        <p className="mt-2 rounded-control border border-negative/25 bg-negative/[0.06] px-3 py-2 text-sm leading-relaxed text-negative-soft">
           {job.error}
         </p>
       )}
 
       {job.status === "duplicate" && (
         <div className="mt-1.5 space-y-1.5">
-          <p className="text-[11.5px] leading-relaxed text-ink-dim">
+          <p className="text-sm leading-relaxed text-ink-dim">
             Mismo contenido que una carga anterior, así que no se insertó nada. Eso es lo
             que evita que subir dos veces el mismo archivo duplique tus cifras.
           </p>
           {onReprocess && (
-            <p className="text-[11.5px] leading-relaxed text-ink-dim">
+            <p className="text-sm leading-relaxed text-ink-dim">
               Si Data Effi cambió desde entonces —por ejemplo al corregir cómo se lee una
               columna— el mismo archivo puede producir datos distintos.{" "}
               <button
                 type="button"
                 onClick={onReprocess}
-                className="font-medium text-accent underline underline-offset-2"
+                className="font-medium text-accent-ink underline underline-offset-2"
               >
                 Vuelve a procesarlo
               </button>{" "}
@@ -180,25 +180,25 @@ export function BatchResult({ batchId }: { batchId: string }) {
   return (
     <div className="mt-2 space-y-1.5">
       {report.profile?.label && (
-        <p className="text-[11.5px] text-accent">Detectado: {report.profile.label}</p>
+        <p className="text-sm text-accent-ink">Detectado: {report.profile.label}</p>
       )}
-      <p className="text-[11.5px] text-ink-2">
-        {batch.rows_total} filas · <b className="text-positive">{batch.rows_inserted} nuevas</b> ·{" "}
+      <p className="text-sm text-ink-2">
+        {batch.rows_total} filas · <b className="text-positive-ink">{batch.rows_inserted} nuevas</b> ·{" "}
         {batch.rows_updated} actualizadas · {batch.rows_skipped} sin cambios ·{" "}
-        <b className={batch.rows_failed > 0 ? "text-negative" : ""}>
+        <b className={batch.rows_failed > 0 ? "text-negative-ink" : ""}>
           {batch.rows_failed} con error
         </b>
       </p>
 
       {batch.discrepancy_count > 0 && (
-        <p className="text-[11px] text-warning">
+        <p className="text-xs text-warning-ink">
           {batch.discrepancy_count} valores de dinero cambiaron respecto a una carga previa.
           Se guardó el rastro.
         </p>
       )}
 
       {unmapped.length > 0 && (
-        <details className="text-[11px] text-ink-dim">
+        <details className="text-xs text-ink-dim">
           <summary className="cursor-pointer hover:text-ink-muted">
             {unmapped.length} columnas del archivo no se usaron
           </summary>
@@ -207,12 +207,12 @@ export function BatchResult({ batchId }: { batchId: string }) {
       )}
 
       {sanity.slice(0, 3).map((issue, index) => (
-        <p key={index} className="text-[11px] text-warning">
+        <p key={index} className="text-xs text-warning-ink">
           Fila {issue.row}: {issue.message}
         </p>
       ))}
       {sanity.length > 3 && (
-        <p className="text-[11px] text-ink-dim">y {sanity.length - 3} avisos más</p>
+        <p className="text-xs text-ink-dim">y {sanity.length - 3} avisos más</p>
       )}
     </div>
   );

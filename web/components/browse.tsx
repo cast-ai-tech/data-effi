@@ -37,12 +37,12 @@ export function CountryMissing({
 }) {
   return (
     <div className="flex flex-col items-center justify-center gap-3 py-14 text-center">
-      <p className="text-[13px] font-semibold text-ink-2">
+      <p className="text-base font-semibold text-ink-2">
         {code === ""
           ? "Falta el país en la dirección"
           : `${code} no está activo en tu workspace`}
       </p>
-      <p className="max-w-md text-[12px] leading-relaxed text-ink-dim">
+      <p className="max-w-md text-sm leading-relaxed text-ink-dim">
         Cada país tiene su propia moneda y sus propios datos, así que esta
         pantalla siempre pertenece a uno. Elige cuál quieres ver, o activa el país
         que falta en Configuración.
@@ -53,7 +53,7 @@ export function CountryMissing({
             <Link
               key={country.code}
               href={`/${country.code.toLowerCase()}${section ? `/${section}` : ""}`}
-              className="flex items-center gap-1.5 rounded-[8px] border border-line-input px-3 py-1.5 text-[12px] font-semibold no-underline hover:border-accent"
+              className="flex items-center gap-1.5 rounded-control border border-line-input px-3 py-1.5 text-sm font-semibold no-underline hover:border-accent"
             >
               <span aria-hidden>{countryFlag(country.code)}</span>
               {country.name}
@@ -136,14 +136,14 @@ export function PaginationFooter({
 
   return (
     <div className="flex flex-wrap items-center justify-between gap-3 border-t border-line-subtle px-4 py-3">
-      <p className="text-[11.5px] text-ink-dim">
+      <p className="text-sm text-ink-dim">
         {total === 0
           ? `Sin ${noun}`
           : `${span.first}–${span.last} de ${total} ${noun}`}
       </p>
 
       <div className="flex items-center gap-2">
-        <span className="text-[11.5px] text-ink-dim">
+        <span className="text-sm text-ink-dim">
           Página {page} de {span.pageCount}
         </span>
         <button
@@ -168,8 +168,8 @@ export function PaginationFooter({
 }
 
 const PAGE_BUTTON =
-  "rounded-[8px] border border-line-input px-3 py-1.5 text-[11.5px] font-semibold text-ink-2 " +
-  "transition-colors hover:border-accent hover:text-accent " +
+  "rounded-control border border-line-input px-3 py-1.5 text-sm font-semibold text-ink-2 " +
+  "transition-colors hover:border-accent hover:text-accent-ink " +
   "disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:border-line-input disabled:hover:text-ink-2";
 
 /**
@@ -189,10 +189,10 @@ export function FilterError({
 }) {
   return (
     <div className="flex flex-col items-center justify-center gap-2 py-8 text-center">
-      <p className="text-[13px] font-semibold text-warning">
+      <p className="text-base font-semibold text-warning-ink">
         El servidor no aceptó este filtro
       </p>
-      <p className="max-w-md text-[12px] leading-relaxed text-ink-dim">{message}</p>
+      <p className="max-w-md text-sm leading-relaxed text-ink-dim">{message}</p>
       <Button size="sm" variant="ghost" className="mt-1" onClick={onClear}>
         Quitar filtros
       </Button>
@@ -209,7 +209,7 @@ export function FilterError({
 export function PiiNotice({ children }: { children: React.ReactNode }) {
   return (
     <p
-      className="mb-4 rounded-[8px] border border-line-input bg-sunken px-3 py-2 text-[11.5px] leading-relaxed text-ink-muted"
+      className="mb-4 rounded-control border border-line-input bg-sunken px-3 py-2 text-sm leading-relaxed text-ink-muted"
       role="note"
     >
       {children}
@@ -229,8 +229,8 @@ export function Block({
   children: React.ReactNode;
 }) {
   return (
-    <section className="rounded-[10px] border border-line bg-surface px-3.5 py-3">
-      <h3 className="mb-2 text-[10.5px] font-bold uppercase tracking-[0.08em] text-ink-faint">
+    <section className="rounded-control border border-line bg-surface px-3.5 py-3">
+      <h3 className="mb-2 text-xs font-bold uppercase tracking-[0.08em] text-ink-faint">
         {title}
       </h3>
       <div className="space-y-1.5">{children}</div>
@@ -251,10 +251,10 @@ export function Line({
 
   return (
     <div className="flex items-baseline justify-between gap-3">
-      <span className="shrink-0 text-[11.5px] text-ink-dim">{label}</span>
+      <span className="shrink-0 text-sm text-ink-dim">{label}</span>
       <span
         className={cx(
-          "min-w-0 flex-1 truncate text-right text-[12px]",
+          "min-w-0 flex-1 truncate text-right text-sm",
           empty ? "text-ink-dim" : "text-ink-2",
           mono && !empty && "font-mono",
         )}

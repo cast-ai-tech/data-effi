@@ -166,12 +166,12 @@ export function BasisBand({
       className={cx(
         "flex items-start gap-2 border border-line-strong bg-sunken px-4 py-2",
         standalone
-          ? "rounded-[12px]"
-          : cx("border-b-0", rounded && "rounded-t-[12px]"),
+          ? "rounded-card"
+          : cx("border-b-0", rounded && "rounded-t-card"),
       )}
     >
       <ClockIcon className="mt-[1px] size-3.5 shrink-0 text-ink-dim" />
-      <p className="text-[11.5px] leading-snug text-ink-muted">
+      <p className="text-sm leading-snug text-ink-muted">
         <span className="font-semibold text-ink-2">{note.short}</span> · {note.detail}
       </p>
     </div>
@@ -182,7 +182,7 @@ export function BasisBand({
 export function BasisCaption({ note }: { note: BasisNote }) {
   return (
     <p
-      className="mt-1.5 flex items-center gap-1.5 px-1 text-[10.5px] leading-snug text-ink-dim"
+      className="mt-1.5 flex items-center gap-1.5 px-1 text-xs leading-snug text-ink-dim"
       title={note.caveat}
     >
       <ClockIcon className="size-3 shrink-0" />

@@ -147,17 +147,17 @@ function ChartTooltip({
   const total = (prep ?? 0) + (transit ?? 0);
 
   return (
-    <div className="rounded-[8px] border border-line-input bg-surface px-3 py-2 shadow-lg">
-      <p className="text-[11px] font-semibold text-ink">{String(label ?? "")}</p>
-      <p className="mt-1 text-[11px] text-ink-muted">
+    <div className="rounded-control border border-line-input bg-surface px-3 py-2 shadow-pop">
+      <p className="text-xs font-semibold text-ink">{String(label ?? "")}</p>
+      <p className="mt-1 text-xs text-ink-muted">
         Alistamiento (tuyo):{" "}
         <span className="text-ink-2">{formatNumber(prep, country, 1)} días</span>
       </p>
-      <p className="text-[11px] text-ink-muted">
+      <p className="text-xs text-ink-muted">
         Tránsito (de la transportadora):{" "}
         <span className="text-ink-2">{formatNumber(transit, country, 1)} días</span>
       </p>
-      <p className="mt-1 text-[11px] text-ink-dim">
+      <p className="mt-1 text-xs text-ink-dim">
         Total: {formatNumber(total, country, 1)} días
       </p>
     </div>
@@ -224,25 +224,25 @@ export default function FulfillmentSla({ countryCode, country }: WidgetProps) {
     <Card title="Alistamiento y cumplimiento" subtitle={SUBTITLE}>
       <div className="flex flex-wrap items-end gap-x-10 gap-y-3">
         <div>
-          <p className="text-[10.5px] font-bold uppercase tracking-[0.08em] text-ink-faint">
+          <p className="text-xs font-bold uppercase tracking-[0.08em] text-ink-faint">
             La espera que causas tú
           </p>
-          <p className="mt-1.5 text-[30px] font-bold leading-none text-warning">
+          <p className="mt-1.5 text-4xl font-bold leading-none text-warning-ink">
             {formatPercent(model.prepShare)}
           </p>
         </div>
 
         <div className="self-end">
-          <p className="text-[10.5px] font-bold uppercase tracking-[0.08em] text-ink-faint">
+          <p className="text-xs font-bold uppercase tracking-[0.08em] text-ink-faint">
             Llegó en la fecha prometida
           </p>
-          <p className="mt-1 text-[16px] font-semibold leading-none text-ink-muted">
+          <p className="mt-1 text-lg font-semibold leading-none text-ink-muted">
             {formatPercent(model.onTime)}
           </p>
         </div>
       </div>
 
-      <p className="mt-3 max-w-2xl text-[11.5px] leading-relaxed text-ink-dim">
+      <p className="mt-3 max-w-2xl text-sm leading-relaxed text-ink-dim">
         {model.prepShare === null
           ? "Aún no hay suficientes fechas de despacho para saber qué parte de la espera ocurre antes de que el paquete salga."
           : `El ${formatPercent(model.prepShare)} de la espera está de tu lado: pasa entre que creas la guía y que el paquete sale de tu bodega, antes de que la transportadora lo toque. Es la mitad del reloj que puedes arreglar sin renegociar nada.`}
@@ -298,11 +298,11 @@ export default function FulfillmentSla({ countryCode, country }: WidgetProps) {
         </ResponsiveContainer>
       </div>
 
-      <div className="mt-2 flex flex-wrap items-center gap-4 text-[11px] text-ink-dim">
+      <div className="mt-2 flex flex-wrap items-center gap-4 text-xs text-ink-dim">
         <span className="inline-flex items-center gap-1.5">
           <span
             aria-hidden
-            className="inline-block size-[8px] rounded-[2px]"
+            className="inline-block size-[8px] rounded-sm"
             style={{ background: PREP_COLOUR }}
           />
           Alistamiento: mediana de días hasta que el paquete sale (tuyo)
@@ -310,7 +310,7 @@ export default function FulfillmentSla({ countryCode, country }: WidgetProps) {
         <span className="inline-flex items-center gap-1.5">
           <span
             aria-hidden
-            className="inline-block size-[8px] rounded-[2px]"
+            className="inline-block size-[8px] rounded-sm"
             style={{ background: TRANSIT_COLOUR }}
           />
           Tránsito: promedio de días hasta entregar (de la transportadora)
@@ -318,24 +318,24 @@ export default function FulfillmentSla({ countryCode, country }: WidgetProps) {
       </div>
 
       <div className="mt-4 overflow-x-auto border-t border-line-subtle pt-3">
-        <table className="w-full min-w-[520px] border-collapse text-[12px]">
+        <table className="w-full min-w-[520px] border-collapse text-sm">
           <thead>
             <tr>
               <th
                 scope="col"
-                className="px-2 py-1.5 text-left text-[10.5px] font-semibold uppercase tracking-[0.06em] text-ink-dim"
+                className="px-2 py-1.5 text-left text-xs font-semibold uppercase tracking-[0.06em] text-ink-dim"
               >
                 Transportadora
               </th>
               <th
                 scope="col"
-                className="px-2 py-1.5 text-right text-[10.5px] font-semibold uppercase tracking-[0.06em] text-ink-dim"
+                className="px-2 py-1.5 text-right text-xs font-semibold uppercase tracking-[0.06em] text-ink-dim"
               >
                 Guías
               </th>
               <th
                 scope="col"
-                className="px-2 py-1.5 text-left text-[10.5px] font-semibold uppercase tracking-[0.06em] text-ink-dim"
+                className="px-2 py-1.5 text-left text-xs font-semibold uppercase tracking-[0.06em] text-ink-dim"
               >
                 % en la fecha prometida
               </th>
@@ -359,7 +359,7 @@ export default function FulfillmentSla({ countryCode, country }: WidgetProps) {
                       label={formatPercent(lane.on_time_pct)}
                     />
                   ) : (
-                    <span className="text-[11px] text-ink-dim">
+                    <span className="text-xs text-ink-dim">
                       sin fecha prometida
                     </span>
                   )}

@@ -32,8 +32,8 @@ function totalCost(row: ProductRow): number | null {
 
 function moneyTone(value: number | null | undefined): string {
   if (value === null || value === undefined || !Number.isFinite(value)) return "text-ink-dim";
-  if (value < 0) return "text-negative";
-  if (value > 0) return "text-positive";
+  if (value < 0) return "text-negative-ink";
+  if (value > 0) return "text-positive-ink";
   return "text-ink-2";
 }
 
@@ -52,9 +52,9 @@ function buildColumns(country: FormatCountry): Array<ColumnDef<ProductRow>> {
       header: "Producto",
       cell: ({ row }) => (
         <div className="min-w-0">
-          <p className="truncate text-[12.5px] text-ink">{row.original.product_name}</p>
+          <p className="truncate text-base text-ink">{row.original.product_name}</p>
           {row.original.sku && (
-            <p className="truncate text-[10.5px] text-ink-dim">{row.original.sku}</p>
+            <p className="truncate text-xs text-ink-dim">{row.original.sku}</p>
           )}
         </div>
       ),
@@ -216,7 +216,7 @@ export default function ProductTable({ countryCode, country }: WidgetProps) {
       subtitle={subtitle}
       actions={
         bleeding > 0 ? (
-          <span className="text-[11px] text-negative">
+          <span className="text-xs text-negative-ink">
             {bleeding} {bleeding === 1 ? "producto pierde" : "productos pierden"} plata por guía
           </span>
         ) : undefined
@@ -242,7 +242,7 @@ export default function ProductTable({ countryCode, country }: WidgetProps) {
                             : "none"
                       }
                       className={cx(
-                        "px-3 py-2 text-[10.5px] font-bold uppercase tracking-[0.06em] text-ink-faint",
+                        "px-3 py-2 text-xs font-bold uppercase tracking-[0.06em] text-ink-faint",
                         alignOf(header.column.columnDef.meta),
                         widthOf(header.column.columnDef.meta),
                       )}
@@ -256,7 +256,7 @@ export default function ProductTable({ countryCode, country }: WidgetProps) {
                         )}
                       >
                         {flexRender(header.column.columnDef.header, header.getContext())}
-                        <span aria-hidden className="text-[9px]">
+                        <span aria-hidden className="text-xs">
                           {sorted === "asc" ? "▲" : sorted === "desc" ? "▼" : "↕"}
                         </span>
                       </button>
@@ -275,14 +275,14 @@ export default function ProductTable({ countryCode, country }: WidgetProps) {
                   key={row.id}
                   className={cx(
                     "border-b border-line-row last:border-0",
-                    losing ? "bg-negative/[0.06]" : "hover:bg-white/[0.02]",
+                    losing ? "bg-negative/[0.06]" : "hover:bg-hover",
                   )}
                 >
                   {row.getVisibleCells().map((cell) => (
                     <td
                       key={cell.id}
                       className={cx(
-                        "px-3 py-2 text-[12px] text-ink-2",
+                        "px-3 py-2 text-sm text-ink-2",
                         alignOf(cell.column.columnDef.meta),
                       )}
                     >

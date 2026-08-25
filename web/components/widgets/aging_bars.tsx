@@ -87,7 +87,7 @@ export default function AgingBars({ countryCode, country }: WidgetProps) {
 
           return (
             <li key={bucket.aging_bucket} className="flex items-center gap-3">
-              <span className="w-[54px] shrink-0 text-[11.5px] font-medium text-ink-muted">
+              <span className="w-[54px] shrink-0 text-sm font-medium text-ink-muted">
                 {bucket.aging_bucket}
               </span>
 
@@ -98,10 +98,10 @@ export default function AgingBars({ countryCode, country }: WidgetProps) {
                 />
               </div>
 
-              <span className="w-[64px] shrink-0 text-right text-[12px] font-semibold text-ink-2">
+              <span className="w-[64px] shrink-0 text-right text-sm font-semibold text-ink-2">
                 {formatNumber(bucket.shipments, country, 0)}
               </span>
-              <span className="w-[104px] shrink-0 text-right text-[12px] text-ink-muted">
+              <span className="w-[104px] shrink-0 text-right text-sm text-ink-muted">
                 {formatMoney(bucket.value_at_risk, country)}
               </span>
             </li>
@@ -111,8 +111,8 @@ export default function AgingBars({ countryCode, country }: WidgetProps) {
 
       <p
         className={cx(
-          "mt-4 border-t border-line-subtle pt-3 text-[13px] font-semibold leading-snug",
-          atRisk.value > 0 ? "text-negative" : "text-ink-muted",
+          "mt-4 border-t border-line-subtle pt-3 text-base font-semibold leading-snug",
+          atRisk.value > 0 ? "text-negative-ink" : "text-ink-muted",
         )}
       >
         {atRisk.shipments > 0

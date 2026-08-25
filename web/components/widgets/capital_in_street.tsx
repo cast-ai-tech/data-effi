@@ -60,38 +60,38 @@ export default function CapitalInStreet({ countryCode, country }: WidgetProps) {
 
   return (
     <Card title={TITLE} subtitle={SUBTITLE}>
-      <p className="text-[10.5px] font-bold uppercase tracking-[0.08em] text-ink-faint">
+      <p className="text-xs font-bold uppercase tracking-[0.08em] text-ink-faint">
         Tu plata viajando ahora mismo
       </p>
-      <p className="mt-1.5 text-[30px] font-bold leading-none text-warning">
+      <p className="mt-1.5 text-4xl font-bold leading-none text-warning-ink">
         {formatMoney(row.capital_in_street, country)}
       </p>
-      <p className="mt-1.5 text-[11.5px] text-ink-muted">
+      <p className="mt-1.5 text-sm text-ink-muted">
         en {pluralize(row.open_shipments, "guía abierta", "guías abiertas")} · si todas
         llegan, deberían recaudar {formatMoney(row.committed_revenue, country)}
       </p>
 
       <div className="mt-4">
         <div className="mb-1 flex items-baseline justify-between gap-3">
-          <span className="text-[11px] text-ink-dim">Guías que ya terminaron</span>
-          <span className="text-[11.5px] font-semibold text-ink-2">
+          <span className="text-xs text-ink-dim">Guías que ya terminaron</span>
+          <span className="text-sm font-semibold text-ink-2">
             {formatPercent(row.maturity_pct)}
           </span>
         </div>
         <MicroBar value={row.maturity_pct ?? 0} max={100} tone="accent" />
-        <p className="mt-1 text-[10.5px] text-ink-dim">
+        <p className="mt-1 text-xs text-ink-dim">
           {formatNumber(row.closed_shipments, country, 0)} cerradas ·{" "}
           {formatNumber(row.open_shipments, country, 0)} en la calle
         </p>
       </div>
 
       {notice && (
-        <p className="mt-4 rounded-[8px] border border-line-input bg-sunken px-3 py-2 text-[11.5px] leading-relaxed text-ink-muted">
+        <p className="mt-4 rounded-control border border-line-input bg-sunken px-3 py-2 text-sm leading-relaxed text-ink-muted">
           {notice}
         </p>
       )}
 
-      <p className="mt-3 border-t border-line-subtle pt-3 text-[11px] leading-relaxed text-ink-dim">
+      <p className="mt-3 border-t border-line-subtle pt-3 text-xs leading-relaxed text-ink-dim">
         Este dinero no está perdido ni ganado: está comprometido. Vuelve a tu cuenta a
         medida que las guías se entregan y la transportadora te liquida, y no vuelve
         cuando se devuelven. Por eso es el número que manda a la hora de decidir si

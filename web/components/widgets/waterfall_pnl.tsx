@@ -180,14 +180,14 @@ export default function WaterfallPnl({ countryCode, country }: WidgetProps) {
       </ResponsiveContainer>
 
       {model.adSpendMissing && (
-        <p className="mt-3 text-[11.5px] leading-snug text-warning">
+        <p className="mt-3 text-sm leading-snug text-warning-ink">
           Sin datos de pauta en el rango: se omitió ese paso y la contribución no
           descuenta medios.
         </p>
       )}
 
       {Math.abs(model.residual) > RECONCILIATION_EPSILON && (
-        <p className="mt-2 text-[11.5px] leading-snug text-ink-dim">
+        <p className="mt-2 text-sm leading-snug text-ink-dim">
           La diferencia de {formatMoney(model.residual, country)} entre la cadena y la
           contribución corresponde a ajustes registrados aparte.
         </p>

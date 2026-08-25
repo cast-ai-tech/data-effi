@@ -30,7 +30,7 @@ export function AlertCard({
   return (
     <article
       className={cx(
-        "rounded-[10px] border bg-surface p-3.5",
+        "rounded-control border bg-surface p-3.5",
         critical
           ? "border-negative/30"
           : alert.severity === "warning"
@@ -44,7 +44,7 @@ export function AlertCard({
           {critical ? "CRÍTICA" : alert.severity === "warning" ? "ATENCIÓN" : "INFO"}
         </Chip>
         {alert.impact_amount !== null && (
-          <span className="text-[11px] font-semibold text-negative">
+          <span className="text-xs font-semibold text-negative-ink">
             {formatMoney(alert.impact_amount, {
               ...FALLBACK_COUNTRY,
               currency_symbol: "",
@@ -56,15 +56,15 @@ export function AlertCard({
         )}
       </div>
 
-      <h4 className="text-[12.5px] font-semibold text-ink">{alert.title}</h4>
-      <p className="mt-1 text-[12px] leading-[1.55] text-ink-2">{alert.finding}</p>
-      <p className="mt-2 text-[12px] leading-[1.5] text-ink-muted">{alert.action}</p>
+      <h4 className="text-base font-semibold text-ink">{alert.title}</h4>
+      <p className="mt-1 text-sm leading-[1.55] text-ink-2">{alert.finding}</p>
+      <p className="mt-2 text-sm leading-[1.5] text-ink-muted">{alert.action}</p>
 
       {alert.deep_link && (
         <Link
           href={alert.deep_link}
           onClick={onNavigate}
-          className="mt-2.5 inline-block text-[11.5px] font-semibold no-underline"
+          className="mt-2.5 inline-block text-sm font-semibold no-underline"
         >
           Ver detalle →
         </Link>

@@ -51,8 +51,8 @@ export default function GlobalPage() {
   return (
     <AppShell>
       <header className="mb-5">
-        <h1 className="text-[22px] font-bold tracking-tight">Global</h1>
-        <p className="mt-1 text-[12px] text-ink-dim">
+        <h1 className="text-2xl font-bold tracking-tight">Global</h1>
+        <p className="mt-1 text-sm text-ink-dim">
           {active.length > 0
             ? `${active.length} ${active.length === 1 ? "país activo" : "países activos"}`
             : "Aún no has activado ningún país"}
@@ -69,7 +69,7 @@ export default function GlobalPage() {
             action={
               <Link
                 href="/onboarding"
-                className="rounded-[8px] bg-accent px-3.5 py-2 text-[12px] font-semibold text-on-accent no-underline"
+                className="rounded-control bg-accent px-3.5 py-2 text-sm font-semibold text-on-accent no-underline"
               >
                 Abrir asistente
               </Link>
@@ -163,19 +163,19 @@ function StatTile({
   tone?: "positive" | "negative";
 }) {
   return (
-    <div className="rounded-[12px] border border-line bg-surface p-4">
-      <p className="text-[10.5px] font-bold uppercase tracking-[0.08em] text-ink-faint">
+    <div className="rounded-card border border-line bg-surface p-4">
+      <p className="text-xs font-bold uppercase tracking-[0.08em] text-ink-faint">
         {label}
       </p>
       <p
         className={
-          "mt-1.5 text-[28px] font-bold leading-none " +
-          (tone === "negative" ? "text-negative" : tone === "positive" ? "text-positive" : "text-ink")
+          "mt-1.5 text-3xl font-bold leading-none " +
+          (tone === "negative" ? "text-negative-ink" : tone === "positive" ? "text-positive-ink" : "text-ink")
         }
       >
         {value}
       </p>
-      <p className="mt-2 text-[11px] text-ink-dim">{hint}</p>
+      <p className="mt-2 text-xs text-ink-dim">{hint}</p>
     </div>
   );
 }
@@ -190,7 +190,7 @@ function BriefCard({ countryCode }: { countryCode: string | null }) {
       {loading && <SkeletonRows rows={3} />}
       {!loading && data && (
         <>
-          <p className="whitespace-pre-line text-[12.5px] leading-[1.65] text-ink-body">
+          <p className="whitespace-pre-line text-base leading-[1.65] text-ink-body">
             {data.summary}
           </p>
           {data.degraded && (
@@ -201,7 +201,7 @@ function BriefCard({ countryCode }: { countryCode: string | null }) {
         </>
       )}
       {!loading && !data && (
-        <p className="text-[12px] text-ink-dim">
+        <p className="text-sm text-ink-dim">
           El resumen aparece cuando hay guías cargadas.
         </p>
       )}
@@ -231,7 +231,7 @@ function ConnectionsCard({ connections }: { connections: Connection[] }) {
     <Card
       title="Salud de conexiones"
       actions={
-        <Link href="/settings" className="text-[11.5px] no-underline">
+        <Link href="/settings" className="text-sm no-underline">
           Configurar
         </Link>
       }
@@ -249,16 +249,16 @@ function ConnectionsCard({ connections }: { connections: Connection[] }) {
               className="flex items-center justify-between gap-3 border-t border-line-row py-2.5 first:border-t-0"
             >
               <div className="min-w-0">
-                <p className="truncate text-[12.5px] font-medium text-ink">
+                <p className="truncate text-base font-medium text-ink">
                   {countryFlag(connection.country_code)} {connection.connection_name}
                 </p>
-                <p className="text-[11px] text-ink-dim">
+                <p className="text-xs text-ink-dim">
                   {connection.platform_name} · Tier {connection.tier}
                 </p>
               </div>
               <div className="flex shrink-0 items-center gap-2">
                 <StatusDot tone={tone(connection.health)} />
-                <span className="text-[11px] text-ink-muted">
+                <span className="text-xs text-ink-muted">
                   {connection.last_sync_at
                     ? formatRelative(connection.last_sync_at)
                     : label[connection.health]}

@@ -102,11 +102,11 @@ export default function CountryDashboard() {
     <AppShell>
       <header className="mb-5 flex items-end justify-between gap-4">
         <div>
-          <h1 className="flex items-center gap-2.5 text-[22px] font-bold tracking-tight">
-            <span className="text-[24px] leading-none">{countryFlag(countryCode)}</span>
+          <h1 className="flex items-center gap-2.5 text-2xl font-bold tracking-tight">
+            <span className="text-2xl leading-none">{countryFlag(countryCode)}</span>
             {country?.name ?? countryCode}
           </h1>
-          <p className="mt-1 text-[12px] text-ink-dim">
+          <p className="mt-1 text-sm text-ink-dim">
             {country
               ? `Moneda ${country.currency_code} · ventana de maduración ${
                   country.maturation_days ?? 21
@@ -123,7 +123,7 @@ export default function CountryDashboard() {
             href={`/${countryCode.toLowerCase()}/informe${
               search.toString() ? `?${search.toString()}` : ""
             }`}
-            className="shrink-0 rounded-[8px] border border-line-strong bg-surface px-3 py-1.5 text-[12px] font-medium text-ink-2 no-underline hover:text-ink"
+            className="shrink-0 rounded-control border border-line-strong bg-surface px-3 py-1.5 text-sm font-medium text-ink-2 no-underline hover:text-ink"
           >
             Informe diario
           </Link>
@@ -146,7 +146,7 @@ export default function CountryDashboard() {
               });
             }}
             className={cx(
-              "-mb-px border-b-2 px-3.5 py-2.5 text-[13px] transition-colors",
+              "-mb-px border-b-2 px-3.5 py-2.5 text-base transition-colors",
               tab === item.key
                 ? "border-accent font-semibold text-ink"
                 : "border-transparent text-ink-muted hover:text-ink-2",

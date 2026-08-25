@@ -283,22 +283,22 @@ export default function ConnectionsPage() {
     <AppShell>
       <header className="mb-5 flex flex-wrap items-end justify-between gap-3">
         <div className="min-w-0">
-          <h1 className="text-[22px] font-bold tracking-tight">Conexiones</h1>
-          <p className="mt-1 max-w-2xl text-[12px] leading-relaxed text-ink-dim">
+          <h1 className="text-2xl font-bold tracking-tight">Conexiones</h1>
+          <p className="mt-1 max-w-2xl text-sm leading-relaxed text-ink-dim">
             De dónde salen los números. Data Effi guarda el <b>nombre</b> de la variable
             donde vive cada credencial, nunca la credencial.
           </p>
         </div>
         <Link
           href="/settings"
-          className="inline-flex shrink-0 items-center gap-1.5 rounded-[8px] border border-line-input px-3 py-1.5 text-[12px] font-semibold text-ink-2 no-underline transition-colors hover:border-accent hover:text-accent"
+          className="inline-flex shrink-0 items-center gap-1.5 rounded-control border border-line-input px-3 py-1.5 text-sm font-semibold text-ink-2 no-underline transition-colors hover:border-accent hover:text-accent-ink"
         >
           Países y personas
         </Link>
       </header>
 
       {error && (
-        <p className="mb-4 rounded-[8px] border border-negative/30 bg-negative/[0.08] px-3 py-2 text-[12px] text-negative">
+        <p className="mb-4 rounded-control border border-negative/30 bg-negative/[0.08] px-3 py-2 text-sm text-negative-ink">
           {error}
         </p>
       )}
@@ -357,8 +357,8 @@ export default function ConnectionsPage() {
               <SectionTitle hint="su plataforma ya no está en el catálogo">
                 Fuera del catálogo
               </SectionTitle>
-              <div className="rounded-[12px] border border-warning/30 bg-warning/[0.05] p-4">
-                <p className="mb-3 text-[11.5px] leading-relaxed text-warning">
+              <div className="rounded-card border border-warning/30 bg-warning/[0.05] p-4">
+                <p className="mb-3 text-sm leading-relaxed text-warning-ink">
                   Estas conexiones siguen activas pero su plataforma ya no aparece en el
                   catálogo. Revisa si todavía las necesitas.
                 </p>
@@ -492,11 +492,11 @@ function PlatformCard({
   return (
     <article
       className={cx(
-        "flex h-full flex-col rounded-[12px] border bg-surface p-4",
+        "flex h-full flex-col rounded-card border bg-surface p-4",
         planned ? "border-line-subtle opacity-60" : "border-line",
       )}
     >
-      <h3 className="text-[13.5px] font-semibold leading-tight text-ink">
+      <h3 className="text-md font-semibold leading-tight text-ink">
         {platform.platform_name}
       </h3>
 
@@ -510,7 +510,7 @@ function PlatformCard({
         {platform.direction === "out" && <Chip>Salida</Chip>}
       </div>
 
-      <p className="mt-2.5 text-[11.5px] leading-relaxed text-ink-muted">
+      <p className="mt-2.5 text-sm leading-relaxed text-ink-muted">
         {domains.length > 0 ? (
           <>
             Aporta <span className="text-ink-2">{joinSpanish(domains)}</span>.
@@ -521,13 +521,13 @@ function PlatformCard({
       </p>
 
       {platform.scope === "global" && (
-        <p className="mt-1.5 text-[11px] leading-relaxed text-ink-dim">
+        <p className="mt-1.5 text-xs leading-relaxed text-ink-dim">
           Sirve para todos los países a la vez: cada carga declara de qué país es.
         </p>
       )}
 
       {platform.setup_hint && (
-        <p className="mt-2 text-[11.5px] leading-relaxed text-ink-dim">
+        <p className="mt-2 text-sm leading-relaxed text-ink-dim">
           {platform.setup_hint}
         </p>
       )}
@@ -537,7 +537,7 @@ function PlatformCard({
           href={platform.docs_url}
           target="_blank"
           rel="noreferrer"
-          className="mt-1.5 text-[11px]"
+          className="mt-1.5 text-xs"
         >
           Cómo se configura
         </a>
@@ -566,7 +566,7 @@ function PlatformCard({
         )}
       >
         {planned && (
-          <span className="text-[11px] text-ink-faint">Todavía no se puede conectar</span>
+          <span className="text-xs text-ink-faint">Todavía no se puede conectar</span>
         )}
         <Button
           size="sm"
@@ -599,21 +599,21 @@ function ConnectionRow({
   return (
     <div className="flex flex-wrap items-start justify-between gap-2">
       <div className="min-w-0 flex-1">
-        <p className="truncate text-[12px] font-medium text-ink">
+        <p className="truncate text-sm font-medium text-ink">
           {countryFlag(connection.country_code)} {connection.connection_name}
         </p>
-        <p className="mt-0.5 flex items-center gap-1.5 text-[11px] text-ink-dim">
+        <p className="mt-0.5 flex items-center gap-1.5 text-xs text-ink-dim">
           <StatusDot tone={healthTone(connection.health)} />
           {HEALTH_LABELS[connection.health]}
           {connection.last_sync_at ? ` · ${formatRelative(connection.last_sync_at)}` : ""}
         </p>
         {connection.last_error && (
-          <p className="mt-1 text-[11px] leading-relaxed text-negative">
+          <p className="mt-1 text-xs leading-relaxed text-negative-ink">
             {connection.last_error}
           </p>
         )}
         {connection.consent_granted_at && (
-          <p className="mt-1 text-[11px] text-ink-faint">
+          <p className="mt-1 text-xs text-ink-faint">
             Consentimiento otorgado {formatRelative(connection.consent_granted_at)}
           </p>
         )}
@@ -641,7 +641,7 @@ function ConnectionRow({
             )
           ) : (
             !connection.has_webhook && (
-              <span className="text-[11px] text-warning">
+              <span className="text-xs text-warning-ink">
                 Falta la URL: pídesela al dueño del espacio
               </span>
             )
@@ -679,7 +679,7 @@ function SidePanel({
 
   return (
     <>
-      <div className="fixed inset-0 z-40 bg-black/40" onClick={onClose} aria-hidden />
+      <div className="fixed inset-0 z-40 bg-scrim" onClick={onClose} aria-hidden />
       <aside
         className="fixed right-0 top-0 z-50 flex h-full w-full max-w-[440px] flex-col border-l border-line bg-sidebar"
         role="dialog"
@@ -687,13 +687,13 @@ function SidePanel({
       >
         <header className="flex items-start justify-between gap-3 border-b border-line-subtle px-4 py-3.5">
           <div className="min-w-0">
-            <h2 className="truncate text-[14px] font-bold">{title}</h2>
-            {subtitle && <p className="mt-0.5 text-[11px] text-ink-dim">{subtitle}</p>}
+            <h2 className="truncate text-md font-bold">{title}</h2>
+            {subtitle && <p className="mt-0.5 text-xs text-ink-dim">{subtitle}</p>}
           </div>
           <button
             type="button"
             onClick={onClose}
-            className="shrink-0 rounded-[6px] px-2 py-1 text-[13px] text-ink-muted hover:bg-white/[0.05]"
+            className="shrink-0 rounded-md px-2 py-1 text-base text-ink-muted hover:bg-hover-strong"
             aria-label="Cerrar"
           >
             ✕
@@ -710,7 +710,7 @@ function SidePanel({
 // ---------------------------------------------------------------------------
 
 const FIELD_CLASS =
-  "w-full rounded-[8px] border border-line-input bg-surface px-3 py-2 text-[13px] text-ink focus:border-accent focus:outline-none";
+  "w-full rounded-control border border-line-input bg-surface px-3 py-2 text-base text-ink focus:border-accent focus:outline-none";
 
 function ConnectPanel({
   platform,
@@ -850,7 +850,7 @@ function ConnectPanel({
           action={
             <Link
               href="/settings"
-              className="inline-flex items-center rounded-[8px] border border-line-input px-3 py-1.5 text-[12px] font-semibold text-ink-2 no-underline hover:border-accent hover:text-accent"
+              className="inline-flex items-center rounded-control border border-line-input px-3 py-1.5 text-sm font-semibold text-ink-2 no-underline hover:border-accent hover:text-accent-ink"
             >
               Ir a Configuración
             </Link>
@@ -859,14 +859,14 @@ function ConnectPanel({
       ) : (
         <form onSubmit={submit} className="space-y-4">
           {failure && (
-            <p className="rounded-[8px] border border-negative/30 bg-negative/[0.08] px-3 py-2 text-[12px] text-negative">
+            <p className="rounded-control border border-negative/30 bg-negative/[0.08] px-3 py-2 text-sm text-negative-ink">
               {failure}
             </p>
           )}
 
           {platform.scope === "country" ? (
             <label className="block">
-              <span className="mb-1 block text-[11.5px] font-medium text-ink-muted">
+              <span className="mb-1 block text-sm font-medium text-ink-muted">
                 País
               </span>
               <select
@@ -880,20 +880,20 @@ function ConnectPanel({
                   </option>
                 ))}
               </select>
-              <p className="mt-1 text-[11px] leading-relaxed text-ink-dim">
+              <p className="mt-1 text-xs leading-relaxed text-ink-dim">
                 Cada cuenta pertenece a una sola operación. Si manejas dos países, crea
                 una conexión por país.
               </p>
             </label>
           ) : (
-            <p className="rounded-[8px] border border-line bg-sunken px-3 py-2.5 text-[11.5px] leading-relaxed text-ink-2">
+            <p className="rounded-control border border-line bg-sunken px-3 py-2.5 text-sm leading-relaxed text-ink-2">
               Es una conexión <b>global</b>: no se ata a un país porque cada carga
               declara de qué país es.
             </p>
           )}
 
           <label className="block">
-            <span className="mb-1 block text-[11.5px] font-medium text-ink-muted">
+            <span className="mb-1 block text-sm font-medium text-ink-muted">
               Nombre
             </span>
             <input
@@ -902,14 +902,14 @@ function ConnectPanel({
               placeholder={defaultConnectionName(platform, countryCode)}
               className={FIELD_CLASS}
             />
-            <p className="mt-1 text-[11px] text-ink-dim">
+            <p className="mt-1 text-xs text-ink-dim">
               Como lo vas a reconocer tú en la lista de fuentes.
             </p>
           </label>
 
           {wantsSecret && (
             <label className="block">
-              <span className="mb-1 block text-[11.5px] font-medium text-ink-muted">
+              <span className="mb-1 block text-sm font-medium text-ink-muted">
                 Variable de entorno con la credencial
               </span>
               <input
@@ -920,7 +920,7 @@ function ConnectPanel({
                 spellCheck={false}
                 className={`${FIELD_CLASS} font-mono`}
               />
-              <p className="mt-1 text-[11px] leading-relaxed text-ink-dim">
+              <p className="mt-1 text-xs leading-relaxed text-ink-dim">
                 Escribe el <b>nombre</b> de la variable, no la clave. Data Effi nunca
                 guarda credenciales: cada vez que sincroniza las lee del servidor usando
                 este nombre. Si lo dejas vacío lo puedes llenar después.
@@ -930,7 +930,7 @@ function ConnectPanel({
 
           {isWebhook && isOwner && (
             <label className="block">
-              <span className="mb-1 block text-[11.5px] font-medium text-ink-muted">
+              <span className="mb-1 block text-sm font-medium text-ink-muted">
                 Qué va a enviar (opcional)
               </span>
               <select
@@ -947,7 +947,7 @@ function ConnectPanel({
                   </option>
                 ))}
               </select>
-              <p className="mt-1 text-[11px] leading-relaxed text-ink-dim">
+              <p className="mt-1 text-xs leading-relaxed text-ink-dim">
                 Si eliges uno, tu automatización puede mandar solo las filas. Si lo dejas
                 en «lo dirá cada envío», cada llamada tiene que decir de qué tipo es o
                 Data Effi la rechaza.
@@ -957,27 +957,27 @@ function ConnectPanel({
 
           {isWebhook &&
             (isOwner ? (
-              <div className="rounded-[8px] border border-line bg-sunken px-3 py-2.5 text-[11.5px] leading-relaxed text-ink-2">
+              <div className="rounded-control border border-line bg-sunken px-3 py-2.5 text-sm leading-relaxed text-ink-2">
                 Al crearla, Data Effi te dará una URL con un token adentro. Se muestra{" "}
                 <b>una sola vez</b> y no hay forma de volver a verla: ten a mano dónde
                 pegarla (n8n, Make o Zapier) antes de continuar.
               </div>
             ) : (
-              <div className="rounded-[8px] border border-warning/30 bg-warning/[0.07] px-3 py-2.5 text-[11.5px] leading-relaxed text-warning">
+              <div className="rounded-control border border-warning/30 bg-warning/[0.07] px-3 py-2.5 text-sm leading-relaxed text-warning-ink">
                 Puedes crear la conexión, pero la URL de envío solo la puede generar el
                 dueño del espacio. Quedará lista y él la genera desde la tarjeta.
               </div>
             ))}
 
           {platform.requires_consent && (
-            <label className="flex items-start gap-2.5 rounded-[8px] border border-warning/30 bg-warning/[0.07] p-3">
+            <label className="flex items-start gap-2.5 rounded-control border border-warning/30 bg-warning/[0.07] p-3">
               <input
                 type="checkbox"
                 checked={consent}
                 onChange={(event) => setConsent(event.target.checked)}
                 className="mt-0.5"
               />
-              <span className="text-[11.5px] leading-relaxed text-warning">
+              <span className="text-sm leading-relaxed text-warning-ink">
                 Entiendo que esta es una conexión <b>Tier 3</b>: Data Effi entrará con mi
                 sesión de usuario a {platform.platform_name}. Puede ir contra los términos
                 de esa plataforma y la responsabilidad es mía. Leí{" "}
@@ -1070,7 +1070,7 @@ function WebhookPanel({
   return (
     <SidePanel title="Webhook listo" subtitle={reveal.connectionName} onClose={onClose}>
       <div className="space-y-4">
-        <p className="rounded-[8px] border border-warning/30 bg-warning/[0.07] px-3 py-2.5 text-[11.5px] leading-relaxed text-warning">
+        <p className="rounded-control border border-warning/30 bg-warning/[0.07] px-3 py-2.5 text-sm leading-relaxed text-warning-ink">
           Esta URL se muestra <b>una sola vez</b>. Data Effi guarda únicamente su huella,
           así que no existe ninguna pantalla donde volver a verla. Cópiala ahora. Si la
           pierdes tendrás que revocarla y generar otra, y eso <b>rompe</b> la
@@ -1079,19 +1079,19 @@ function WebhookPanel({
 
         {/* Copy written by the API. Shown as it comes. */}
         {reveal.secret.message && (
-          <p className="text-[11.5px] leading-relaxed text-ink-2">
+          <p className="text-sm leading-relaxed text-ink-2">
             {reveal.secret.message}
           </p>
         )}
 
         <CopyField label="URL de envío" value={reveal.secret.url} />
-        <p className="-mt-1.5 text-[11px] leading-relaxed text-ink-dim">
+        <p className="-mt-1.5 text-xs leading-relaxed text-ink-dim">
           El token va dentro de la URL, así que la URL <b>es</b> la contraseña. Trátala
           como tal: no la pegues en un chat público ni en un repositorio.
         </p>
 
         {looksLikeMismatchedHost(reveal.secret.url) && (
-          <p className="rounded-[8px] border border-warning/30 bg-warning/[0.07] px-3 py-2.5 text-[11.5px] leading-relaxed text-warning">
+          <p className="rounded-control border border-warning/30 bg-warning/[0.07] px-3 py-2.5 text-sm leading-relaxed text-warning-ink">
             Ojo: esta dirección no coincide con la dirección pública configurada de Data
             Effi. Casi siempre es que las dos configuraciones no están de acuerdo.
             Pruébala antes de guardarla en tu automatización; si no responde, avísale a
@@ -1100,16 +1100,16 @@ function WebhookPanel({
         )}
 
         <CopyField label="Token" value={reveal.secret.token} />
-        <p className="-mt-1.5 text-[11px] leading-relaxed text-ink-dim">
+        <p className="-mt-1.5 text-xs leading-relaxed text-ink-dim">
           Es el mismo token que ya viene en la URL. Está aparte por si tu herramienta lo
           pide en un campo propio.
         </p>
 
-        <div className="rounded-[10px] border border-line bg-sunken p-3.5">
-          <h3 className="text-[12px] font-semibold text-ink">
+        <div className="rounded-control border border-line bg-sunken p-3.5">
+          <h3 className="text-sm font-semibold text-ink">
             Cómo usarlo en n8n, Make o Zapier
           </h3>
-          <ol className="mt-2 list-decimal space-y-1.5 pl-4 text-[11.5px] leading-relaxed text-ink-2">
+          <ol className="mt-2 list-decimal space-y-1.5 pl-4 text-sm leading-relaxed text-ink-2">
             <li>
               Agrega un paso que haga una petición HTTP: en n8n es <b>HTTP Request</b>, en
               Make <b>HTTP · Make a request</b>, en Zapier{" "}
@@ -1122,13 +1122,13 @@ function WebhookPanel({
             </li>
             <li>
               Cuerpo en JSON. Cada fila usa los mismos nombres de columna de tus reportes:
-              <pre className="mt-1.5 overflow-x-auto rounded-[6px] bg-page px-2.5 py-2 font-mono text-[11px] leading-relaxed text-ink-2">
+              <pre className="mt-1.5 overflow-x-auto rounded-md bg-page px-2.5 py-2 font-mono text-xs leading-relaxed text-ink-2">
                 {bodyExample}
               </pre>
             </li>
           </ol>
 
-          <div className="mt-2.5 space-y-1.5 text-[11px] leading-relaxed text-ink-dim">
+          <div className="mt-2.5 space-y-1.5 text-xs leading-relaxed text-ink-dim">
             {kind ? (
               <p>
                 Esta conexión ya sabe que le mandas{" "}
@@ -1190,20 +1190,20 @@ function CopyField({ label, value }: { label: string; value: string }) {
   return (
     <div>
       <div className="mb-1 flex items-center justify-between gap-2">
-        <span className="text-[11.5px] font-medium text-ink-muted">{label}</span>
+        <span className="text-sm font-medium text-ink-muted">{label}</span>
         <button
           type="button"
           onClick={copy}
-          className="rounded-[6px] border border-line-input px-2 py-0.5 text-[11px] font-semibold text-ink-2 transition-colors hover:border-accent hover:text-accent"
+          className="rounded-md border border-line-input px-2 py-0.5 text-xs font-semibold text-ink-2 transition-colors hover:border-accent hover:text-accent-ink"
         >
           {copied ? "Copiado" : "Copiar"}
         </button>
       </div>
-      <p className="break-all rounded-[8px] border border-line-input bg-page px-3 py-2 font-mono text-[11.5px] leading-relaxed text-ink selection:bg-accent/30">
+      <p className="break-all rounded-control border border-line-input bg-page px-3 py-2 font-mono text-sm leading-relaxed text-ink selection:bg-accent/30">
         {value}
       </p>
       {failed && (
-        <p className="mt-1 text-[11px] text-warning">
+        <p className="mt-1 text-xs text-warning-ink">
           El navegador no dejó copiar. Selecciona el texto y cópialo a mano.
         </p>
       )}

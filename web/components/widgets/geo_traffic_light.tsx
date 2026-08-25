@@ -176,12 +176,12 @@ export default function GeoTrafficLight({ countryCode, country }: WidgetProps) {
                 aria-expanded={isOpen}
                 className={cx(
                   "flex w-full items-center gap-3 px-4 py-2.5 text-left transition-colors",
-                  "hover:bg-white/[0.03] focus:outline-none focus-visible:bg-white/[0.05]",
-                  isOpen && "bg-white/[0.03]",
+                  "hover:bg-hover focus:outline-none focus-visible:bg-hover-strong",
+                  isOpen && "bg-hover",
                 )}
               >
                 <Caret open={isOpen} />
-                <span className="min-w-0 flex-1 truncate text-[12.5px] font-semibold text-ink">
+                <span className="min-w-0 flex-1 truncate text-base font-semibold text-ink">
                   {group.name}
                 </span>
                 <span className="w-[130px] shrink-0">
@@ -192,7 +192,7 @@ export default function GeoTrafficLight({ countryCode, country }: WidgetProps) {
                     label={formatPercent(group.deliveryRate)}
                   />
                 </span>
-                <span className="w-[74px] shrink-0 text-right text-[12px] text-ink-2">
+                <span className="w-[74px] shrink-0 text-right text-sm text-ink-2">
                   {formatNumber(group.shipments, country, 0)}
                 </span>
                 <span
@@ -205,9 +205,9 @@ export default function GeoTrafficLight({ countryCode, country }: WidgetProps) {
               </button>
 
               {isOpen && bestByLevel1.get(group.key) && (
-                <p className="bg-sunken/60 px-4 py-1.5 pl-10 text-[11px] text-ink-muted">
+                <p className="bg-sunken/60 px-4 py-1.5 pl-10 text-xs text-ink-muted">
                   Mejor transportadora aquí:{" "}
-                  <span className="font-semibold text-accent">
+                  <span className="font-semibold text-accent-ink">
                     {bestByLevel1.get(group.key)!.carrier_name}
                   </span>{" "}
                   ({formatPercent(bestByLevel1.get(group.key)!.delivery_rate_pct)} de
@@ -222,7 +222,7 @@ export default function GeoTrafficLight({ countryCode, country }: WidgetProps) {
                       key={city.geo_id ?? `${group.key}-${city.city_name}`}
                       className="flex items-center gap-3 px-4 py-2 pl-10"
                     >
-                      <span className="min-w-0 flex-1 truncate text-[12px] text-ink-2">
+                      <span className="min-w-0 flex-1 truncate text-sm text-ink-2">
                         {city.city_name || "Sin ciudad"}
                       </span>
                       <span className="w-[130px] shrink-0">
@@ -233,7 +233,7 @@ export default function GeoTrafficLight({ countryCode, country }: WidgetProps) {
                           label={formatPercent(city.delivery_rate_pct)}
                         />
                       </span>
-                      <span className="w-[74px] shrink-0 text-right text-[12px] text-ink-muted">
+                      <span className="w-[74px] shrink-0 text-right text-sm text-ink-muted">
                         {formatNumber(city.shipments, country, 0)}
                       </span>
                       <span
@@ -257,7 +257,7 @@ export default function GeoTrafficLight({ countryCode, country }: WidgetProps) {
 
 function ColumnHeader({ level1Label }: { level1Label: string }) {
   return (
-    <div className="flex items-center gap-3 border-b border-line-subtle pb-2 text-[10.5px] font-bold uppercase tracking-[0.06em] text-ink-faint">
+    <div className="flex items-center gap-3 border-b border-line-subtle pb-2 text-xs font-bold uppercase tracking-[0.06em] text-ink-faint">
       <span className="w-[14px] shrink-0" aria-hidden />
       <span className="min-w-0 flex-1 truncate">{level1Label}</span>
       <span className="w-[130px] shrink-0 pl-[52px]">% entrega</span>

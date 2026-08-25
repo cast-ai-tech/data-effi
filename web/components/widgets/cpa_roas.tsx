@@ -79,12 +79,12 @@ function ChartTooltip({
   const cpa = read("cpa_delivered");
 
   return (
-    <div className="rounded-[8px] border border-line-input bg-surface px-3 py-2 shadow-lg">
-      <p className="text-[11px] font-semibold text-ink">{String(label ?? "")}</p>
-      <p className="mt-1 text-[11px] text-ink-muted">
+    <div className="rounded-control border border-line-input bg-surface px-3 py-2 shadow-pop">
+      <p className="text-xs font-semibold text-ink">{String(label ?? "")}</p>
+      <p className="mt-1 text-xs text-ink-muted">
         Inversión: <span className="text-ink-2">{formatMoney(spend, country)}</span>
       </p>
-      <p className="text-[11px] text-ink-muted">
+      <p className="text-xs text-ink-muted">
         CPA entregado: <span className="text-ink-2">{formatMoney(cpa, country)}</span>
       </p>
     </div>
@@ -172,21 +172,21 @@ export default function CpaRoas({ countryCode, country }: WidgetProps) {
     >
       <div className="flex flex-wrap items-start gap-x-10 gap-y-4">
         <div>
-          <p className="text-[10.5px] font-bold uppercase tracking-[0.08em] text-ink-faint">
+          <p className="text-xs font-bold uppercase tracking-[0.08em] text-ink-faint">
             CPA entregado
           </p>
-          <p className="mt-1.5 text-[30px] font-bold leading-none text-ink">
+          <p className="mt-1.5 text-4xl font-bold leading-none text-ink">
             {formatMoney(model.cpaDelivered, country)}
           </p>
         </div>
 
         <div>
-          <p className="text-[10.5px] font-bold uppercase tracking-[0.08em] text-ink-faint">
+          <p className="text-xs font-bold uppercase tracking-[0.08em] text-ink-faint">
             ROAS neto
           </p>
           <p
-            className={`mt-1.5 text-[30px] font-bold leading-none ${
-              model.roas !== null && model.roas < 1 ? "text-negative" : "text-positive"
+            className={`mt-1.5 text-4xl font-bold leading-none ${
+              model.roas !== null && model.roas < 1 ? "text-negative-ink" : "text-positive-ink"
             }`}
           >
             {formatRatio(model.roas, country)}
@@ -194,17 +194,17 @@ export default function CpaRoas({ countryCode, country }: WidgetProps) {
         </div>
 
         <div className="self-end">
-          <p className="text-[10.5px] font-bold uppercase tracking-[0.08em] text-ink-faint">
+          <p className="text-xs font-bold uppercase tracking-[0.08em] text-ink-faint">
             CPA despachado
           </p>
-          <p className="mt-1 text-[16px] font-semibold leading-none text-ink-muted">
+          <p className="mt-1 text-lg font-semibold leading-none text-ink-muted">
             {formatMoney(model.cpaDispatched, country)}
           </p>
         </div>
       </div>
 
       {model.gapPct !== null && model.deliveryShare !== null && (
-        <p className="mt-3 max-w-2xl text-[11.5px] leading-relaxed text-ink-dim">
+        <p className="mt-3 max-w-2xl text-sm leading-relaxed text-ink-dim">
           Tu CPA real es {formatPercent(model.gapPct)} más alto que el que reporta la
           plataforma de pauta, porque solo {formatPercent(model.deliveryShare)} de las
           guías se entrega.

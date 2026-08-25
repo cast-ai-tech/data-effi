@@ -79,7 +79,7 @@ export default function CashCycle({ countryCode, country }: WidgetProps) {
   return (
     <Card title="Ciclo de caja" subtitle={SUBTITLE}>
       {verdict && (
-        <p className="mb-4 flex items-start gap-2 text-[13px] font-semibold leading-snug text-ink">
+        <p className="mb-4 flex items-start gap-2 text-base font-semibold leading-snug text-ink">
           <Chip tone={VERDICT_META[verdict.verdict].tone} className="mt-0.5 shrink-0">
             {VERDICT_META[verdict.verdict].label}
           </Chip>
@@ -89,36 +89,36 @@ export default function CashCycle({ countryCode, country }: WidgetProps) {
 
       <div className="flex flex-wrap items-end gap-x-10 gap-y-4">
         <div>
-          <p className="text-[10.5px] font-bold uppercase tracking-[0.08em] text-ink-faint">
+          <p className="text-xs font-bold uppercase tracking-[0.08em] text-ink-faint">
             La mitad de tus guías se paga en
           </p>
-          <p className="mt-1.5 text-[30px] font-bold leading-none text-ink">
+          <p className="mt-1.5 text-4xl font-bold leading-none text-ink">
             {formatNumber(row.p50_days_to_cash, country, 1)}
-            <span className="ml-1.5 text-[15px] font-semibold text-ink-muted">días</span>
+            <span className="ml-1.5 text-lg font-semibold text-ink-muted">días</span>
           </p>
         </div>
 
         <div className="self-end">
-          <p className="text-[10.5px] font-bold uppercase tracking-[0.08em] text-ink-faint">
+          <p className="text-xs font-bold uppercase tracking-[0.08em] text-ink-faint">
             Las más lentas (9 de cada 10)
           </p>
-          <p className="mt-1 text-[16px] font-semibold leading-none text-ink-muted">
+          <p className="mt-1 text-lg font-semibold leading-none text-ink-muted">
             {formatNumber(row.p90_days_to_cash, country, 1)} días
           </p>
         </div>
 
         <div className="self-end">
-          <p className="text-[10.5px] font-bold uppercase tracking-[0.08em] text-ink-faint">
+          <p className="text-xs font-bold uppercase tracking-[0.08em] text-ink-faint">
             Entregadas y todavía sin pagar
           </p>
-          <p className="mt-1 text-[16px] font-semibold leading-none text-warning">
+          <p className="mt-1 text-lg font-semibold leading-none text-warning-ink">
             {formatNumber(row.delivered_unsettled, country, 0)} guías ·{" "}
             {formatMoney(row.cash_in_transit, country)}
           </p>
         </div>
       </div>
 
-      <p className="mt-4 max-w-2xl border-t border-line-subtle pt-3 text-[11.5px] leading-relaxed text-ink-dim">
+      <p className="mt-4 max-w-2xl border-t border-line-subtle pt-3 text-sm leading-relaxed text-ink-dim">
         Entregada no es lo mismo que recaudada: el cliente ya pagó, pero la plata sigue en
         manos de la transportadora hasta que te la liquida. Ese dinero cuenta en tu
         contribución y no sirve para comprar el siguiente lote.

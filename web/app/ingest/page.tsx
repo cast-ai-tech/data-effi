@@ -41,8 +41,8 @@ export default function IngestForwardPage() {
   return (
     <AppShell>
       <header className="mb-5">
-        <h1 className="text-[22px] font-bold tracking-tight">Cargar datos</h1>
-        <p className="mt-1 text-[12px] text-ink-dim">
+        <h1 className="text-2xl font-bold tracking-tight">Cargar datos</h1>
+        <p className="mt-1 text-sm text-ink-dim">
           Cada país tiene su propia carga: ahí eliges de qué plataforma es el archivo.
         </p>
       </header>
@@ -57,7 +57,7 @@ export default function IngestForwardPage() {
             action={
               <Link
                 href="/settings"
-                className="rounded-[8px] bg-accent px-3.5 py-2 text-[12px] font-semibold text-on-accent no-underline"
+                className="rounded-control bg-accent px-3.5 py-2 text-sm font-semibold text-on-accent no-underline"
               >
                 Ir a Configuración
               </Link>
@@ -66,22 +66,22 @@ export default function IngestForwardPage() {
         )}
 
         {!loading && allowed.length === 1 && (
-          <p className="text-[12.5px] text-ink-2">
+          <p className="text-base text-ink-2">
             Abriendo la carga de {allowed[0].name}…
           </p>
         )}
 
         {!loading && allowed.length > 1 && (
           <div>
-            <p className="mb-3 text-[12.5px] text-ink-2">¿De qué país es el archivo?</p>
+            <p className="mb-3 text-base text-ink-2">¿De qué país es el archivo?</p>
             <ul className="grid gap-2 sm:grid-cols-2">
               {allowed.map((country) => (
                 <li key={country.code}>
                   <Link
                     href={`/${country.code.toLowerCase()}/cargar`}
-                    className="flex items-center gap-2.5 rounded-[10px] border border-line-strong bg-surface px-3.5 py-2.5 text-[13px] font-medium text-ink no-underline hover:border-accent/60"
+                    className="flex items-center gap-2.5 rounded-control border border-line-strong bg-surface px-3.5 py-2.5 text-base font-medium text-ink no-underline hover:border-accent/60"
                   >
-                    <span className="text-[16px] leading-none">{countryFlag(country.code)}</span>
+                    <span className="text-lg leading-none">{countryFlag(country.code)}</span>
                     {country.name}
                   </Link>
                 </li>

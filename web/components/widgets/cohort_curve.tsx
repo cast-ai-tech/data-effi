@@ -241,7 +241,7 @@ export default function CohortCurve({ countryCode, country }: WidgetProps) {
         </LineChart>
       </ResponsiveContainer>
 
-      <p className="mt-3 text-[11.5px] leading-relaxed text-ink-dim">
+      <p className="mt-3 text-sm leading-relaxed text-ink-dim">
         {maturationDays !== null
           ? `Solo se grafican los días que la cohorte ya alcanzó a vivir: una semana despachada hace menos de ${maturationDays} días todavía no tuvo la oportunidad de entregar, y dibujarla completa la haría ver peor de lo que es.`
           : "Solo se grafican los días que la cohorte ya alcanzó a vivir: una semana recién despachada todavía no tuvo la oportunidad de entregar, y dibujarla completa la haría ver peor de lo que es."}

@@ -138,14 +138,14 @@ export default function CountryUploadPage() {
   return (
     <AppShell>
       <header className="mb-5">
-        <p className="text-[11px] font-bold uppercase tracking-[0.08em] text-ink-faint">
+        <p className="text-xs font-bold uppercase tracking-[0.08em] text-ink-faint">
           Cargar datos
         </p>
-        <h1 className="mt-1 flex items-center gap-2.5 text-[22px] font-bold tracking-tight">
-          <span className="text-[24px] leading-none">{countryFlag(countryCode)}</span>
+        <h1 className="mt-1 flex items-center gap-2.5 text-2xl font-bold tracking-tight">
+          <span className="text-2xl leading-none">{countryFlag(countryCode)}</span>
           {country?.name ?? countryCode}
         </h1>
-        <p className="mt-1 text-[12px] text-ink-dim">
+        <p className="mt-1 text-sm text-ink-dim">
           Primero di de qué plataforma es el archivo; luego súbelo. Subir el mismo archivo
           dos veces no duplica nada.
         </p>
@@ -163,7 +163,7 @@ export default function CountryUploadPage() {
             action={
               <Link
                 href="/connections"
-                className="rounded-[8px] bg-accent px-3.5 py-2 text-[12px] font-semibold text-on-accent no-underline"
+                className="rounded-control bg-accent px-3.5 py-2 text-sm font-semibold text-on-accent no-underline"
               >
                 Ir a Conexiones
               </Link>
@@ -172,7 +172,7 @@ export default function CountryUploadPage() {
         ) : (
           <>
             <label className="mb-4 block sm:w-1/2">
-              <span className="mb-1 block text-[11.5px] font-medium text-ink-muted">
+              <span className="mb-1 block text-sm font-medium text-ink-muted">
                 1. Tipo de reporte
               </span>
               <select
@@ -183,7 +183,7 @@ export default function CountryUploadPage() {
                   setError(null);
                   setNotice(null);
                 }}
-                className="w-full rounded-[8px] border border-line-input bg-surface px-3 py-2 text-[13px] text-ink focus:border-accent focus:outline-none"
+                className="w-full rounded-control border border-line-input bg-surface px-3 py-2 text-base text-ink focus:border-accent focus:outline-none"
               >
                 {KINDS.map((item) => (
                   <option key={item.value} value={item.value}>
@@ -194,7 +194,7 @@ export default function CountryUploadPage() {
             </label>
 
             <fieldset className="mb-4">
-              <legend className="mb-1.5 block text-[11.5px] font-medium text-ink-muted">
+              <legend className="mb-1.5 block text-sm font-medium text-ink-muted">
                 2. ¿De qué plataforma es el archivo?
               </legend>
               <div className="flex flex-wrap gap-2" role="radiogroup" aria-label="Plataforma del archivo">
@@ -213,7 +213,7 @@ export default function CountryUploadPage() {
                       }}
                       title={item.setup_hint ?? undefined}
                       className={cx(
-                        "flex items-center gap-2 rounded-[10px] border px-3.5 py-2 text-[13px] transition-colors",
+                        "flex items-center gap-2 rounded-control border px-3.5 py-2 text-base transition-colors",
                         active
                           ? "border-accent bg-accent/[0.12] font-semibold text-ink"
                           : "border-line-strong bg-surface text-ink-2 hover:border-accent/60",
@@ -234,7 +234,7 @@ export default function CountryUploadPage() {
                   );
                 })}
               </div>
-              <p className="mt-1.5 text-[11px] text-ink-dim">
+              <p className="mt-1.5 text-xs text-ink-dim">
                 Las guías quedan bajo la plataforma que elijas: así el tablero separa Effi de
                 Dropi. Si el archivo es un reporte conocido y no coincide, no se carga.
               </p>
@@ -262,19 +262,19 @@ export default function CountryUploadPage() {
                 }
               }}
               className={cx(
-                "flex cursor-pointer flex-col items-center justify-center gap-2 rounded-[12px] border-2 border-dashed px-6 py-12 text-center transition-colors focus:outline-none focus-visible:border-accent focus-visible:ring-2 focus-visible:ring-accent/40",
+                "flex cursor-pointer flex-col items-center justify-center gap-2 rounded-card border-2 border-dashed px-6 py-12 text-center transition-colors focus:outline-none focus-visible:border-accent focus-visible:ring-2 focus-visible:ring-accent/40",
                 dragging
                   ? "border-accent bg-accent/[0.06]"
                   : "border-line-input bg-sunken hover:border-line-strong",
               )}
             >
-              <p className="text-[14px] font-semibold text-ink-2">
+              <p className="text-md font-semibold text-ink-2">
                 3. Arrastra el reporte aquí
               </p>
-              <p className="text-[12px] text-ink-dim">
+              <p className="text-sm text-ink-dim">
                 o haz clic para elegirlo · Excel (.xlsx, .xls), CSV o TXT · hasta 25 MB cada uno
               </p>
-              {checking && <p className="text-[12px] text-accent">Revisando de qué plataforma es…</p>}
+              {checking && <p className="text-sm text-accent-ink">Revisando de qué plataforma es…</p>}
               <input
                 ref={inputRef}
                 type="file"
@@ -289,14 +289,14 @@ export default function CountryUploadPage() {
             </div>
 
             {notice && (
-              <p className="mt-3 rounded-[8px] border border-accent/30 bg-accent/[0.08] px-3 py-2 text-[12px] text-ink-2">
+              <p className="mt-3 rounded-control border border-accent/30 bg-accent/[0.08] px-3 py-2 text-sm text-ink-2">
                 {notice}
               </p>
             )}
             {error && (
               <p
                 role="alert"
-                className="mt-3 rounded-[8px] border border-negative/30 bg-negative/[0.08] px-3 py-2 text-[12px] text-negative"
+                className="mt-3 rounded-control border border-negative/30 bg-negative/[0.08] px-3 py-2 text-sm text-negative-ink"
               >
                 {error}
               </p>

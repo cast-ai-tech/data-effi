@@ -148,7 +148,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
     <div className="flex h-screen w-full overflow-hidden bg-page text-ink">
       {drawerOpen && (
         <div
-          className="fixed inset-0 z-40 bg-black/50 md:hidden"
+          className="fixed inset-0 z-40 bg-scrim md:hidden"
           onClick={() => setDrawerOpen(false)}
           aria-hidden
         />
@@ -165,11 +165,11 @@ export function AppShell({ children }: { children: React.ReactNode }) {
         aria-label="Menú principal"
       >
         <div className="flex items-center gap-2.5 border-b border-line-subtle px-[18px] py-5">
-          <div className="flex size-7 shrink-0 items-center justify-center rounded-[7px] bg-accent text-[14px] font-extrabold text-on-accent">
+          <div className="flex size-7 shrink-0 items-center justify-center rounded-control bg-accent text-md font-extrabold text-on-accent">
             DE
           </div>
           {!rail && (
-            <span className="text-[15px] font-bold tracking-tight">Data Effi</span>
+            <span className="text-lg font-bold tracking-tight">Data Effi</span>
           )}
         </div>
 
@@ -206,7 +206,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
           )}
 
           {!rail && activeCountries.length > 0 && (
-            <p className="px-2.5 pb-1.5 pt-3.5 text-[10.5px] font-bold uppercase tracking-[0.08em] text-ink-faint">
+            <p className="px-2.5 pb-1.5 pt-3.5 text-xs font-bold uppercase tracking-[0.08em] text-ink-faint">
               Países
             </p>
           )}
@@ -279,17 +279,17 @@ export function AppShell({ children }: { children: React.ReactNode }) {
         <div className="border-t border-line-subtle p-2.5">
           {!rail && user && (
             <div className="mb-2 px-2.5">
-              <p className="truncate text-[12px] font-semibold text-ink-2">
+              <p className="truncate text-sm font-semibold text-ink-2">
                 {user.full_name ?? user.email}
               </p>
-              <p className="truncate text-[10.5px] text-ink-dim">{user.tenant_name}</p>
+              <p className="truncate text-xs text-ink-dim">{user.tenant_name}</p>
             </div>
           )}
           <ThemeToggle showLabel={!rail} />
           <button
             type="button"
             onClick={() => setCollapsed(!collapsed)}
-            className="hidden w-full items-center gap-2.5 rounded-[8px] px-2.5 py-2 text-[12px] text-ink-muted hover:bg-white/[0.04] md:flex"
+            className="hidden w-full items-center gap-2.5 rounded-control px-2.5 py-2 text-sm text-ink-muted hover:bg-hover md:flex"
             aria-label={rail ? "Expandir menú" : "Colapsar menú"}
           >
             <span aria-hidden>{rail ? "»" : "«"}</span>
@@ -298,7 +298,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
           <button
             type="button"
             onClick={signOut}
-            className="flex w-full items-center gap-2.5 rounded-[8px] px-2.5 py-2 text-[12px] text-ink-muted hover:bg-white/[0.04]"
+            className="flex w-full items-center gap-2.5 rounded-control px-2.5 py-2 text-sm text-ink-muted hover:bg-hover"
           >
             <span aria-hidden>⏻</span>
             {!rail && <span>Cerrar sesión</span>}
@@ -314,9 +314,9 @@ export function AppShell({ children }: { children: React.ReactNode }) {
               onClick={() => setDrawerOpen(true)}
               aria-label="Abrir menú"
               aria-expanded={drawerOpen}
-              className="flex size-9 items-center justify-center rounded-[8px] border border-line-strong text-ink-muted md:hidden"
+              className="flex size-9 items-center justify-center rounded-control border border-line-strong text-ink-muted md:hidden"
             >
-              <span aria-hidden className="text-[16px] leading-none">☰</span>
+              <span aria-hidden className="text-lg leading-none">☰</span>
             </button>
           </div>
 
@@ -343,7 +343,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
 
             <Link
               href="/connections"
-              className="flex items-center gap-1.5 rounded-full border border-line-strong bg-surface px-2.5 py-1 text-[11px] no-underline"
+              className="flex items-center gap-1.5 rounded-full border border-line-strong bg-surface px-2.5 py-1 text-xs no-underline"
               title={health.detail}
             >
               <StatusDot tone={health.tone} />
@@ -361,8 +361,8 @@ export function AppShell({ children }: { children: React.ReactNode }) {
           <div
             role="status"
             className={cx(
-              "flex flex-wrap items-center justify-between gap-2 border-b px-4 py-2 text-[12px] md:px-5",
-              banner.tone === "negative" && "border-negative/30 bg-negative/[0.08] text-negative",
+              "flex flex-wrap items-center justify-between gap-2 border-b px-4 py-2 text-sm md:px-5",
+              banner.tone === "negative" && "border-negative/30 bg-negative/[0.08] text-negative-ink",
               banner.tone === "warning" && "border-warning/30 bg-warning/[0.10] text-ink",
               banner.tone === "accent" && "border-accent/30 bg-accent/[0.08] text-ink",
               banner.tone === "neutral" && "border-line-subtle bg-sunken text-ink-2",
@@ -387,7 +387,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
           <button
             type="button"
             onClick={() => setCopilotOpen(true)}
-            className="fixed bottom-6 right-6 z-40 flex size-12 items-center justify-center rounded-full bg-accent text-on-accent shadow-lg transition-transform hover:scale-105"
+            className="fixed bottom-6 right-6 z-40 flex size-12 items-center justify-center rounded-full bg-accent text-on-accent shadow-pop transition-transform hover:scale-105"
             aria-label="Abrir copiloto"
           >
             <SparkIcon />
@@ -461,7 +461,7 @@ function WorkspacePicker({ user, collapsed }: { user: User; collapsed: boolean }
           type="button"
           onClick={() => setOpen(!open)}
           title={current?.name ?? "Cambiar de sociedad"}
-          className="flex size-9 items-center justify-center rounded-[8px] border border-line-strong bg-surface text-[12px] font-bold text-ink-2"
+          className="flex size-9 items-center justify-center rounded-control border border-line-strong bg-surface text-sm font-bold text-ink-2"
         >
           {(current?.name ?? "?").slice(0, 2).toUpperCase()}
         </button>
@@ -475,23 +475,23 @@ function WorkspacePicker({ user, collapsed }: { user: User; collapsed: boolean }
         type="button"
         onClick={() => setOpen(!open)}
         aria-expanded={open}
-        className="flex w-full items-center justify-between gap-2 rounded-[8px] border border-line-strong bg-surface px-2.5 py-2 text-left hover:bg-white/[0.04]"
+        className="flex w-full items-center justify-between gap-2 rounded-control border border-line-strong bg-surface px-2.5 py-2 text-left hover:bg-hover"
       >
         <span className="min-w-0">
-          <span className="block text-[10.5px] font-bold uppercase tracking-[0.08em] text-ink-faint">
+          <span className="block text-xs font-bold uppercase tracking-[0.08em] text-ink-faint">
             Sociedad
           </span>
-          <span className="block truncate text-[12.5px] font-semibold text-ink-2">
+          <span className="block truncate text-base font-semibold text-ink-2">
             {current?.name ?? "Sin sociedad"}
           </span>
         </span>
-        <span aria-hidden className="text-[10px] text-ink-dim">
+        <span aria-hidden className="text-xs text-ink-dim">
           ▾
         </span>
       </button>
 
       {open && (
-        <div className="absolute left-2.5 right-2.5 z-50 mt-1 overflow-hidden rounded-[10px] border border-line-strong bg-surface shadow-xl">
+        <div className="absolute left-2.5 right-2.5 z-50 mt-1 overflow-hidden rounded-control border border-line-strong bg-surface shadow-pop">
           {user.workspaces.map((ws) => (
             <button
               key={ws.tenant_id}
@@ -499,15 +499,15 @@ function WorkspacePicker({ user, collapsed }: { user: User; collapsed: boolean }
               onClick={() => switchTo(ws.tenant_id)}
               disabled={switching !== null}
               className={cx(
-                "flex w-full flex-col items-start gap-0.5 px-3 py-2 text-left hover:bg-white/[0.05] disabled:opacity-50",
-                ws.tenant_id === user.tenant_id && "bg-white/[0.06]",
+                "flex w-full flex-col items-start gap-0.5 px-3 py-2 text-left hover:bg-hover-strong disabled:opacity-50",
+                ws.tenant_id === user.tenant_id && "bg-hover-strong",
               )}
             >
-              <span className="text-[12.5px] font-semibold text-ink-2">
+              <span className="text-base font-semibold text-ink-2">
                 {ws.name}
                 {switching === ws.tenant_id && " …"}
               </span>
-              <span className="text-[10.5px] text-ink-dim">
+              <span className="text-xs text-ink-dim">
                 {ROLE_LABEL[ws.role]}
                 {ws.country_scope
                   ? ` · solo ${ws.country_scope.join(", ")}`
@@ -582,7 +582,7 @@ function CountryNav({
         href={`${base}${rangeSuffix}`}
         active={open}
         collapsed={collapsed}
-        icon={<span className="text-[15px] leading-none">{countryFlag(country.code)}</span>}
+        icon={<span className="text-lg leading-none">{countryFlag(country.code)}</span>}
         label={country.name}
       />
 
@@ -633,10 +633,10 @@ function NavItem({
       href={href}
       title={collapsed ? label : undefined}
       className={cx(
-        "flex items-center gap-2.5 rounded-[8px] px-2.5 py-2 text-[13px] no-underline transition-colors",
+        "flex items-center gap-2.5 rounded-control px-2.5 py-2 text-base no-underline transition-colors",
         active
-          ? "bg-accent/[0.12] font-semibold text-accent"
-          : "text-ink-nav hover:bg-white/[0.04] hover:text-ink-2",
+          ? "bg-accent/[0.12] font-semibold text-accent-ink"
+          : "text-ink-nav hover:bg-hover hover:text-ink-2",
       )}
     >
       <span className="flex size-4 shrink-0 items-center justify-center">{icon}</span>

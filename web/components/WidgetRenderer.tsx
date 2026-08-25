@@ -56,7 +56,7 @@ export function WidgetRenderer({
     // than rendering nothing, so the gap is visible instead of invisible.
     return (
       <Card title={widget.title} subtitle={widget.description}>
-        <p className="py-6 text-center text-[12px] text-ink-dim">
+        <p className="py-6 text-center text-sm text-ink-dim">
           Este widget existe en el servidor pero no en esta versión de la interfaz
           (<code className="text-ink-muted">{widget.widget_code}</code>).
         </p>
@@ -72,11 +72,11 @@ export function WidgetRenderer({
     <div className="relative">
       {degraded && (
         <div
-          className="flex items-start gap-2 rounded-t-[12px] border border-b-0 border-warning/25 bg-warning/[0.08] px-4 py-2"
+          className="flex items-start gap-2 rounded-t-card border border-b-0 border-warning/25 bg-warning/[0.08] px-4 py-2"
           role="status"
         >
-          <LockIcon className="mt-[1px] size-3.5 shrink-0 text-warning" variant="warning" />
-          <p className="text-[11.5px] leading-snug text-warning">{widget.state_message}</p>
+          <LockIcon className="mt-[1px] size-3.5 shrink-0 text-warning-ink" variant="warning" />
+          <p className="text-sm leading-snug text-warning-ink">{widget.state_message}</p>
         </div>
       )}
       <div className={cx(degraded && "[&>section]:rounded-t-none")}>
@@ -104,13 +104,13 @@ function BlockedWidget({ widget }: { widget: LayoutWidget }) {
 
   return (
     <section
-      className="relative overflow-hidden rounded-[12px] border border-line bg-surface"
+      className="relative overflow-hidden rounded-card border border-line bg-surface"
       data-widget-state="blocked"
       data-widget-code={widget.widget_code}
       aria-label={`${widget.title} (bloqueado)`}
     >
       <header className="border-b border-line-subtle px-4 py-3">
-        <h3 className="flex items-center gap-2 text-[13px] font-semibold text-ink-dim">
+        <h3 className="flex items-center gap-2 text-base font-semibold text-ink-dim">
           <LockIcon className="size-3.5" />
           {widget.title}
         </h3>
@@ -134,13 +134,13 @@ function BlockedWidget({ widget }: { widget: LayoutWidget }) {
 
         <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 bg-page/[0.72] px-6 text-center">
           <LockIcon className="size-5 text-ink-muted" />
-          <p className="max-w-xs text-[12.5px] leading-relaxed text-ink-2">
+          <p className="max-w-xs text-base leading-relaxed text-ink-2">
             {widget.state_message ??
               `Falta conectar ${missing} para ver este widget.`}
           </p>
           <Link
             href="/settings"
-            className="rounded-[8px] bg-accent px-3.5 py-1.5 text-[12px] font-semibold text-on-accent no-underline hover:bg-accent-hover"
+            className="rounded-control bg-accent px-3.5 py-1.5 text-sm font-semibold text-on-accent no-underline hover:bg-accent-hover"
           >
             Conectar
           </Link>
@@ -161,7 +161,7 @@ export function LockIcon({
     <svg
       viewBox="0 0 16 16"
       fill="none"
-      className={cx(className, variant === "warning" ? "text-warning" : "")}
+      className={cx(className, variant === "warning" ? "text-warning-ink" : "")}
       aria-hidden
     >
       <rect

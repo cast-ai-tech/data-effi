@@ -118,7 +118,7 @@ export default function CarrierByZone({ countryCode, country }: WidgetProps) {
           value={level1}
           onChange={(event) => setLevel1(event.target.value)}
           aria-label={`Filtrar por ${level1Label.toLowerCase()}`}
-          className="rounded-[8px] border border-line-input bg-surface px-2 py-1 text-[11.5px] text-ink-2 focus:border-accent focus:outline-none"
+          className="rounded-control border border-line-input bg-surface px-2 py-1 text-sm text-ink-2 focus:border-accent focus:outline-none"
         >
           <option value="">Todo el país</option>
           {zones.map((zone) => (
@@ -130,7 +130,7 @@ export default function CarrierByZone({ countryCode, country }: WidgetProps) {
       }
     >
       <div className="overflow-x-auto">
-        <table className="w-full min-w-[720px] border-collapse text-[12px]">
+        <table className="w-full min-w-[720px] border-collapse text-sm">
           <thead>
             <tr>
               {["Ciudad", "Transportadora", "Guías", "% entrega", "Días prom.", "Flete prom."].map(
@@ -139,7 +139,7 @@ export default function CarrierByZone({ countryCode, country }: WidgetProps) {
                     key={header}
                     scope="col"
                     className={cx(
-                      "px-3 py-2 text-[10.5px] font-semibold uppercase tracking-[0.06em] text-ink-dim",
+                      "px-3 py-2 text-xs font-semibold uppercase tracking-[0.06em] text-ink-dim",
                       index >= 2 ? "text-right" : "text-left",
                     )}
                   >
@@ -167,7 +167,7 @@ export default function CarrierByZone({ countryCode, country }: WidgetProps) {
                         <span className="block truncate font-medium text-ink-body">
                           {row.city_name || "Sin ciudad"}
                         </span>
-                        <span className="block truncate text-[10.5px] text-ink-dim">
+                        <span className="block truncate text-xs text-ink-dim">
                           {row.level1_name}
                         </span>
                       </>
@@ -214,7 +214,7 @@ export default function CarrierByZone({ countryCode, country }: WidgetProps) {
         />
       </div>
 
-      <p className="border-t border-line-subtle px-3 py-2 text-[10.5px] leading-snug text-ink-dim">
+      <p className="border-t border-line-subtle px-3 py-2 text-xs leading-snug text-ink-dim">
         «Mejor aquí» compara transportadoras con al menos {MIN_TERMINAL_FOR_BEST} guías
         cerradas en esa ciudad. Con menos, el porcentaje es suerte, no medición.
       </p>

@@ -38,26 +38,26 @@ export function Card({
   return (
     <section
       className={cx(
-        "rounded-[12px] border border-line bg-surface overflow-hidden",
+        "rounded-card border border-line bg-surface shadow-card overflow-hidden",
         className,
       )}
     >
       {(title || actions) && (
-        <header className="flex items-start justify-between gap-3 border-b border-line-subtle px-4 py-3">
+        <header className="flex items-start justify-between gap-3 border-b border-line-subtle px-4 py-3.5 sm:px-5">
           <div className="min-w-0">
             {title && (
-              <h3 className="text-[13px] font-semibold text-ink leading-tight truncate">
+              <h3 className="text-md font-semibold text-ink leading-tight truncate">
                 {title}
               </h3>
             )}
             {subtitle && (
-              <p className="mt-0.5 text-[11px] text-ink-dim leading-snug">{subtitle}</p>
+              <p className="mt-1 text-sm text-ink-muted leading-snug">{subtitle}</p>
             )}
           </div>
           {actions && <div className="shrink-0">{actions}</div>}
         </header>
       )}
-      <div className={cx("p-4", bodyClassName)}>{children}</div>
+      <div className={cx("p-4 sm:p-5", bodyClassName)}>{children}</div>
     </section>
   );
 }
@@ -95,8 +95,8 @@ export function EmptyState({
 }) {
   return (
     <div className="flex flex-col items-center justify-center gap-2 py-10 text-center">
-      <p className="text-[13px] font-semibold text-ink-2">{title}</p>
-      <p className="max-w-sm text-[12px] leading-relaxed text-ink-dim">{instruction}</p>
+      <p className="text-md font-semibold text-ink-2">{title}</p>
+      <p className="max-w-md text-base leading-relaxed text-ink-muted">{instruction}</p>
       {action && <div className="mt-2">{action}</div>}
     </div>
   );
@@ -105,13 +105,13 @@ export function EmptyState({
 export function ErrorState({ message, onRetry }: { message: string; onRetry?: () => void }) {
   return (
     <div className="flex flex-col items-center justify-center gap-2 py-8 text-center">
-      <p className="text-[13px] font-semibold text-negative">No se pudo cargar</p>
-      <p className="max-w-sm text-[12px] leading-relaxed text-ink-dim">{message}</p>
+      <p className="text-md font-semibold text-negative-ink">No se pudo cargar</p>
+      <p className="max-w-md text-base leading-relaxed text-ink-muted">{message}</p>
       {onRetry && (
         <button
           type="button"
           onClick={onRetry}
-          className="mt-1 rounded-[8px] border border-line-input px-3 py-1.5 text-[12px] text-ink-2 hover:border-accent hover:text-accent"
+          className="mt-2 min-h-11 rounded-control border border-line-input px-4 text-base font-medium text-ink-2 hover:border-accent hover:text-accent-ink"
         >
           Reintentar
         </button>
@@ -127,11 +127,11 @@ export function ErrorState({ message, onRetry }: { message: string; onRetry?: ()
 export type Tone = "neutral" | "accent" | "positive" | "warning" | "negative";
 
 const TONE_CLASSES: Record<Tone, string> = {
-  neutral: "bg-white/[0.06] text-ink-muted",
-  accent: "bg-accent/15 text-accent",
-  positive: "bg-positive/15 text-positive",
-  warning: "bg-warning/15 text-warning",
-  negative: "bg-negative/15 text-negative",
+  neutral: "bg-hover-strong text-ink-muted",
+  accent: "bg-accent/15 text-accent-ink",
+  positive: "bg-positive/15 text-positive-ink",
+  warning: "bg-warning/15 text-warning-ink",
+  negative: "bg-negative/15 text-negative-ink",
 };
 
 export function Chip({
@@ -146,7 +146,7 @@ export function Chip({
   return (
     <span
       className={cx(
-        "inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10.5px] font-semibold tracking-wide",
+        "inline-flex items-center gap-1 whitespace-nowrap rounded-full px-2.5 py-0.5 text-xs font-semibold",
         TONE_CLASSES[tone],
         className,
       )}
@@ -168,7 +168,7 @@ export function StatusDot({ tone }: { tone: Tone }) {
           : tone === "accent"
             ? "bg-accent"
             : "bg-ink-dim";
-  return <span className={cx("inline-block size-[7px] rounded-full", colour)} />;
+  return <span className={cx("inline-block size-2.5 rounded-full", colour)} />;
 }
 
 // ---------------------------------------------------------------------------
@@ -183,15 +183,22 @@ export function Button({
   ...props
 }: React.ButtonHTMLAttributes<HTMLButtonElement> & {
   variant?: "primary" | "ghost" | "danger";
-  size?: "sm" | "md";
+  size?: "sm" | "md" | "lg";
 }) {
   const base =
-    "inline-flex items-center justify-center gap-2 rounded-[8px] font-semibold transition-colors disabled:opacity-50 disabled:cursor-not-allowed";
-  const sizes = { sm: "px-3 py-1.5 text-[12px]", md: "px-4 py-2 text-[13px]" };
+    "inline-flex items-center justify-center gap-2 rounded-control font-semibold transition-colors disabled:opacity-50 disabled:cursor-not-allowed";
+  // Every size is a comfortable tap target: 36px is the floor for a
+  // secondary action, 44px for anything a phone user must hit.
+  const sizes = {
+    sm: "min-h-9 px-3 text-sm",
+    md: "min-h-11 px-4 text-base",
+    lg: "min-h-12 px-5 text-md",
+  };
   const variants = {
     primary: "bg-accent text-on-accent hover:bg-accent-hover",
-    ghost: "border border-line-input text-ink-2 hover:border-accent hover:text-accent",
-    danger: "border border-negative/40 text-negative hover:bg-negative/10",
+    ghost:
+      "border border-line-input bg-surface text-ink-2 hover:border-accent-deep hover:text-accent-ink",
+    danger: "bg-negative-ink text-on-solid hover:opacity-90",
   };
   return (
     <button className={cx(base, sizes[size], variants[variant], className)} {...props}>
@@ -228,7 +235,7 @@ export function MicroBar({
 
   return (
     <div className="flex items-center gap-2">
-      {label && <span className="w-[52px] shrink-0 text-right text-[12px]">{label}</span>}
+      {label && <span className="w-[52px] shrink-0 text-right text-sm">{label}</span>}
       <div className="h-[6px] flex-1 min-w-[40px] overflow-hidden rounded-full bg-track">
         <div className={cx("h-full rounded-full", fill)} style={{ width: `${pct}%` }} />
       </div>
@@ -251,16 +258,16 @@ export function Delta({
   invert?: boolean;
 }) {
   if (value === null || value === undefined || !Number.isFinite(value)) {
-    return <span className="text-[11px] text-ink-dim">sin comparativo</span>;
+    return <span className="text-xs text-ink-dim">sin comparativo</span>;
   }
 
   const good = invert ? value < 0 : value > 0;
   const neutral = value === 0;
-  const tone = neutral ? "text-ink-dim" : good ? "text-positive" : "text-negative";
+  const tone = neutral ? "text-ink-dim" : good ? "text-positive-ink" : "text-negative-ink";
   const arrow = neutral ? "→" : value > 0 ? "↑" : "↓";
 
   return (
-    <span className={cx("inline-flex items-center gap-1 text-[11px] font-semibold", tone)}>
+    <span className={cx("inline-flex items-center gap-1 text-xs font-semibold", tone)}>
       <span aria-hidden>{arrow}</span>
       {Math.abs(value).toFixed(1).replace(".", ",")}
       {suffix}
@@ -275,10 +282,10 @@ export function Delta({
 export function SectionTitle({ children, hint }: { children: ReactNode; hint?: string }) {
   return (
     <div className="mb-3 flex items-baseline gap-2">
-      <h2 className="text-[11px] font-bold uppercase tracking-[0.08em] text-ink-faint">
+      <h2 className="text-xs font-bold uppercase tracking-[0.06em] text-ink-muted">
         {children}
       </h2>
-      {hint && <span className="text-[11px] text-ink-dim">{hint}</span>}
+      {hint && <span className="text-xs text-ink-dim">{hint}</span>}
     </div>
   );
 }
@@ -346,14 +353,14 @@ export function ShowMore({
 
   return (
     <div className="mt-2 flex items-center justify-between gap-3 border-t border-line-subtle pt-2.5">
-      <span className="text-[11px] text-ink-dim">
+      <span className="text-xs text-ink-dim">
         {shownCount} de {total} {noun}
       </span>
       {remaining > 0 ? (
         <button
           type="button"
           onClick={onMore}
-          className="rounded-[6px] border border-line-strong px-2.5 py-1 text-[11.5px] font-medium text-ink-2 transition-colors hover:bg-sunken"
+          className="rounded-md border border-line-strong px-2.5 py-1 text-sm font-medium text-ink-2 transition-colors hover:bg-sunken"
         >
           Ver {Math.min(step, remaining)} más
         </button>
@@ -361,7 +368,7 @@ export function ShowMore({
         <button
           type="button"
           onClick={onCollapse}
-          className="rounded-[6px] px-2.5 py-1 text-[11.5px] font-medium text-ink-dim transition-colors hover:text-ink-2"
+          className="rounded-md px-2.5 py-1 text-sm font-medium text-ink-dim transition-colors hover:text-ink-2"
         >
           Ver menos
         </button>

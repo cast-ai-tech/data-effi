@@ -175,15 +175,15 @@ export default function OfficeRescue({ countryCode, country }: WidgetProps) {
     <Card title="Guías en oficina" subtitle={SUBTITLE}>
       <p
         className={cx(
-          "text-[13px] font-semibold leading-snug",
-          model.recoverable > 0 ? "text-warning" : "text-ink-muted",
+          "text-base font-semibold leading-snug",
+          model.recoverable > 0 ? "text-warning-ink" : "text-ink-muted",
         )}
       >
         {model.recoverable > 0
           ? `${formatMoney(model.recoverable, country)} todavía se salvan con una llamada.`
           : "No queda plata en la ventana de rescate: nada entre 8 y 21 días esperando."}
       </p>
-      <p className="mt-1 max-w-2xl text-[11.5px] leading-relaxed text-ink-dim">
+      <p className="mt-1 max-w-2xl text-sm leading-relaxed text-ink-dim">
         Es el recaudo de las guías que llevan entre 8 y 21 días en la oficina: ya se
         enfriaron, pero la transportadora aún no las devuelve. Después de tres semanas se
         regresan solas y ese dinero se pierde junto con el flete de ida y el de vuelta.
@@ -192,16 +192,16 @@ export default function OfficeRescue({ countryCode, country }: WidgetProps) {
       {callFirst.length > 0 && (
         <section
           aria-label="Llamar primero"
-          className="mt-4 rounded-[10px] border border-accent/30 bg-accent/[0.06] p-3"
+          className="mt-4 rounded-control border border-accent/30 bg-accent/[0.06] p-3"
         >
-          <h4 className="text-[10.5px] font-bold uppercase tracking-[0.08em] text-accent">
+          <h4 className="text-xs font-bold uppercase tracking-[0.08em] text-accent-ink">
             Llamar primero
           </h4>
           <ol className="mt-2 space-y-1.5">
             {callFirst.map((item, index) => {
               const shipments = Number(item.numbers.shipments);
               return (
-                <li key={item.key} className="flex items-baseline gap-2 text-[12px]">
+                <li key={item.key} className="flex items-baseline gap-2 text-sm">
                   <span className="w-4 shrink-0 text-right text-ink-dim">{index + 1}.</span>
                   <span className="min-w-0 flex-1 truncate text-ink-2">
                     <span className="font-semibold text-ink">{item.label}</span>
@@ -232,7 +232,7 @@ export default function OfficeRescue({ countryCode, country }: WidgetProps) {
           const width = model.maxBand > 0 ? (band.count / model.maxBand) * 100 : 0;
           return (
             <li key={band.key} className="flex items-center gap-3" title={band.hint}>
-              <span className="w-[92px] shrink-0 text-[11.5px] font-medium text-ink-muted">
+              <span className="w-[92px] shrink-0 text-sm font-medium text-ink-muted">
                 {band.label}
               </span>
               <div className="h-[10px] flex-1 overflow-hidden rounded-full bg-track">
@@ -241,7 +241,7 @@ export default function OfficeRescue({ countryCode, country }: WidgetProps) {
                   style={{ width: `${width}%`, background: band.colour }}
                 />
               </div>
-              <span className="w-[64px] shrink-0 text-right text-[12px] font-semibold text-ink-2">
+              <span className="w-[64px] shrink-0 text-right text-sm font-semibold text-ink-2">
                 {formatNumber(band.count, country, 0)}
               </span>
             </li>
@@ -250,27 +250,27 @@ export default function OfficeRescue({ countryCode, country }: WidgetProps) {
       </ul>
 
       <div className="mt-4 overflow-x-auto border-t border-line-subtle pt-3">
-        <table className="w-full min-w-[420px] border-collapse text-[12px]">
-          <caption className="mb-2 text-left text-[11px] text-ink-dim">
+        <table className="w-full min-w-[420px] border-collapse text-sm">
+          <caption className="mb-2 text-left text-xs text-ink-dim">
             Ciudades ordenadas por el recaudo que tienen detenido. Empieza por arriba.
           </caption>
           <thead>
             <tr>
               <th
                 scope="col"
-                className="px-2 py-1.5 text-left text-[10.5px] font-semibold uppercase tracking-[0.06em] text-ink-dim"
+                className="px-2 py-1.5 text-left text-xs font-semibold uppercase tracking-[0.06em] text-ink-dim"
               >
                 Ciudad
               </th>
               <th
                 scope="col"
-                className="px-2 py-1.5 text-right text-[10.5px] font-semibold uppercase tracking-[0.06em] text-ink-dim"
+                className="px-2 py-1.5 text-right text-xs font-semibold uppercase tracking-[0.06em] text-ink-dim"
               >
                 Guías
               </th>
               <th
                 scope="col"
-                className="px-2 py-1.5 text-right text-[10.5px] font-semibold uppercase tracking-[0.06em] text-ink-dim"
+                className="px-2 py-1.5 text-right text-xs font-semibold uppercase tracking-[0.06em] text-ink-dim"
               >
                 Recaudo detenido
               </th>
@@ -281,7 +281,7 @@ export default function OfficeRescue({ countryCode, country }: WidgetProps) {
               <tr key={city.key} className="border-t border-line-row">
                 <td className="max-w-[220px] px-2 py-2 text-left">
                   <span className="block truncate text-ink-2">{city.city_name}</span>
-                  <span className="block truncate text-[10.5px] text-ink-dim">
+                  <span className="block truncate text-xs text-ink-dim">
                     {city.level1_name}
                   </span>
                 </td>
@@ -295,7 +295,7 @@ export default function OfficeRescue({ countryCode, country }: WidgetProps) {
             ))}
           </tbody>
           <tfoot>
-            <tr className="border-t border-line-strong bg-sunken text-[11.5px] font-semibold text-ink-2">
+            <tr className="border-t border-line-strong bg-sunken text-sm font-semibold text-ink-2">
               <td className="px-2 py-2 text-left">Total en oficina</td>
               <td className="px-2 py-2 text-right">
                 {formatNumber(model.shipments, country, 0)}

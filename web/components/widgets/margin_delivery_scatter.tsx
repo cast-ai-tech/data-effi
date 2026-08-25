@@ -138,7 +138,7 @@ export default function MarginDeliveryScatter({ countryCode, country }: WidgetPr
       subtitle={subtitle}
       actions={
         skipped > 0 ? (
-          <span className="text-[11px] text-ink-dim">
+          <span className="text-xs text-ink-dim">
             {skipped} sin margen o sin % de entrega
           </span>
         ) : undefined
@@ -217,7 +217,7 @@ export default function MarginDeliveryScatter({ countryCode, country }: WidgetPr
 
       <ul className="mt-3 flex flex-wrap gap-x-4 gap-y-1.5">
         {(Object.keys(QUADRANT_LABEL) as Quadrant[]).map((quadrant) => (
-          <li key={quadrant} className="flex items-center gap-1.5 text-[11px] text-ink-muted">
+          <li key={quadrant} className="flex items-center gap-1.5 text-xs text-ink-muted">
             <span
               className="inline-block size-[7px] rounded-full"
               style={{ background: QUADRANT_COLOUR[quadrant] }}
@@ -237,7 +237,7 @@ export default function MarginDeliveryScatter({ countryCode, country }: WidgetPr
  */
 function QuadrantLabels() {
   const base =
-    "pointer-events-none absolute text-[10.5px] font-semibold uppercase tracking-[0.06em]";
+    "pointer-events-none absolute text-xs font-semibold uppercase tracking-[0.06em]";
   return (
     <div className="pointer-events-none absolute inset-0 z-[1]" aria-hidden>
       <span className={`${base} right-4 top-1`} style={{ color: QUADRANT_COLOUR.escalar }}>
@@ -272,11 +272,11 @@ function ScatterTooltip({
   if (!point) return null;
 
   return (
-    <div className="rounded-[8px] border border-line-strong bg-surface px-3 py-2 shadow-lg">
-      <p className="mb-1.5 max-w-[220px] text-[12px] font-semibold leading-snug text-ink">
+    <div className="rounded-control border border-line-strong bg-surface px-3 py-2 shadow-pop">
+      <p className="mb-1.5 max-w-[220px] text-sm font-semibold leading-snug text-ink">
         {point.name}
       </p>
-      <dl className="space-y-0.5 text-[11.5px]">
+      <dl className="space-y-0.5 text-sm">
         <Row label="% entrega" value={formatPercent(point.deliveryRate)} />
         <Row label="Margen" value={formatPercent(point.marginPct)} />
         <Row label="Guías" value={formatNumber(point.shipments, country, 0)} />
@@ -285,13 +285,13 @@ function ScatterTooltip({
           value={formatMoney(point.contribution, country, { compact: true })}
           tone={
             point.contribution !== null && point.contribution < 0
-              ? "text-negative"
-              : "text-positive"
+              ? "text-negative-ink"
+              : "text-positive-ink"
           }
         />
       </dl>
       <p
-        className="mt-1.5 text-[10.5px] font-semibold uppercase tracking-[0.06em]"
+        className="mt-1.5 text-xs font-semibold uppercase tracking-[0.06em]"
         style={{ color: QUADRANT_COLOUR[point.quadrant] }}
       >
         {QUADRANT_LABEL[point.quadrant]}

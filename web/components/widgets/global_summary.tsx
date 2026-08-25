@@ -121,14 +121,14 @@ export default function GlobalSummary({ country }: WidgetProps) {
 
   return (
     <Card title="Consolidado multi-país" subtitle={subtitle} bodyClassName="p-0">
-      <p className="border-b border-line-subtle px-4 py-2.5 text-[12px] text-ink-2">
+      <p className="border-b border-line-subtle px-4 py-2.5 text-sm text-ink-2">
         <span className="font-semibold text-ink">
           {activeCount} {activeCount === 1 ? "país" : "países"} con operación
         </span>
         {withRate.length > 0 && (
           <>
             {" · "}
-            <span className={totalUsd < 0 ? "text-negative" : "text-positive"}>
+            <span className={totalUsd < 0 ? "text-negative-ink" : "text-positive-ink"}>
               {formatMoney(totalUsd, usd)}
             </span>{" "}
             <span className="text-ink-dim">
@@ -140,14 +140,14 @@ export default function GlobalSummary({ country }: WidgetProps) {
         {missingRate > 0 && (
           <>
             {" · "}
-            <span className="text-warning">
+            <span className="text-warning-ink">
               {missingRate} sin tasa, fuera del total
             </span>
           </>
         )}
       </p>
 
-      <div className="flex items-center gap-3 px-4 pb-2 pt-3 text-[10.5px] font-bold uppercase tracking-[0.06em] text-ink-faint">
+      <div className="flex items-center gap-3 px-4 pb-2 pt-3 text-xs font-bold uppercase tracking-[0.06em] text-ink-faint">
         <span className="min-w-0 flex-1">País</span>
         <span className="w-[132px] shrink-0 text-right">Contribución local</span>
         <span className="w-[128px] shrink-0 text-right">En dólares</span>
@@ -165,8 +165,8 @@ export default function GlobalSummary({ country }: WidgetProps) {
           );
           const contributionTone =
             row.contribution !== null && row.contribution < 0
-              ? "text-negative"
-              : "text-positive";
+              ? "text-negative-ink"
+              : "text-positive-ink";
 
           return (
             <li
@@ -174,32 +174,32 @@ export default function GlobalSummary({ country }: WidgetProps) {
               className="flex items-center gap-3 px-4 py-2.5"
             >
               <span className="flex min-w-0 flex-1 items-center gap-2">
-                <span aria-hidden className="text-[14px] leading-none">
+                <span aria-hidden className="text-md leading-none">
                   {countryFlag(row.country_code)}
                 </span>
                 <span className="min-w-0">
-                  <span className="block truncate text-[12.5px] font-semibold text-ink">
+                  <span className="block truncate text-base font-semibold text-ink">
                     {row.country_name}
                   </span>
-                  <span className="block text-[10.5px] text-ink-dim">
+                  <span className="block text-xs text-ink-dim">
                     {row.currency_code ?? "—"}
                   </span>
                 </span>
               </span>
 
               <span
-                className={`w-[132px] shrink-0 text-right text-[12px] ${contributionTone}`}
+                className={`w-[132px] shrink-0 text-right text-sm ${contributionTone}`}
               >
                 {formatMoney(row.contribution, local)}
               </span>
 
-              <span className="flex w-[128px] shrink-0 justify-end text-[12px]">
+              <span className="flex w-[128px] shrink-0 justify-end text-sm">
                 {row.fx_missing || row.contribution_usd === null ? (
                   <Chip tone="warning">sin tasa de cambio</Chip>
                 ) : (
                   <span
                     className={
-                      row.contribution_usd < 0 ? "text-negative" : "text-positive"
+                      row.contribution_usd < 0 ? "text-negative-ink" : "text-positive-ink"
                     }
                   >
                     {formatMoney(row.contribution_usd, usd)}
@@ -224,7 +224,7 @@ export default function GlobalSummary({ country }: WidgetProps) {
                 />
               </span>
 
-              <span className="w-[76px] shrink-0 text-right text-[12px] text-ink-2">
+              <span className="w-[76px] shrink-0 text-right text-sm text-ink-2">
                 {formatNumber(row.shipments, country, 0)}
               </span>
             </li>

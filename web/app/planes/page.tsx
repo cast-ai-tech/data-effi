@@ -42,8 +42,8 @@ export default function PlanesPage() {
   return (
     <AppShell>
       <header className="mb-5">
-        <h1 className="text-[22px] font-bold tracking-tight">Planes</h1>
-        <p className="mt-1 text-[12px] text-ink-dim">
+        <h1 className="text-2xl font-bold tracking-tight">Planes</h1>
+        <p className="mt-1 text-sm text-ink-dim">
           Un mes gratis para 1 empresa. Después, el plan que te sirva; un asesor lo activa
           cuando pagas.
         </p>
@@ -71,13 +71,13 @@ export default function PlanesPage() {
           </div>
 
           {failure && (
-            <p role="alert" className="text-[12px] text-negative">
+            <p role="alert" className="text-sm text-negative-ink">
               {failure}
             </p>
           )}
 
           {!data.can_choose && (
-            <p className="text-[11.5px] text-ink-dim">
+            <p className="text-sm text-ink-dim">
               Solo el administrador de la organización puede elegir el plan.
             </p>
           )}
@@ -114,12 +114,12 @@ function StatusCard({ state }: { state: SubscriptionState }) {
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
           <div className="flex items-center gap-2">
-            <h2 className="text-[15px] font-bold">{title}</h2>
+            <h2 className="text-lg font-bold">{title}</h2>
             <Chip tone={tone}>{state.blocked ? "en pausa" : state.status === "active" ? "activo" : state.status === "pending" ? "pendiente" : "gratis"}</Chip>
           </div>
-          <p className="mt-1 text-[12.5px] text-ink-2">{state.message}</p>
+          <p className="mt-1 text-base text-ink-2">{state.message}</p>
         </div>
-        <dl className="grid grid-cols-2 gap-x-6 gap-y-1 text-[12px]">
+        <dl className="grid grid-cols-2 gap-x-6 gap-y-1 text-sm">
           <dt className="text-ink-dim">Empresas</dt>
           <dd className="font-semibold">
             {state.tenants_used} de {state.max_tenants ?? "sin límite"}
@@ -168,13 +168,13 @@ function PlanCard({
       )}
     >
       <div className="flex items-center justify-between gap-2">
-        <h3 className="text-[15px] font-bold">{plan.name}</h3>
+        <h3 className="text-lg font-bold">{plan.name}</h3>
         {isCurrent && <Chip tone="positive">tu plan</Chip>}
         {isRequested && <Chip tone="accent">elegido</Chip>}
         {!isCurrent && !isRequested && highlight && <Chip tone="accent">más elegido</Chip>}
       </div>
-      <p className="mt-2 text-[22px] font-extrabold leading-tight">{planPrice(plan)}</p>
-      <ul className="mt-3 flex-1 space-y-1 text-[12px] text-ink-2">
+      <p className="mt-2 text-2xl font-extrabold leading-tight">{planPrice(plan)}</p>
+      <ul className="mt-3 flex-1 space-y-1 text-sm text-ink-2">
         <li>✓ {planCompanies(plan)}</li>
         <li>✓ Usuarios ilimitados por empresa</li>
         <li>✓ Todos los países y plataformas</li>
@@ -188,12 +188,12 @@ function PlanCard({
             href={whatsappUrl}
             target="_blank"
             rel="noopener noreferrer"
-            className="mt-4 rounded-[8px] bg-positive px-3.5 py-2 text-center text-[12.5px] font-semibold text-white no-underline"
+            className="mt-4 rounded-control bg-positive px-3.5 py-2 text-center text-base font-semibold text-on-solid no-underline"
           >
             Hablar con un asesor
           </a>
         ) : (
-          <p className="mt-4 text-[11.5px] text-ink-dim">
+          <p className="mt-4 text-sm text-ink-dim">
             Escríbenos y armamos el plan contigo.
           </p>
         )
@@ -203,7 +203,7 @@ function PlanCard({
           disabled={!canChoose || busy || isCurrent || isRequested}
           onClick={onChoose}
           className={cx(
-            "mt-4 rounded-[8px] px-3.5 py-2 text-[12.5px] font-semibold disabled:opacity-50",
+            "mt-4 rounded-control px-3.5 py-2 text-base font-semibold disabled:opacity-50",
             highlight ? "bg-accent text-on-accent" : "border border-line-strong bg-surface text-ink",
           )}
         >

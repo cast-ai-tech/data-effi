@@ -141,11 +141,11 @@ function CustomersScreen() {
   return (
     <>
       <header className="mb-5">
-        <h1 className="flex items-center gap-2.5 text-[22px] font-bold tracking-tight">
-          <span className="text-[24px] leading-none">{countryFlag(countryCode)}</span>
+        <h1 className="flex items-center gap-2.5 text-2xl font-bold tracking-tight">
+          <span className="text-2xl leading-none">{countryFlag(countryCode)}</span>
           Clientes
         </h1>
-        <p className="mt-1 max-w-2xl text-[12px] leading-relaxed text-ink-dim">
+        <p className="mt-1 max-w-2xl text-sm leading-relaxed text-ink-dim">
           Cada persona de {country?.name ?? countryCode} agrupada por su teléfono, con
           todos sus pedidos juntos. Acá se ve quién recibe lo que le mandas y quién te
           devuelve la mitad — algo que guía por guía es imposible de notar.
@@ -184,7 +184,7 @@ function CustomersScreen() {
           );
         })}
 
-        <label className="ml-auto flex items-center gap-2 text-[11.5px] text-ink-dim">
+        <label className="ml-auto flex items-center gap-2 text-sm text-ink-dim">
           Mínimo de pedidos
           <input
             type="number"
@@ -193,7 +193,7 @@ function CustomersScreen() {
             onChange={(event) => setMinOrders(event.target.value)}
             placeholder="1"
             aria-label="Mínimo de pedidos"
-            className="w-[72px] rounded-[8px] border border-line-input bg-surface px-2.5 py-1.5 text-[12.5px] text-ink-2"
+            className="w-[72px] rounded-control border border-line-input bg-surface px-2.5 py-1.5 text-base text-ink-2"
           />
         </label>
 
@@ -243,7 +243,7 @@ function CustomersScreen() {
 
         {!loading && !error && rows.length > 0 && country && (
           <div className="overflow-x-auto">
-            <table className="w-full min-w-[1020px] border-collapse text-[12px]">
+            <table className="w-full min-w-[1020px] border-collapse text-sm">
               <thead>
                 <tr>
                   {[
@@ -261,7 +261,7 @@ function CustomersScreen() {
                       key={header.label}
                       scope="col"
                       className={cx(
-                        "px-3 py-2 text-[10.5px] font-semibold uppercase tracking-[0.06em] text-ink-dim",
+                        "px-3 py-2 text-xs font-semibold uppercase tracking-[0.06em] text-ink-dim",
                         header.align === "right" ? "text-right" : "text-left",
                       )}
                     >
@@ -339,7 +339,7 @@ function CustomerTableRow({
           onOpen();
         }
       }}
-      className="cursor-pointer border-t border-line-row hover:bg-white/[0.03] focus:bg-white/[0.05] focus:outline-none"
+      className="cursor-pointer border-t border-line-row hover:bg-hover focus:bg-hover-strong focus:outline-none"
     >
       <td className="max-w-[220px] px-3 py-2 text-left">
         <span
@@ -352,7 +352,7 @@ function CustomerTableRow({
           {contact.primary}
         </span>
         {contact.secondary && (
-          <span className="block truncate text-[10.5px] text-ink-dim">
+          <span className="block truncate text-xs text-ink-dim">
             {contact.secondary}
           </span>
         )}
@@ -362,7 +362,7 @@ function CustomerTableRow({
         {formatNumber(row.orders, country, 0)}
         {row.open_orders > 0 && (
           <span
-            className="ml-1 text-[10.5px] text-accent"
+            className="ml-1 text-xs text-accent-ink"
             title={`${row.open_orders} todavía en la calle`}
           >
             +{row.open_orders}
@@ -375,7 +375,7 @@ function CustomerTableRow({
       <td
         className={cx(
           "px-3 py-2 text-right",
-          row.returned > 0 ? "text-negative" : "text-ink-dim",
+          row.returned > 0 ? "text-negative-ink" : "text-ink-dim",
         )}
       >
         {formatNumber(row.returned, country, 0)}
@@ -386,7 +386,7 @@ function CustomerTableRow({
       <td
         className={cx(
           "px-3 py-2 text-right font-medium",
-          (row.contribution ?? 0) >= 0 ? "text-ink-2" : "text-negative",
+          (row.contribution ?? 0) >= 0 ? "text-ink-2" : "text-negative-ink",
         )}
       >
         {formatMoney(row.contribution, country)}
@@ -409,9 +409,9 @@ function CustomerTableRow({
 /** Same thresholds the carrier and product tables use, so a number means one thing. */
 function deliveryTone(pct: number | null): string {
   if (pct === null) return "text-ink-dim";
-  if (pct >= 75) return "text-positive";
-  if (pct >= 60) return "text-warning";
-  return "text-negative";
+  if (pct >= 75) return "text-positive-ink";
+  if (pct >= 60) return "text-warning-ink";
+  return "text-negative-ink";
 }
 
 // ---------------------------------------------------------------------------
@@ -459,7 +459,7 @@ function CustomerCard({
 
   return (
     <>
-      <div className="fixed inset-0 z-40 bg-black/40" onClick={onClose} aria-hidden />
+      <div className="fixed inset-0 z-40 bg-scrim" onClick={onClose} aria-hidden />
       <aside
         className="fixed right-0 top-0 z-50 flex h-full w-full max-w-[520px] flex-col border-l border-line bg-sidebar"
         role="dialog"
@@ -469,7 +469,7 @@ function CustomerCard({
           <div className="min-w-0">
             <h2
               className={cx(
-                "truncate text-[15px] font-bold",
+                "truncate text-lg font-bold",
                 contact?.hidden && "font-mono",
               )}
             >
@@ -478,7 +478,7 @@ function CustomerCard({
             {customer && grade && (
               <div className="mt-1 flex items-center gap-2">
                 <Chip tone={grade.tone}>{grade.label}</Chip>
-                <span className="text-[11px] text-ink-dim">
+                <span className="text-xs text-ink-dim">
                   {pluralize(customer.orders, "pedido", "pedidos")} en {country.name}
                 </span>
               </div>
@@ -487,7 +487,7 @@ function CustomerCard({
           <button
             type="button"
             onClick={onClose}
-            className="rounded-[6px] px-2 py-1 text-[13px] text-ink-muted hover:bg-white/[0.05]"
+            className="rounded-md px-2 py-1 text-base text-ink-muted hover:bg-hover-strong"
             aria-label="Cerrar"
           >
             ✕
@@ -505,7 +505,7 @@ function CustomerCard({
                 {contact.hidden ? (
                   <>
                     <Line label="Código" value={customer.customer_ref} mono />
-                    <p className="pt-1 text-[11px] leading-relaxed text-ink-dim">
+                    <p className="pt-1 text-xs leading-relaxed text-ink-dim">
                       {PII_HIDDEN_NOTICE}
                     </p>
                   </>
@@ -516,7 +516,7 @@ function CustomerCard({
                     <Line label="Documento" value={customer.customer_document} />
                     <Line label="Código" value={customer.customer_ref} mono />
                     {contactNotice([customer], true) === "missing" && (
-                      <p className="pt-1 text-[11px] leading-relaxed text-ink-dim">
+                      <p className="pt-1 text-xs leading-relaxed text-ink-dim">
                         {PII_MISSING_NOTICE}
                       </p>
                     )}
@@ -526,7 +526,7 @@ function CustomerCard({
 
               <Block title="A dónde le llegan los pedidos">
                 {contact.hidden ? (
-                  <p className="text-[11.5px] leading-relaxed text-ink-dim">
+                  <p className="text-sm leading-relaxed text-ink-dim">
                     La dirección de entrega es un dato de contacto, así que se oculta
                     junto con el nombre y el teléfono. La ciudad sí se puede mostrar
                     porque es la que usa el tablero para medir la operación.
@@ -539,7 +539,7 @@ function CustomerCard({
               </Block>
 
               <Block title="Cómo se comporta">
-                <p className="pb-1 text-[11.5px] leading-relaxed text-ink-muted">
+                <p className="pb-1 text-sm leading-relaxed text-ink-muted">
                   {grade.explanation}
                 </p>
                 <Line
@@ -603,15 +603,15 @@ function CustomerCard({
                   value={formatMoney(customer.contribution_per_order, country)}
                 />
                 <div className="mt-1 flex items-baseline justify-between gap-3 border-t border-line-subtle pt-2">
-                  <span className="text-[11.5px] font-semibold text-ink-2">
+                  <span className="text-sm font-semibold text-ink-2">
                     Contribución total
                   </span>
                   <span
                     className={cx(
-                      "text-[15px] font-bold",
+                      "text-lg font-bold",
                       (customer.contribution ?? 0) >= 0
-                        ? "text-positive"
-                        : "text-negative",
+                        ? "text-positive-ink"
+                        : "text-negative-ink",
                     )}
                   >
                     {formatMoney(customer.contribution, country)}
@@ -644,7 +644,7 @@ function CustomerOrders({
   if (ordered.length === 0) {
     return (
       <Block title="Sus guías">
-        <p className="text-[11.5px] leading-relaxed text-ink-dim">
+        <p className="text-sm leading-relaxed text-ink-dim">
           No pudimos traer las guías de este cliente. Sus totales de arriba sí están
           calculados sobre ellas.
         </p>
@@ -665,10 +665,10 @@ function CustomerOrders({
               className="flex items-start justify-between gap-3 border-b border-line-row pb-2 last:border-b-0 last:pb-0"
             >
               <div className="min-w-0">
-                <span className="block truncate font-mono text-[11.5px] text-ink-2">
+                <span className="block truncate font-mono text-sm text-ink-2">
                   {order.tracking_number}
                 </span>
-                <span className="block truncate text-[10.5px] text-ink-dim">
+                <span className="block truncate text-xs text-ink-dim">
                   {formatDate(order.created_date, country)}
                   {order.product_name && (
                     <>
@@ -682,8 +682,8 @@ function CustomerOrders({
                 <Chip tone={status.tone}>{status.label}</Chip>
                 <span
                   className={cx(
-                    "w-[92px] text-right text-[11.5px] font-semibold",
-                    (order.contribution ?? 0) >= 0 ? "text-ink-2" : "text-negative",
+                    "w-[92px] text-right text-sm font-semibold",
+                    (order.contribution ?? 0) >= 0 ? "text-ink-2" : "text-negative-ink",
                   )}
                 >
                   {formatMoney(order.contribution, country)}
@@ -695,13 +695,13 @@ function CustomerOrders({
       </ul>
 
       {ordered.length > shown.length && (
-        <p className="pt-2 text-[10.5px] leading-relaxed text-ink-dim">
+        <p className="pt-2 text-xs leading-relaxed text-ink-dim">
           {`Hay ${ordered.length - shown.length} guías más antes de estas. Búscalas por número en Órdenes.`}
         </p>
       )}
 
       {ordered.length >= CUSTOMER_ORDERS_CAP && (
-        <p className="pt-1 text-[10.5px] leading-relaxed text-ink-dim">
+        <p className="pt-1 text-xs leading-relaxed text-ink-dim">
           {`Esta lista llega hasta las ${CUSTOMER_ORDERS_CAP} guías más recientes. Los totales de arriba sí están calculados sobre todos sus pedidos.`}
         </p>
       )}
@@ -723,6 +723,6 @@ function sanitiseMinOrders(raw: string): string {
 }
 
 const FILTER_PILL =
-  "rounded-full border px-3 py-1 text-[11.5px] font-semibold transition-colors";
-const FILTER_ON = "border-accent/40 bg-accent/[0.12] text-accent";
+  "rounded-full border px-3 py-1 text-sm font-semibold transition-colors";
+const FILTER_ON = "border-accent/40 bg-accent/[0.12] text-accent-ink";
 const FILTER_OFF = "border-line-input text-ink-muted hover:text-ink-2";

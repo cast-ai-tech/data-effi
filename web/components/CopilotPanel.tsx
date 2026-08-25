@@ -46,7 +46,7 @@ export function CopilotPanel({
   return (
     <>
       <div
-        className="fixed inset-0 z-40 bg-black/40"
+        className="fixed inset-0 z-40 bg-scrim"
         onClick={onClose}
         aria-hidden
       />
@@ -56,11 +56,11 @@ export function CopilotPanel({
         aria-label="Copiloto"
       >
         <header className="flex items-center justify-between border-b border-line-subtle px-4 py-3.5">
-          <h2 className="text-[14px] font-bold">Copiloto</h2>
+          <h2 className="text-md font-bold">Copiloto</h2>
           <button
             type="button"
             onClick={onClose}
-            className="rounded-[6px] px-2 py-1 text-[13px] text-ink-muted hover:bg-white/[0.05]"
+            className="rounded-md px-2 py-1 text-base text-ink-muted hover:bg-hover-strong"
             aria-label="Cerrar"
           >
             ✕
@@ -88,12 +88,12 @@ function BriefBlock({ countryCode }: { countryCode: string | null }) {
 
   return (
     <section>
-      <h3 className="mb-2 text-[10.5px] font-bold uppercase tracking-[0.08em] text-ink-faint">
+      <h3 className="mb-2 text-xs font-bold uppercase tracking-[0.08em] text-ink-faint">
         Resumen del día
       </h3>
 
       {!countryCode && (
-        <p className="text-[12px] text-ink-dim">
+        <p className="text-sm text-ink-dim">
           Abre un país para ver su resumen.
         </p>
       )}
@@ -107,14 +107,14 @@ function BriefBlock({ countryCode }: { countryCode: string | null }) {
       )}
 
       {error && (
-        <p className="text-[12px] text-ink-dim">
+        <p className="text-sm text-ink-dim">
           El resumen no está disponible ahora. Los tableros siguen funcionando.
         </p>
       )}
 
       {data && (
-        <div className="rounded-[10px] border border-line bg-surface p-3.5">
-          <p className="whitespace-pre-line text-[12.5px] leading-[1.65] text-ink-body">
+        <div className="rounded-control border border-line bg-surface p-3.5">
+          <p className="whitespace-pre-line text-base leading-[1.65] text-ink-body">
             {data.summary}
           </p>
           {data.degraded && (
@@ -123,7 +123,7 @@ function BriefBlock({ countryCode }: { countryCode: string | null }) {
             </Chip>
           )}
           {data.cached && !data.degraded && (
-            <p className="mt-2 text-[10.5px] text-ink-faint">Generado una vez al día</p>
+            <p className="mt-2 text-xs text-ink-faint">Generado una vez al día</p>
           )}
         </div>
       )}
@@ -150,14 +150,14 @@ function AlertsBlock({
 
   return (
     <section>
-      <h3 className="mb-2 text-[10.5px] font-bold uppercase tracking-[0.08em] text-ink-faint">
+      <h3 className="mb-2 text-xs font-bold uppercase tracking-[0.08em] text-ink-faint">
         Alertas
       </h3>
 
       {loading && <Skeleton className="h-20 w-full" />}
 
       {!loading && alerts.length === 0 && (
-        <p className="rounded-[10px] border border-line bg-surface p-3.5 text-[12px] text-ink-dim">
+        <p className="rounded-control border border-line bg-surface p-3.5 text-sm text-ink-dim">
           Nada que reportar. Ninguna transportadora, producto ni zona cruzó su
           umbral en este periodo.
         </p>
@@ -219,7 +219,7 @@ function AskBlock({ countryCode }: { countryCode: string | null }) {
 
   return (
     <section>
-      <h3 className="mb-2 text-[10.5px] font-bold uppercase tracking-[0.08em] text-ink-faint">
+      <h3 className="mb-2 text-xs font-bold uppercase tracking-[0.08em] text-ink-faint">
         Pregúntale a tus datos
       </h3>
 
@@ -235,7 +235,7 @@ function AskBlock({ countryCode }: { countryCode: string | null }) {
           value={question}
           onChange={(event) => setQuestion(event.target.value)}
           placeholder="¿Qué quieres saber?"
-          className="min-w-0 flex-1 rounded-[8px] border border-line-input bg-surface px-3 py-2 text-[12.5px] text-ink placeholder:text-ink-dim focus:border-accent focus:outline-none"
+          className="min-w-0 flex-1 rounded-control border border-line-input bg-surface px-3 py-2 text-base text-ink placeholder:text-ink-dim focus:border-accent focus:outline-none"
         />
         <Button type="submit" size="sm" disabled={pending || !question.trim()}>
           {pending ? "..." : "Ir"}
@@ -251,7 +251,7 @@ function AskBlock({ countryCode }: { countryCode: string | null }) {
               setQuestion(suggestion);
               void ask(suggestion);
             }}
-            className="rounded-full border border-line-input bg-surface px-2.5 py-1 text-[11px] text-ink-2 hover:border-accent hover:text-accent"
+            className="rounded-full border border-line-input bg-surface px-2.5 py-1 text-xs text-ink-2 hover:border-accent hover:text-accent-ink"
           >
             {suggestion}
           </button>
@@ -259,12 +259,12 @@ function AskBlock({ countryCode }: { countryCode: string | null }) {
       </div>
 
       {result && (
-        <div className="mt-3 rounded-[10px] border border-line bg-surface p-3.5">
-          <p className="text-[12.5px] leading-[1.6] text-ink-body">{result.answer}</p>
+        <div className="mt-3 rounded-control border border-line bg-surface p-3.5">
+          <p className="text-base leading-[1.6] text-ink-body">{result.answer}</p>
 
           {result.rows.length > 0 && (
-            <div className="mt-3 max-h-56 overflow-auto rounded-[8px] border border-line-row">
-              <table className="w-full text-[11px]">
+            <div className="mt-3 max-h-56 overflow-auto rounded-control border border-line-row">
+              <table className="w-full text-xs">
                 <thead className="sticky top-0 bg-sunken">
                   <tr>
                     {result.columns.map((column) => (
@@ -297,12 +297,12 @@ function AskBlock({ countryCode }: { countryCode: string | null }) {
               <button
                 type="button"
                 onClick={() => setShowSql(!showSql)}
-                className="mt-2.5 text-[11px] text-ink-muted underline-offset-2 hover:text-accent"
+                className="mt-2.5 text-xs text-ink-muted underline-offset-2 hover:text-accent-ink"
               >
                 {showSql ? "Ocultar consulta" : "Ver consulta"}
               </button>
               {showSql && (
-                <pre className="mt-2 overflow-x-auto rounded-[8px] bg-sunken p-2.5 text-[10.5px] leading-[1.5] text-ink-muted">
+                <pre className="mt-2 overflow-x-auto rounded-control bg-sunken p-2.5 text-xs leading-[1.5] text-ink-muted">
                   {result.sql}
                 </pre>
               )}

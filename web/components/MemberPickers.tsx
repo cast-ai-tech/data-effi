@@ -55,13 +55,13 @@ export function CountryFlagPicker({
               title={country.name}
               onClick={() => onChange(toggleCountry(selected, country.code, codes))}
               className={cx(
-                "flex items-center gap-1.5 rounded-full border px-2.5 py-1.5 text-[12px] font-semibold transition disabled:opacity-40",
+                "flex items-center gap-1.5 rounded-full border px-2.5 py-1.5 text-sm font-semibold transition disabled:opacity-40",
                 on
                   ? "border-accent/60 bg-accent/15 text-ink"
                   : "border-line-strong text-ink-muted hover:border-line-input hover:text-ink",
               )}
             >
-              <span aria-hidden className="text-[16px] leading-none">
+              <span aria-hidden className="text-lg leading-none">
                 {countryFlag(country.code)}
               </span>
               {country.code}
@@ -69,7 +69,7 @@ export function CountryFlagPicker({
           );
         })}
       </div>
-      <p className="text-[11px] text-ink-dim">
+      <p className="text-xs text-ink-dim">
         {allSelected
           ? "Ninguno marcado = ve todos los países de la sociedad."
           : `Solo ${selected.join(", ")}. Haz clic en una bandera para agregar o quitar.`}
@@ -101,7 +101,7 @@ export function BusinessModelPicker({
             title={BUSINESS_MODEL_META[model].detail}
             onClick={() => onChange(on ? null : model)}
             className={cx(
-              "rounded-full border px-2.5 py-1.5 text-[12px] font-semibold transition disabled:opacity-40",
+              "rounded-full border px-2.5 py-1.5 text-sm font-semibold transition disabled:opacity-40",
               on
                 ? "border-positive/60 bg-positive/15 text-ink"
                 : "border-line-strong text-ink-muted hover:text-ink",

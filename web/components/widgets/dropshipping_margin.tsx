@@ -113,9 +113,9 @@ export default function DropshippingMargin({ countryCode, country }: WidgetProps
               </span>
               <span className="mt-0.5 flex flex-wrap items-center gap-1.5">
                 {row.sku && (
-                  <span className="text-[10.5px] text-ink-dim">{row.sku}</span>
+                  <span className="text-xs text-ink-dim">{row.sku}</span>
                 )}
-                <span className="text-[10.5px] text-ink-dim">{row.supplier_name}</span>
+                <span className="text-xs text-ink-dim">{row.supplier_name}</span>
                 {!row.catalogue_reviewed && (
                   <Chip tone="warning" className="cursor-help">
                     {/* Native title so the explanation travels with the chip. */}
@@ -166,8 +166,8 @@ export default function DropshippingMargin({ countryCode, country }: WidgetProps
                 value === null
                   ? "text-ink-dim"
                   : value < 0
-                    ? "text-negative"
-                    : "text-positive",
+                    ? "text-negative-ink"
+                    : "text-positive-ink",
               )}
             >
               {formatMoney(value, country)}
@@ -186,7 +186,7 @@ export default function DropshippingMargin({ countryCode, country }: WidgetProps
                 value === null
                   ? "text-ink-dim"
                   : value < 0
-                    ? "text-negative"
+                    ? "text-negative-ink"
                     : "text-ink-2",
               )}
             >
@@ -207,7 +207,7 @@ export default function DropshippingMargin({ countryCode, country }: WidgetProps
             <span
               className={cx(
                 "font-semibold",
-                losesMoney(row) ? "text-negative" : "text-ink-2",
+                losesMoney(row) ? "text-negative-ink" : "text-ink-2",
               )}
             >
               {formatPercent(value)}
@@ -271,7 +271,7 @@ export default function DropshippingMargin({ countryCode, country }: WidgetProps
       bodyClassName="p-0"
     >
       <div className="overflow-x-auto">
-        <table className="w-full min-w-[1040px] border-collapse text-[12px]">
+        <table className="w-full min-w-[1040px] border-collapse text-sm">
           <thead>
             {table.getHeaderGroups().map((headerGroup) => (
               <tr key={headerGroup.id}>
@@ -289,7 +289,7 @@ export default function DropshippingMargin({ countryCode, country }: WidgetProps
                             : "none"
                       }
                       className={cx(
-                        "px-3 py-2 text-[10.5px] font-semibold uppercase tracking-[0.06em] text-ink-dim",
+                        "px-3 py-2 text-xs font-semibold uppercase tracking-[0.06em] text-ink-dim",
                         RIGHT_ALIGNED.has(header.column.id) ? "text-right" : "text-left",
                       )}
                     >
@@ -302,7 +302,7 @@ export default function DropshippingMargin({ countryCode, country }: WidgetProps
                         )}
                       >
                         {flexRender(header.column.columnDef.header, header.getContext())}
-                        <span aria-hidden className="text-[9px]">
+                        <span aria-hidden className="text-xs">
                           {sorted === "asc" ? "▲" : sorted === "desc" ? "▼" : ""}
                         </span>
                       </button>
@@ -346,8 +346,8 @@ export default function DropshippingMargin({ countryCode, country }: WidgetProps
       <div className="space-y-1.5 border-t border-line-subtle px-4 py-3">
         <p
           className={cx(
-            "text-[11.5px] leading-relaxed",
-            belowBreakeven.length > 0 ? "text-negative" : "text-ink-dim",
+            "text-sm leading-relaxed",
+            belowBreakeven.length > 0 ? "text-negative-ink" : "text-ink-dim",
           )}
         >
           {belowBreakeven.length > 0
@@ -356,7 +356,7 @@ export default function DropshippingMargin({ countryCode, country }: WidgetProps
         </p>
 
         {unreviewed > 0 && (
-          <p className="text-[11.5px] leading-relaxed text-ink-dim">
+          <p className="text-sm leading-relaxed text-ink-dim">
             {unreviewed === 1
               ? "Un producto todavía tiene el costo estimado a partir de los reportes, no confirmado por una persona. Ajústalo en Productos para que su margen sea real."
               : `${unreviewed} productos todavía tienen el costo estimado a partir de los reportes, no confirmado por una persona. Ajústalos en Productos para que su margen sea real.`}

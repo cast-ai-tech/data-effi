@@ -73,7 +73,7 @@ export function PlatformPicker({ countryCode }: { countryCode?: string | null })
 
   return (
     <div
-      className="flex items-center gap-0.5 rounded-[8px] border border-line-strong bg-surface p-0.5"
+      className="flex items-center gap-0.5 rounded-control border border-line-strong bg-surface p-0.5"
       role="group"
       aria-label="Plataforma que cargó las guías"
     >
@@ -125,7 +125,7 @@ function PickerButton({
       aria-pressed={active}
       title={title}
       className={cx(
-        "rounded-[6px] px-2.5 py-1 text-[11.5px] font-medium transition-colors",
+        "rounded-md px-2.5 py-1 text-sm font-medium transition-colors",
         active ? "bg-range-active text-ink" : "text-ink-muted hover:text-ink-2",
       )}
     >

@@ -89,8 +89,8 @@ export default function UsuariosPage() {
   return (
     <AppShell>
       <header className="mb-5">
-        <h1 className="text-[22px] font-bold tracking-tight">Usuarios</h1>
-        <p className="mt-1 text-[12px] text-ink-dim">
+        <h1 className="text-2xl font-bold tracking-tight">Usuarios</h1>
+        <p className="mt-1 text-sm text-ink-dim">
           Quién entra a <strong>{user?.tenant_name ?? "esta sociedad"}</strong>,
           qué puede hacer y qué países ve. Cada sociedad tiene su propia lista.
         </p>
@@ -113,7 +113,7 @@ export default function UsuariosPage() {
           >
             {loading && <SkeletonRows rows={3} />}
             {!loading && (members?.length ?? 0) === 0 && (
-              <p className="text-[12px] text-ink-dim">
+              <p className="text-sm text-ink-dim">
                 Todavía no has invitado a nadie.
               </p>
             )}
@@ -213,7 +213,7 @@ function InviteForm({
             value={email}
             onChange={(event) => setEmail(event.target.value)}
             placeholder="socio@empresa.com"
-            className="w-full rounded-[8px] border border-line-strong bg-page px-2.5 py-2 text-[12.5px] outline-none focus:border-accent"
+            className="w-full rounded-control border border-line-strong bg-page px-2.5 py-2 text-base outline-none focus:border-accent"
           />
         </Field>
 
@@ -223,9 +223,9 @@ function InviteForm({
               <label
                 key={option.value}
                 className={cx(
-                  "flex cursor-pointer items-start gap-2 rounded-[8px] border px-2.5 py-2",
+                  "flex cursor-pointer items-start gap-2 rounded-control border px-2.5 py-2",
                   role === option.value
-                    ? "border-accent/50 bg-white/[0.04]"
+                    ? "border-accent/50 bg-hover"
                     : "border-line-strong",
                 )}
               >
@@ -238,10 +238,10 @@ function InviteForm({
                   className="mt-0.5"
                 />
                 <span className="min-w-0">
-                  <span className="block text-[12.5px] font-semibold">
+                  <span className="block text-base font-semibold">
                     {option.label}
                   </span>
-                  <span className="block text-[11px] text-ink-dim">
+                  <span className="block text-xs text-ink-dim">
                     {option.detail}
                   </span>
                 </span>
@@ -287,7 +287,7 @@ function InviteForm({
               value={share}
               onChange={(event) => setShare(event.target.value)}
               placeholder="50"
-              className="w-full rounded-[8px] border border-line-strong bg-page px-2.5 py-2 text-[12.5px] outline-none focus:border-accent"
+              className="w-full rounded-control border border-line-strong bg-page px-2.5 py-2 text-base outline-none focus:border-accent"
             />
           </Field>
         )}
@@ -295,12 +295,12 @@ function InviteForm({
         <button
           type="submit"
           disabled={busy || !email.trim()}
-          className="rounded-[8px] bg-accent px-3.5 py-2 text-[12.5px] font-semibold text-on-accent disabled:opacity-50"
+          className="rounded-control bg-accent px-3.5 py-2 text-base font-semibold text-on-accent disabled:opacity-50"
         >
           {busy ? "Creando…" : "Dar acceso"}
         </button>
 
-        {error && <p className="text-[12px] text-negative">{error}</p>}
+        {error && <p className="text-sm text-negative-ink">{error}</p>}
         {result && <InviteOutcome result={result} />}
       </form>
     </Card>
@@ -315,7 +315,7 @@ function InviteOutcome({ result }: { result: InviteResult }) {
 
   if (result.already_registered) {
     return (
-      <div className="rounded-[8px] border border-line-strong bg-page px-3 py-2.5 text-[12px]">
+      <div className="rounded-control border border-line-strong bg-page px-3 py-2.5 text-sm">
         <p className="font-semibold">{result.email} ya puede entrar</p>
         <p className="mt-0.5 text-ink-dim">
           Ya tenía cuenta en otra de tus sociedades: entra con su misma
@@ -327,20 +327,20 @@ function InviteOutcome({ result }: { result: InviteResult }) {
   }
 
   return (
-    <div className="rounded-[8px] border border-accent/40 bg-page px-3 py-2.5 text-[12px]">
+    <div className="rounded-control border border-accent/40 bg-page px-3 py-2.5 text-sm">
       <p className="font-semibold">Enlace de invitación para {result.email}</p>
       <p className="mt-0.5 text-ink-dim">
         Cópialo y mándaselo. <strong>Se muestra una sola vez</strong> y vence en
         7 días; ahí elige su propia contraseña.
       </p>
-      <code className="mt-2 block break-all rounded-[6px] bg-surface px-2 py-1.5 text-[11px]">
+      <code className="mt-2 block break-all rounded-md bg-surface px-2 py-1.5 text-xs">
         {link ?? result.invitation_token}
       </code>
       {link && (
         <button
           type="button"
           onClick={() => navigator.clipboard?.writeText(link)}
-          className="mt-2 rounded-[7px] border border-line-strong px-2.5 py-1 text-[11.5px]"
+          className="mt-2 rounded-control border border-line-strong px-2.5 py-1 text-sm"
         >
           Copiar enlace
         </button>
@@ -418,13 +418,13 @@ function MemberItem({
     <li className="border-b border-line-subtle/60 py-3 last:border-0">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div className="min-w-0 flex-1">
-          <p className="text-[12.5px] font-semibold">
+          <p className="text-base font-semibold">
             {member.full_name ?? member.email}
             {isMe && (
-              <span className="ml-1.5 text-[10.5px] text-ink-dim">(tú)</span>
+              <span className="ml-1.5 text-xs text-ink-dim">(tú)</span>
             )}
           </p>
-          <p className="truncate text-[11px] text-ink-dim">{member.email}</p>
+          <p className="truncate text-xs text-ink-dim">{member.email}</p>
           <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
             <Chip tone="accent">{companyName}</Chip>
             <Chip tone={member.role === "uploader" ? "warning" : "neutral"}>
@@ -436,7 +436,7 @@ function MemberItem({
             {member.share_pct != null && (
               <Chip tone="neutral">{member.share_pct}%</Chip>
             )}
-            <span className="text-[10.5px] text-ink-faint">
+            <span className="text-xs text-ink-faint">
               {member.last_login_at
                 ? `entró ${formatRelative(member.last_login_at)}`
                 : "nunca ha entrado"}
@@ -444,23 +444,23 @@ function MemberItem({
           </div>
           {member.role !== "uploader" && (
             <p
-              className="mt-1.5 flex flex-wrap items-center gap-1 text-[12px]"
+              className="mt-1.5 flex flex-wrap items-center gap-1 text-sm"
               aria-label={
                 member.country_scope
                   ? `Solo ve ${member.country_scope.join(", ")}`
                   : "Ve todos los países"
               }
             >
-              <span className="text-[10.5px] uppercase tracking-[0.06em] text-ink-faint">
+              <span className="text-xs uppercase tracking-[0.06em] text-ink-faint">
                 {member.country_scope ? "Solo" : "Todos los países"}
               </span>
               {shown.map((code) => (
                 <span
                   key={code}
                   title={countries.find((c) => c.code === code)?.name ?? code}
-                  className="inline-flex items-center gap-0.5 rounded-full bg-sunken px-1.5 py-0.5 text-[11px]"
+                  className="inline-flex items-center gap-0.5 rounded-full bg-sunken px-1.5 py-0.5 text-xs"
                 >
-                  <span aria-hidden className="text-[14px] leading-none">
+                  <span aria-hidden className="text-md leading-none">
                     {countryFlag(code)}
                   </span>
                   {code}
@@ -474,7 +474,7 @@ function MemberItem({
           <button
             type="button"
             onClick={() => setEditing(!editing)}
-            className="rounded-[7px] border border-line-strong px-2.5 py-1 text-[11.5px]"
+            className="rounded-control border border-line-strong px-2.5 py-1 text-sm"
           >
             {editing ? "Cerrar" : "Cambiar"}
           </button>
@@ -483,7 +483,7 @@ function MemberItem({
               type="button"
               onClick={() => setConfirmingRevoke(true)}
               disabled={busy}
-              className="rounded-[7px] border border-line-strong px-2.5 py-1 text-[11.5px] text-negative disabled:opacity-50"
+              className="rounded-control border border-line-strong px-2.5 py-1 text-sm text-negative-ink disabled:opacity-50"
             >
               Quitar
             </button>
@@ -492,7 +492,7 @@ function MemberItem({
       </div>
 
       {editing && (
-        <div className="mt-3 flex flex-col gap-3 rounded-[8px] border border-line-strong bg-page p-3">
+        <div className="mt-3 flex flex-col gap-3 rounded-control border border-line-strong bg-page p-3">
           <EditRow label="Rol">
             <div className="flex flex-wrap gap-1.5">
               {ROLES.map((option) => (
@@ -502,7 +502,7 @@ function MemberItem({
                   disabled={busy || option.value === member.role}
                   onClick={() => patch({ role: option.value })}
                   className={cx(
-                    "rounded-full border px-2.5 py-1 text-[11.5px] disabled:opacity-40",
+                    "rounded-full border px-2.5 py-1 text-sm disabled:opacity-40",
                     option.value === member.role
                       ? "border-accent/60 bg-accent/15"
                       : "border-line-strong",
@@ -549,7 +549,7 @@ function MemberItem({
         </div>
       )}
 
-      {error && <p className="mt-2 text-[11.5px] text-negative">{error}</p>}
+      {error && <p className="mt-2 text-sm text-negative-ink">{error}</p>}
 
       {confirmingRevoke && (
         <ConfirmDialog
@@ -585,7 +585,7 @@ function EditRow({
 }) {
   return (
     <div className="flex flex-col gap-1.5 sm:flex-row sm:items-start sm:gap-3">
-      <span className="w-[120px] shrink-0 pt-1.5 text-[11px] font-semibold uppercase tracking-[0.06em] text-ink-faint">
+      <span className="w-[120px] shrink-0 pt-1.5 text-xs font-semibold uppercase tracking-[0.06em] text-ink-faint">
         {label}
       </span>
       <div className="min-w-0 flex-1">{children}</div>
@@ -615,13 +615,13 @@ function SharePctEditor({
           step="0.01"
           value={value}
           onChange={(event) => setValue(event.target.value)}
-          className="w-24 rounded-[7px] border border-line-strong bg-surface px-2 py-1 text-[11.5px] outline-none focus:border-accent"
+          className="w-24 rounded-control border border-line-strong bg-surface px-2 py-1 text-sm outline-none focus:border-accent"
         />
         <button
           type="button"
           disabled={busy || !value.trim()}
           onClick={() => onSave(Number(value))}
-          className="rounded-[7px] border border-line-strong px-2.5 py-1 text-[11.5px] disabled:opacity-40"
+          className="rounded-control border border-line-strong px-2.5 py-1 text-sm disabled:opacity-40"
         >
           Guardar
         </button>
@@ -647,7 +647,7 @@ function Field({
   children: React.ReactNode;
 }) {
   const captionClass =
-    "text-[11px] font-semibold uppercase tracking-[0.06em] text-ink-faint";
+    "text-xs font-semibold uppercase tracking-[0.06em] text-ink-faint";
   return (
     <div className="flex flex-col gap-1.5">
       {htmlFor ? (
@@ -657,7 +657,7 @@ function Field({
       ) : (
         <span className={captionClass}>{label}</span>
       )}
-      {hint && <span className="-mt-1 text-[11px] text-ink-dim">{hint}</span>}
+      {hint && <span className="-mt-1 text-xs text-ink-dim">{hint}</span>}
       {children}
     </div>
   );

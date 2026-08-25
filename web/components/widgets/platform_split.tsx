@@ -109,7 +109,7 @@ export function ConsolidatedStrip({
       <Figure
         label="Devoluciones combinadas"
         value={formatNumber(total.devolucion, country, 0)}
-        tone="text-negative"
+        tone="text-negative-ink"
       />
       <Figure
         label="% devolución combinado"
@@ -141,12 +141,12 @@ function Figure({
   tone?: string;
 }) {
   return (
-    <div className="rounded-[10px] border border-line-subtle bg-sunken px-3.5 py-2.5">
-      <dt className="text-[10.5px] font-bold uppercase tracking-[0.06em] text-ink-faint">
+    <div className="rounded-control border border-line-subtle bg-sunken px-3.5 py-2.5">
+      <dt className="text-xs font-bold uppercase tracking-[0.06em] text-ink-faint">
         {label}
       </dt>
-      <dd className={cx("mt-0.5 text-[18px] font-bold leading-tight", tone)}>{value}</dd>
-      {hint && <dd className="mt-0.5 text-[11px] text-ink-dim">{hint}</dd>}
+      <dd className={cx("mt-0.5 text-xl font-bold leading-tight", tone)}>{value}</dd>
+      {hint && <dd className="mt-0.5 text-xs text-ink-dim">{hint}</dd>}
     </div>
   );
 }
@@ -201,20 +201,20 @@ export default function PlatformSplit({ countryCode, country }: WidgetProps) {
             />
             <span className="min-w-0 flex-1">
               <span className="flex items-center gap-2">
-                <span className="truncate text-[12.5px] font-semibold text-ink">
+                <span className="truncate text-base font-semibold text-ink">
                   {row.platform_name}
                 </span>
                 {index === 0 && rows.length > 1 && <Chip tone="accent">más guías</Chip>}
                 {row.sample_quality === "muestra_corta" && (
                   <abbr
                     title={SHORT_SAMPLE_HINT}
-                    className="cursor-help text-[10px] font-semibold text-ink-dim no-underline"
+                    className="cursor-help text-xs font-semibold text-ink-dim no-underline"
                   >
                     ~
                   </abbr>
                 )}
               </span>
-              <span className="block text-[10.5px] text-ink-dim">
+              <span className="block text-xs text-ink-dim">
                 {formatNumber(row.shipments, country, 0)} guías ·{" "}
                 {formatPercent(row.share_pct)} del total ·{" "}
                 {formatNumber(row.devolucion, country, 0)} devueltas
@@ -228,7 +228,7 @@ export default function PlatformSplit({ countryCode, country }: WidgetProps) {
                 tone={deliveryTone(row.pct_entrega_cerradas)}
                 label={formatPercent(row.pct_entrega_cerradas)}
               />
-              <span className="mt-0.5 block text-right text-[10px] text-ink-faint">
+              <span className="mt-0.5 block text-right text-xs text-ink-faint">
                 entrega (cerradas)
               </span>
             </span>
@@ -240,7 +240,7 @@ export default function PlatformSplit({ countryCode, country }: WidgetProps) {
                 tone="negative"
                 label={formatPercent(row.pct_devolucion_total)}
               />
-              <span className="mt-0.5 block text-right text-[10px] text-ink-faint">
+              <span className="mt-0.5 block text-right text-xs text-ink-faint">
                 devolución
               </span>
             </span>

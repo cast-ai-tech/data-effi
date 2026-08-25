@@ -74,10 +74,10 @@ const SEARCH_DEBOUNCE_MS = 350;
 
 const TONE_TEXT: Record<string, string> = {
   neutral: "text-ink-2",
-  accent: "text-accent",
-  positive: "text-positive",
-  warning: "text-warning",
-  negative: "text-negative",
+  accent: "text-accent-ink",
+  positive: "text-positive-ink",
+  warning: "text-warning-ink",
+  negative: "text-negative-ink",
 };
 
 export default function OrdersPage() {
@@ -146,11 +146,11 @@ function OrdersScreen() {
   return (
     <>
       <header className="mb-5">
-        <h1 className="flex items-center gap-2.5 text-[22px] font-bold tracking-tight">
-          <span className="text-[24px] leading-none">{countryFlag(countryCode)}</span>
+        <h1 className="flex items-center gap-2.5 text-2xl font-bold tracking-tight">
+          <span className="text-2xl leading-none">{countryFlag(countryCode)}</span>
           Órdenes
         </h1>
-        <p className="mt-1 max-w-2xl text-[12px] leading-relaxed text-ink-dim">
+        <p className="mt-1 max-w-2xl text-sm leading-relaxed text-ink-dim">
           Cada guía despachada de {country?.name ?? countryCode}, con lo que dejó y
           cuánto lleva abierta. Haz clic en una fila para ver su historia completa: a
           quién iba, qué se cobró y qué se pagó, y todo lo que le fue pasando en el
@@ -166,23 +166,23 @@ function OrdersScreen() {
 
       <div className="mb-4 flex flex-wrap items-end gap-2">
         <label className="block">
-          <span className="mb-1 block text-[11px] text-ink-dim">Buscar guía</span>
+          <span className="mb-1 block text-xs text-ink-dim">Buscar guía</span>
           <input
             type="search"
             value={search}
             onChange={(event) => setSearch(event.target.value)}
             placeholder="Número de guía…"
             aria-label="Buscar por número de guía"
-            className="w-[220px] rounded-[8px] border border-line-input bg-surface px-3 py-1.5 text-[12.5px]"
+            className="w-[220px] rounded-control border border-line-input bg-surface px-3 py-1.5 text-base"
           />
         </label>
 
         <label className="block">
-          <span className="mb-1 block text-[11px] text-ink-dim">Estado</span>
+          <span className="mb-1 block text-xs text-ink-dim">Estado</span>
           <select
             value={group}
             onChange={(event) => setGroup(event.target.value as StatusGroup | "")}
-            className="rounded-[8px] border border-line-input bg-surface px-3 py-1.5 text-[12.5px]"
+            className="rounded-control border border-line-input bg-surface px-3 py-1.5 text-base"
           >
             <option value="">Todos</option>
             {STATUS_GROUPS.map((item) => (
@@ -194,27 +194,27 @@ function OrdersScreen() {
         </label>
 
         <label className="block">
-          <span className="mb-1 block text-[11px] text-ink-dim">Desde</span>
+          <span className="mb-1 block text-xs text-ink-dim">Desde</span>
           <input
             type="date"
             value={fromDate}
             onChange={(event) => setFromDate(event.target.value)}
-            className="rounded-[8px] border border-line-input bg-surface px-3 py-1.5 text-[12.5px]"
+            className="rounded-control border border-line-input bg-surface px-3 py-1.5 text-base"
           />
         </label>
 
         <label className="block">
-          <span className="mb-1 block text-[11px] text-ink-dim">Hasta</span>
+          <span className="mb-1 block text-xs text-ink-dim">Hasta</span>
           <input
             type="date"
             value={toDate}
             onChange={(event) => setToDate(event.target.value)}
-            className="rounded-[8px] border border-line-input bg-surface px-3 py-1.5 text-[12.5px]"
+            className="rounded-control border border-line-input bg-surface px-3 py-1.5 text-base"
           />
         </label>
 
         <label
-          className="flex cursor-pointer items-center gap-2 rounded-[8px] border border-line-input px-3 py-2 text-[12px] text-ink-2"
+          className="flex cursor-pointer items-center gap-2 rounded-control border border-line-input px-3 py-2 text-sm text-ink-2"
           title="Deja fuera las guías que ya se entregaron, se devolvieron o se dieron por perdidas."
         >
           <input
@@ -272,7 +272,7 @@ function OrdersScreen() {
 
         {!loading && !error && rows.length > 0 && country && (
           <div className="overflow-x-auto">
-            <table className="w-full min-w-[980px] border-collapse text-[12px]">
+            <table className="w-full min-w-[980px] border-collapse text-sm">
               <thead>
                 <tr>
                   {[
@@ -288,7 +288,7 @@ function OrdersScreen() {
                       key={header.label}
                       scope="col"
                       className={cx(
-                        "px-3 py-2 text-[10.5px] font-semibold uppercase tracking-[0.06em] text-ink-dim",
+                        "px-3 py-2 text-xs font-semibold uppercase tracking-[0.06em] text-ink-dim",
                         header.align === "right" ? "text-right" : "text-left",
                       )}
                     >
@@ -370,11 +370,11 @@ function OrderTableRow({
           onOpen();
         }
       }}
-      className="cursor-pointer border-t border-line-row hover:bg-white/[0.03] focus:bg-white/[0.05] focus:outline-none"
+      className="cursor-pointer border-t border-line-row hover:bg-hover focus:bg-hover-strong focus:outline-none"
     >
       <td className="px-3 py-2 text-left">
         <span className="block font-medium text-ink-body">{row.tracking_number}</span>
-        <span className="text-[10.5px] text-ink-dim">
+        <span className="text-xs text-ink-dim">
           {formatDate(row.created_date, country)}
         </span>
       </td>
@@ -390,7 +390,7 @@ function OrderTableRow({
           {contact.primary}
         </span>
         {contact.secondary && (
-          <span className="block truncate text-[10.5px] text-ink-dim">
+          <span className="block truncate text-xs text-ink-dim">
             {contact.secondary}
           </span>
         )}
@@ -413,7 +413,7 @@ function OrderTableRow({
       <td
         className={cx(
           "px-3 py-2 text-right font-medium",
-          (row.contribution ?? 0) >= 0 ? "text-ink-2" : "text-negative",
+          (row.contribution ?? 0) >= 0 ? "text-ink-2" : "text-negative-ink",
         )}
       >
         {formatMoney(row.contribution, country)}
@@ -425,7 +425,7 @@ function OrderTableRow({
             <span className="block text-ink-muted">
               {delivery === null ? "—" : formatNumber(delivery, country, 0)}
             </span>
-            <span className="block text-[10.5px] text-ink-dim">
+            <span className="block text-xs text-ink-dim">
               {delivery === null ? "cerrada" : "en entregar"}
             </span>
           </>
@@ -434,7 +434,7 @@ function OrderTableRow({
             <span className={cx("block", TONE_TEXT[daysTone])}>
               {formatNumber(row.days_open, country, 0)}
             </span>
-            <span className="block text-[10.5px] text-ink-dim">abierta</span>
+            <span className="block text-xs text-ink-dim">abierta</span>
           </>
         )}
       </td>
@@ -484,7 +484,7 @@ function OrderCard({
 
   return (
     <>
-      <div className="fixed inset-0 z-40 bg-black/40" onClick={onClose} aria-hidden />
+      <div className="fixed inset-0 z-40 bg-scrim" onClick={onClose} aria-hidden />
       <aside
         className="fixed right-0 top-0 z-50 flex h-full w-full max-w-[520px] flex-col border-l border-line bg-sidebar"
         role="dialog"
@@ -492,20 +492,20 @@ function OrderCard({
       >
         <header className="flex items-start justify-between gap-3 border-b border-line-subtle px-4 py-3.5">
           <div className="min-w-0">
-            <h2 className="truncate text-[15px] font-bold">
+            <h2 className="truncate text-lg font-bold">
               {order ? order.tracking_number : "Cargando…"}
             </h2>
             {order && (
               <div className="mt-1 flex items-center gap-2">
                 {status && <Chip tone={status.tone}>{status.label}</Chip>}
-                <span className="text-[11px] text-ink-dim">{order.status_label}</span>
+                <span className="text-xs text-ink-dim">{order.status_label}</span>
               </div>
             )}
           </div>
           <button
             type="button"
             onClick={onClose}
-            className="rounded-[6px] px-2 py-1 text-[13px] text-ink-muted hover:bg-white/[0.05]"
+            className="rounded-md px-2 py-1 text-base text-ink-muted hover:bg-hover-strong"
             aria-label="Cerrar"
           >
             ✕
@@ -561,7 +561,7 @@ function OrderCard({
                 {contact.hidden ? (
                   <>
                     <Line label="Código" value={order.customer_ref} mono />
-                    <p className="pt-1 text-[11px] leading-relaxed text-ink-dim">
+                    <p className="pt-1 text-xs leading-relaxed text-ink-dim">
                       {PII_HIDDEN_NOTICE}
                     </p>
                   </>
@@ -573,7 +573,7 @@ function OrderCard({
                     <Line label="Dirección" value={order.customer_address} />
                     <Line label="Código" value={order.customer_ref} mono />
                     {contactNotice([order], true) === "missing" && (
-                      <p className="pt-1 text-[11px] leading-relaxed text-ink-dim">
+                      <p className="pt-1 text-xs leading-relaxed text-ink-dim">
                         {PII_MISSING_NOTICE}
                       </p>
                     )}
@@ -583,7 +583,7 @@ function OrderCard({
                 {order.customer_hash && (
                   <Link
                     href={`/${country.code.toLowerCase()}/customers?customer=${order.customer_hash}`}
-                    className="mt-1 block text-[11.5px] font-semibold no-underline"
+                    className="mt-1 block text-sm font-semibold no-underline"
                   >
                     Ver todos los pedidos de este cliente →
                   </Link>
@@ -636,11 +636,11 @@ function MoneyBlock({ order, country }: { order: OrderRow; country: Country }) {
       <Line label="Comisión" value={negative(order.fee_amount, country)} />
 
       <div className="mt-1 flex items-baseline justify-between gap-3 border-t border-line-subtle pt-2">
-        <span className="text-[11.5px] font-semibold text-ink-2">Contribución</span>
+        <span className="text-sm font-semibold text-ink-2">Contribución</span>
         <span
           className={cx(
-            "text-[15px] font-bold",
-            contribution >= 0 ? "text-positive" : "text-negative",
+            "text-lg font-bold",
+            contribution >= 0 ? "text-positive-ink" : "text-negative-ink",
           )}
         >
           {formatMoney(order.contribution, country)}
@@ -648,7 +648,7 @@ function MoneyBlock({ order, country }: { order: OrderRow; country: Country }) {
       </div>
 
       {!order.is_terminal && (
-        <p className="pt-1.5 text-[11px] leading-relaxed text-ink-dim">
+        <p className="pt-1.5 text-xs leading-relaxed text-ink-dim">
           Esta guía sigue en la calle: el flete, el producto y la comisión ya se
           pagaron, pero el recaudo todavía no ha entrado. La contribución de arriba
           será la definitiva solo cuando la guía cierre.
@@ -699,7 +699,7 @@ function Timeline({
   if (ordered.length === 0) {
     return (
       <Block title="Trazabilidad">
-        <p className="text-[11.5px] leading-relaxed text-ink-dim">
+        <p className="text-sm leading-relaxed text-ink-dim">
           Esta guía no tiene historial todavía. Aparecerá acá en cuanto llegue un
           reporte con sus movimientos de estado o de dinero.
         </p>
@@ -738,21 +738,21 @@ function Timeline({
 
               <div className="min-w-0 flex-1">
                 <div className="flex items-baseline justify-between gap-3">
-                  <span className="truncate text-[12px] text-ink-body">
+                  <span className="truncate text-sm text-ink-body">
                     {event.event_label}
                   </span>
                   {isMoney && (
                     <span
                       className={cx(
-                        "shrink-0 text-[12px] font-semibold",
-                        amount < 0 ? "text-negative" : "text-positive",
+                        "shrink-0 text-sm font-semibold",
+                        amount < 0 ? "text-negative-ink" : "text-positive-ink",
                       )}
                     >
                       {formatMoney(event.amount, country)}
                     </span>
                   )}
                 </div>
-                <p className="text-[10.5px] text-ink-dim">
+                <p className="text-xs text-ink-dim">
                   {formatDate(event.event_date, country)}
                   <span className="mx-1.5">·</span>
                   {isMoney ? "movimiento de dinero" : "cambio de estado"}

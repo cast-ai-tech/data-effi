@@ -102,7 +102,7 @@ export function NotificationCenter({
 
   return (
     <>
-      <div className="fixed inset-0 z-40 bg-black/40" onClick={onClose} aria-hidden />
+      <div className="fixed inset-0 z-40 bg-scrim" onClick={onClose} aria-hidden />
       <aside
         data-notification-center
         className="fixed right-0 top-0 z-50 flex h-full w-full max-w-[420px] flex-col border-l border-line bg-sidebar"
@@ -115,13 +115,13 @@ export function NotificationCenter({
               <button
                 type="button"
                 onClick={() => setView("list")}
-                className="rounded-[6px] px-1.5 py-1 text-[13px] text-ink-muted hover:bg-white/[0.05]"
+                className="rounded-md px-1.5 py-1 text-base text-ink-muted hover:bg-hover-strong"
                 aria-label="Volver a notificaciones"
               >
                 ←
               </button>
             )}
-            <h2 className="text-[14px] font-bold">
+            <h2 className="text-md font-bold">
               {view === "list" ? "Notificaciones" : "Umbrales"}
             </h2>
           </div>
@@ -130,7 +130,7 @@ export function NotificationCenter({
               <button
                 type="button"
                 onClick={() => setView("thresholds")}
-                className="rounded-[6px] px-2 py-1 text-[11.5px] font-medium text-ink-muted hover:bg-white/[0.05] hover:text-accent"
+                className="rounded-md px-2 py-1 text-sm font-medium text-ink-muted hover:bg-hover-strong hover:text-accent-ink"
               >
                 Umbrales
               </button>
@@ -138,7 +138,7 @@ export function NotificationCenter({
             <button
               type="button"
               onClick={onClose}
-              className="rounded-[6px] px-2 py-1 text-[13px] text-ink-muted hover:bg-white/[0.05]"
+              className="rounded-md px-2 py-1 text-base text-ink-muted hover:bg-hover-strong"
               aria-label="Cerrar"
             >
               ✕
@@ -259,14 +259,14 @@ function NotificationList({
   return (
     <div className="flex-1 space-y-5 overflow-y-auto p-4">
       <div className="flex items-center justify-between gap-2">
-        <p className="text-[11.5px] text-ink-dim">
+        <p className="text-sm text-ink-dim">
           {countryCode ? `Solo ${countryCode}` : "Todos los países"}
         </p>
         <button
           type="button"
           onClick={() => void readAll()}
           disabled={!unreadHere}
-          className="text-[11.5px] font-medium text-accent disabled:text-ink-dim"
+          className="text-sm font-medium text-accent-ink disabled:text-ink-dim"
         >
           Marcar todo leído
         </button>
@@ -280,14 +280,14 @@ function NotificationList({
       )}
 
       {!loading && failed && (
-        <p className="rounded-[10px] border border-line bg-surface p-3.5 text-[12px] text-ink-dim">
+        <p className="rounded-control border border-line bg-surface p-3.5 text-sm text-ink-dim">
           No se pudieron leer las notificaciones ahora. Los tableros siguen
           funcionando.
         </p>
       )}
 
       {!loading && !failed && items.length === 0 && (
-        <p className="rounded-[10px] border border-line bg-surface p-3.5 text-[12px] text-ink-dim">
+        <p className="rounded-control border border-line bg-surface p-3.5 text-sm text-ink-dim">
           Nada todavía. Cuando una carga cruce un umbral o llegue el resumen de
           la mañana, aparece aquí.
         </p>
@@ -342,7 +342,7 @@ function NotificationList({
 function Section({ title, children }: { title: string; children: React.ReactNode }) {
   return (
     <section>
-      <h3 className="mb-2 text-[10.5px] font-bold uppercase tracking-[0.08em] text-ink-faint">
+      <h3 className="mb-2 text-xs font-bold uppercase tracking-[0.08em] text-ink-faint">
         {title}
       </h3>
       <div className="space-y-2.5">{children}</div>
@@ -365,7 +365,7 @@ function NotificationItem({
       type="button"
       onClick={() => onOpen(item)}
       className={cx(
-        "block w-full rounded-[10px] border bg-surface p-3.5 text-left transition-colors hover:border-accent/40",
+        "block w-full rounded-control border bg-surface p-3.5 text-left transition-colors hover:border-accent/40",
         critical ? "border-negative/30" : "border-line",
         !unread && "opacity-70",
       )}
@@ -376,16 +376,16 @@ function NotificationItem({
           {critical ? "CRÍTICA" : item.kind === "system" ? "SISTEMA" : "AVISO"}
         </Chip>
         {item.country_code && (
-          <span className="text-[10.5px] font-semibold text-ink-dim">{item.country_code}</span>
+          <span className="text-xs font-semibold text-ink-dim">{item.country_code}</span>
         )}
-        <span className="ml-auto text-[10.5px] text-ink-dim">
+        <span className="ml-auto text-xs text-ink-dim">
           {formatRelative(item.created_at)}
         </span>
       </div>
-      <h4 className="text-[12.5px] font-semibold text-ink">{item.title}</h4>
-      <p className="mt-1 text-[12px] leading-[1.55] text-ink-2">{item.finding}</p>
+      <h4 className="text-base font-semibold text-ink">{item.title}</h4>
+      <p className="mt-1 text-sm leading-[1.55] text-ink-2">{item.finding}</p>
       {item.impact_amount !== null && (
-        <p className="mt-1.5 text-[11px] font-semibold text-negative">
+        <p className="mt-1.5 text-xs font-semibold text-negative-ink">
           {formatMoney(item.impact_amount, {
             ...FALLBACK_COUNTRY,
             currency_symbol: "",
@@ -395,9 +395,9 @@ function NotificationItem({
           {item.impact_currency}
         </p>
       )}
-      <p className="mt-2 text-[12px] leading-[1.5] text-ink-muted">{item.action}</p>
+      <p className="mt-2 text-sm leading-[1.5] text-ink-muted">{item.action}</p>
       {item.deep_link && (
-        <span className="mt-2.5 inline-block text-[11.5px] font-semibold text-accent">
+        <span className="mt-2.5 inline-block text-sm font-semibold text-accent-ink">
           Ver detalle →
         </span>
       )}
@@ -425,7 +425,7 @@ function DigestItem({
   return (
     <article
       className={cx(
-        "rounded-[10px] border border-line bg-surface p-3.5",
+        "rounded-control border border-line bg-surface p-3.5",
         item.read_at !== null && "opacity-80",
       )}
     >
@@ -435,14 +435,14 @@ function DigestItem({
         )}
         <Chip tone="accent">RESUMEN</Chip>
         {item.country_code && (
-          <span className="text-[10.5px] font-semibold text-ink-dim">{item.country_code}</span>
+          <span className="text-xs font-semibold text-ink-dim">{item.country_code}</span>
         )}
-        <span className="ml-auto text-[10.5px] text-ink-dim">
+        <span className="ml-auto text-xs text-ink-dim">
           {formatRelative(item.created_at)}
         </span>
       </div>
-      <h4 className="text-[12.5px] font-semibold text-ink">{item.title}</h4>
-      <p className="mt-1 whitespace-pre-line text-[12.5px] leading-[1.65] text-ink-body">
+      <h4 className="text-base font-semibold text-ink">{item.title}</h4>
+      <p className="mt-1 whitespace-pre-line text-base leading-[1.65] text-ink-body">
         {brief}
       </p>
 
@@ -453,7 +453,7 @@ function DigestItem({
             setExpanded((current) => !current);
             if (item.read_at === null) onOpen({ ...item, deep_link: null });
           }}
-          className="mt-2 text-[11.5px] font-medium text-accent"
+          className="mt-2 text-sm font-medium text-accent-ink"
         >
           {expanded ? "Ocultar detalle" : `Ver ${cards.length} ${cards.length === 1 ? "punto" : "puntos"}`}
         </button>
@@ -548,7 +548,7 @@ function ThresholdsView({ countryCode }: { countryCode: string | null }) {
   if (!countryCode) {
     return (
       <div className="flex-1 overflow-y-auto p-4">
-        <p className="text-[12px] text-ink-dim">
+        <p className="text-sm text-ink-dim">
           Abre un país para ajustar sus umbrales: cada uno aprende los suyos.
         </p>
       </div>
@@ -559,7 +559,7 @@ function ThresholdsView({ countryCode }: { countryCode: string | null }) {
 
   return (
     <div className="flex-1 space-y-4 overflow-y-auto p-4">
-      <p className="text-[12px] leading-relaxed text-ink-dim">
+      <p className="text-sm leading-relaxed text-ink-dim">
         Data Effi aprende estos valores de tus propias guías. Escribe uno para
         fijarlo; déjalo vacío y se sigue aprendiendo solo.
       </p>
@@ -572,7 +572,7 @@ function ThresholdsView({ countryCode }: { countryCode: string | null }) {
       )}
 
       {failed && (
-        <p className="rounded-[10px] border border-line bg-surface p-3.5 text-[12px] text-ink-dim">
+        <p className="rounded-control border border-line bg-surface p-3.5 text-sm text-ink-dim">
           No se pudieron leer los umbrales ahora.
         </p>
       )}
@@ -590,9 +590,9 @@ function ThresholdsView({ countryCode }: { countryCode: string | null }) {
             const learned = current ? current.source !== "user" : true;
             return (
               <label key={field.key} className="block">
-                <span className="mb-1 flex items-center justify-between text-[11.5px] font-medium text-ink-muted">
+                <span className="mb-1 flex items-center justify-between text-sm font-medium text-ink-muted">
                   {field.label}
-                  <span className="text-[10.5px] font-normal text-ink-dim">
+                  <span className="text-xs font-normal text-ink-dim">
                     {current
                       ? learned
                         ? current.confidence !== null
@@ -611,13 +611,13 @@ function ThresholdsView({ countryCode }: { countryCode: string | null }) {
                       setDraft((prev) => ({ ...prev, [field.key]: event.target.value }))
                     }
                     aria-label={field.label}
-                    className="min-w-0 flex-1 rounded-[8px] border border-line-input bg-surface px-3 py-2 text-[12.5px] text-ink focus:border-accent focus:outline-none"
+                    className="min-w-0 flex-1 rounded-control border border-line-input bg-surface px-3 py-2 text-base text-ink focus:border-accent focus:outline-none"
                   />
                   {field.suffix && (
-                    <span className="w-8 text-[11px] text-ink-dim">{field.suffix}</span>
+                    <span className="w-8 text-xs text-ink-dim">{field.suffix}</span>
                   )}
                 </span>
-                <span className="mt-1 block text-[10.5px] leading-snug text-ink-dim">
+                <span className="mt-1 block text-xs leading-snug text-ink-dim">
                   {field.hint}
                 </span>
               </label>
@@ -633,7 +633,7 @@ function ThresholdsView({ countryCode }: { countryCode: string | null }) {
             </Button>
           </div>
 
-          {message && <p className="text-[11.5px] text-ink-muted">{message}</p>}
+          {message && <p className="text-sm text-ink-muted">{message}</p>}
         </form>
       )}
     </div>

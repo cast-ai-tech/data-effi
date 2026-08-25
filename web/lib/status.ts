@@ -90,10 +90,10 @@ export const STATUS_GROUP_TONES: Record<StatusGroup, Tone> = {
 
 /** Text colour per group, for numbers in a table cell. */
 export const STATUS_GROUP_TEXT: Record<StatusGroup, string> = {
-  entregada: "text-positive",
-  en_transito: "text-accent",
-  novedad: "text-warning",
-  devolucion: "text-negative",
+  entregada: "text-positive-ink",
+  en_transito: "text-accent-ink",
+  novedad: "text-warning-ink",
+  devolucion: "text-negative-ink",
   indemnizacion: "text-ink-dim",
 };
 

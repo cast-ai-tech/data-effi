@@ -125,9 +125,9 @@ function deliveryRate(row: ProductCatalogueRow): number | null {
 /** Above 75% is healthy, below 60% is bleeding. Same thresholds as carriers. */
 function deliveryTone(pct: number | null): string {
   if (pct === null) return "text-ink-dim";
-  if (pct >= 75) return "text-positive";
-  if (pct >= 60) return "text-warning";
-  return "text-negative";
+  if (pct >= 75) return "text-positive-ink";
+  if (pct >= 60) return "text-warning-ink";
+  return "text-negative-ink";
 }
 
 /** Empty input means "no value", not zero. Zero is a real cost; blank is not. */
@@ -310,11 +310,11 @@ function ProductsScreen() {
     <>
       <header className="mb-5 flex flex-wrap items-start justify-between gap-3">
         <div>
-          <h1 className="flex items-center gap-2.5 text-[22px] font-bold tracking-tight">
-            <span className="text-[24px] leading-none">{countryFlag(countryCode)}</span>
+          <h1 className="flex items-center gap-2.5 text-2xl font-bold tracking-tight">
+            <span className="text-2xl leading-none">{countryFlag(countryCode)}</span>
             Productos
           </h1>
-          <p className="mt-1 max-w-2xl text-[12px] leading-relaxed text-ink-dim">
+          <p className="mt-1 max-w-2xl text-sm leading-relaxed text-ink-dim">
             El costo que escribes acá es el que decide si un producto gana o pierde plata.
             Mientras esté vacío o desactualizado, todos los márgenes del tablero son una
             aproximación.
@@ -331,10 +331,10 @@ function ProductsScreen() {
       {notice && (
         <p
           className={cx(
-            "mb-4 rounded-[8px] border px-3 py-2 text-[12px] leading-relaxed",
+            "mb-4 rounded-control border px-3 py-2 text-sm leading-relaxed",
             notice.tone === "warning"
-              ? "border-warning/30 bg-warning/[0.08] text-warning"
-              : "border-negative/30 bg-negative/[0.08] text-negative",
+              ? "border-warning/30 bg-warning/[0.08] text-warning-ink"
+              : "border-negative/30 bg-negative/[0.08] text-negative-ink",
           )}
         >
           {notice.message}
@@ -344,9 +344,9 @@ function ProductsScreen() {
       {cutCount > 0 && (
         <p
           role="status"
-          className="mb-4 rounded-[8px] border border-accent/30 bg-accent/[0.08] px-3 py-2 text-[12px] leading-relaxed text-ink"
+          className="mb-4 rounded-control border border-accent/30 bg-accent/[0.08] px-3 py-2 text-sm leading-relaxed text-ink"
         >
-          <span className="font-semibold text-accent">
+          <span className="font-semibold text-accent-ink">
             {cutCount === 1
               ? "1 producto está bajo su punto de equilibrio"
               : `${cutCount} productos están bajo su punto de equilibrio`}
@@ -362,9 +362,9 @@ function ProductsScreen() {
             type="button"
             onClick={() => setStatuses(new Set())}
             className={cx(
-              "rounded-full border px-3 py-1 text-[11.5px] font-semibold transition-colors",
+              "rounded-full border px-3 py-1 text-sm font-semibold transition-colors",
               statuses.size === 0
-                ? "border-accent/40 bg-accent/[0.12] text-accent"
+                ? "border-accent/40 bg-accent/[0.12] text-accent-ink"
                 : "border-line-input text-ink-muted hover:text-ink-2",
             )}
           >
@@ -382,9 +382,9 @@ function ProductsScreen() {
                 title={meta.explanation}
                 aria-pressed={on}
                 className={cx(
-                  "rounded-full border px-3 py-1 text-[11.5px] font-semibold transition-colors",
+                  "rounded-full border px-3 py-1 text-sm font-semibold transition-colors",
                   on
-                    ? "border-accent/40 bg-accent/[0.12] text-accent"
+                    ? "border-accent/40 bg-accent/[0.12] text-accent-ink"
                     : "border-line-input text-ink-muted hover:text-ink-2",
                 )}
               >
@@ -399,7 +399,7 @@ function ProductsScreen() {
             onChange={(event) => setSearch(event.target.value)}
             placeholder="Buscar por nombre, SKU o proveedor…"
             aria-label="Buscar productos"
-            className="ml-auto w-full max-w-[280px] rounded-[8px] border border-line-input bg-surface px-3 py-1.5 text-[12.5px]"
+            className="ml-auto w-full max-w-[280px] rounded-control border border-line-input bg-surface px-3 py-1.5 text-base"
           />
         </div>
       )}
@@ -426,7 +426,7 @@ function ProductsScreen() {
                 <div className="flex flex-wrap items-center justify-center gap-2">
                   <Link
                     href={`/${countryCode.toLowerCase()}/cargar`}
-                    className="rounded-[8px] bg-accent px-3.5 py-1.5 text-[12px] font-semibold text-on-accent no-underline hover:bg-accent-hover"
+                    className="rounded-control bg-accent px-3.5 py-1.5 text-sm font-semibold text-on-accent no-underline hover:bg-accent-hover"
                   >
                     Cargar datos
                   </Link>
@@ -468,7 +468,7 @@ function ProductsScreen() {
 
         {!loading && !error && visible.length > 0 && (
           <div className="overflow-x-auto">
-            <table className="w-full min-w-[940px] border-collapse text-[12px]">
+            <table className="w-full min-w-[940px] border-collapse text-sm">
               <thead>
                 <tr>
                   {[
@@ -487,7 +487,7 @@ function ProductsScreen() {
                       key={header}
                       scope="col"
                       className={cx(
-                        "px-3 py-2 text-[10.5px] font-semibold uppercase tracking-[0.06em] text-ink-dim",
+                        "px-3 py-2 text-xs font-semibold uppercase tracking-[0.06em] text-ink-dim",
                         index >= 3 && index <= 7 ? "text-right" : "text-left",
                       )}
                     >
@@ -514,14 +514,14 @@ function ProductsScreen() {
                           setPanel({ mode: "edit", row });
                         }
                       }}
-                      className="cursor-pointer border-t border-line-row hover:bg-white/[0.03] focus:bg-white/[0.05] focus:outline-none"
+                      className="cursor-pointer border-t border-line-row hover:bg-hover focus:bg-hover-strong focus:outline-none"
                     >
                       <td className="max-w-[240px] px-3 py-2 text-left">
                         <span className="block truncate font-medium text-ink-body">
                           {row.product_name}
                         </span>
                         {!row.is_active && (
-                          <span className="text-[10.5px] text-ink-dim">Inactivo</span>
+                          <span className="text-xs text-ink-dim">Inactivo</span>
                         )}
                       </td>
                       <td className="px-3 py-2 text-left text-ink-muted">
@@ -535,7 +535,7 @@ function ProductsScreen() {
                       <td
                         className={cx(
                           "px-3 py-2 text-right",
-                          row.unit_cost === null ? "text-negative" : "text-ink-2",
+                          row.unit_cost === null ? "text-negative-ink" : "text-ink-2",
                         )}
                       >
                         {row.unit_cost === null
@@ -580,7 +580,7 @@ function ProductsScreen() {
         )}
 
         {!loading && !error && rows.length > 0 && (
-          <p className="border-t border-line-subtle px-4 py-3 text-[11.5px] leading-relaxed text-ink-dim">
+          <p className="border-t border-line-subtle px-4 py-3 text-sm leading-relaxed text-ink-dim">
             {missingCost > 0
               ? `${missingCost} de ${rows.length} productos todavía no tienen un costo confirmado. Cada uno de ellos distorsiona el margen, la contribución y el punto de equilibrio del tablero.`
               : "Todos los productos tienen el costo confirmado y al día. Los márgenes del tablero son reales."}{" "}
@@ -873,7 +873,7 @@ function ProductPanel({
 
   return (
     <>
-      <div className="fixed inset-0 z-40 bg-black/40" onClick={onClose} aria-hidden />
+      <div className="fixed inset-0 z-40 bg-scrim" onClick={onClose} aria-hidden />
       <aside
         className="fixed right-0 top-0 z-50 flex h-full w-full max-w-[420px] flex-col border-l border-line bg-sidebar"
         role="dialog"
@@ -881,11 +881,11 @@ function ProductPanel({
       >
         <header className="flex items-start justify-between gap-3 border-b border-line-subtle px-4 py-3.5">
           <div className="min-w-0">
-            <h2 className="truncate text-[14px] font-bold">
+            <h2 className="truncate text-md font-bold">
               {row ? row.product_name : "Nuevo producto"}
             </h2>
             {row && (
-              <p className="mt-0.5 text-[11px] text-ink-dim">
+              <p className="mt-0.5 text-xs text-ink-dim">
                 {formatNumber(row.shipments, money, 0)} guías ·{" "}
                 {row.last_shipment_date
                   ? `último despacho ${formatDate(row.last_shipment_date, money)}`
@@ -896,7 +896,7 @@ function ProductPanel({
           <button
             type="button"
             onClick={onClose}
-            className="rounded-[6px] px-2 py-1 text-[13px] text-ink-muted hover:bg-white/[0.05]"
+            className="rounded-md px-2 py-1 text-base text-ink-muted hover:bg-hover-strong"
             aria-label="Cerrar"
           >
             ✕
@@ -906,14 +906,14 @@ function ProductPanel({
         <form onSubmit={submit} className="flex flex-1 flex-col overflow-y-auto">
           <div className="flex-1 space-y-3 p-4">
             {readOnly && (
-              <p className="rounded-[8px] border border-line-input bg-sunken px-3 py-2 text-[11.5px] leading-relaxed text-ink-muted">
+              <p className="rounded-control border border-line-input bg-sunken px-3 py-2 text-sm leading-relaxed text-ink-muted">
                 Tu rol es de solo lectura: puedes ver el catálogo, pero no cambiarlo.
                 Pídele a quien tenga rol de dueño o analista que ajuste el costo.
               </p>
             )}
 
             {row && !row.is_active && (
-              <p className="rounded-[8px] border border-line-input bg-sunken px-3 py-2 text-[11.5px] leading-relaxed text-ink-muted">
+              <p className="rounded-control border border-line-input bg-sunken px-3 py-2 text-sm leading-relaxed text-ink-muted">
                 Este producto está archivado: sigue en el historial y en los cálculos de
                 lo que ya despachaste, pero no cuenta como parte del catálogo activo.
               </p>
@@ -922,10 +922,10 @@ function ProductPanel({
             {row && (
               <p
                 className={cx(
-                  "rounded-[8px] px-3 py-2 text-[11.5px] leading-relaxed",
+                  "rounded-control px-3 py-2 text-sm leading-relaxed",
                   row.catalogue_status === "ok"
                     ? "border border-line-input bg-sunken text-ink-muted"
-                    : "border border-warning/30 bg-warning/[0.07] text-warning",
+                    : "border border-warning/30 bg-warning/[0.07] text-warning-ink",
                 )}
               >
                 {STATUS_META[row.catalogue_status].explanation}
@@ -1036,14 +1036,14 @@ function ProductPanel({
 
             {history.length > 0 && (
               <section className="border-t border-line-subtle pt-3">
-                <h3 className="text-[10.5px] font-bold uppercase tracking-[0.08em] text-ink-faint">
+                <h3 className="text-xs font-bold uppercase tracking-[0.08em] text-ink-faint">
                   Cómo se ha movido el costo
                 </h3>
                 <ul className="mt-2 space-y-1.5">
                   {history.slice(0, HISTORY_LIMIT).map((entry) => (
                     <li
                       key={entry.id}
-                      className="flex items-baseline justify-between gap-3 text-[11.5px]"
+                      className="flex items-baseline justify-between gap-3 text-sm"
                     >
                       <span className="font-semibold text-ink-2">
                         {formatMoney(entry.unit_cost, money)}
@@ -1063,11 +1063,11 @@ function ProductPanel({
                   ))}
                 </ul>
                 {history.length > HISTORY_LIMIT && (
-                  <p className="mt-1.5 text-[10.5px] text-ink-dim">
+                  <p className="mt-1.5 text-xs text-ink-dim">
                     {`Hay ${history.length - HISTORY_LIMIT} cambios más antes de estos.`}
                   </p>
                 )}
-                <p className="mt-2 text-[11px] leading-relaxed text-ink-dim">
+                <p className="mt-2 text-xs leading-relaxed text-ink-dim">
                   Si el costo viene subiendo, el proveedor cambió el precio y el margen
                   de este producto se movió con él sin que nadie lo anunciara.
                 </p>
@@ -1078,7 +1078,7 @@ function ProductPanel({
           {!readOnly && (
             <footer className="flex flex-wrap items-center justify-end gap-2 border-t border-line-subtle px-4 py-3">
               {formError && (
-                <p className="w-full text-[11.5px] leading-relaxed text-negative">
+                <p className="w-full text-sm leading-relaxed text-negative-ink">
                   {formError}
                 </p>
               )}
@@ -1125,7 +1125,7 @@ function ProductPanel({
 const HISTORY_LIMIT = 6;
 
 const INPUT_CLASS =
-  "w-full rounded-[8px] border border-line-input bg-surface px-3 py-2 text-[13px] disabled:opacity-60";
+  "w-full rounded-control border border-line-input bg-surface px-3 py-2 text-base disabled:opacity-60";
 
 function Field({
   label,
@@ -1138,9 +1138,9 @@ function Field({
 }) {
   return (
     <label className="block">
-      <span className="mb-1 block text-[11.5px] text-ink-muted">{label}</span>
+      <span className="mb-1 block text-sm text-ink-muted">{label}</span>
       {children}
-      {hint && <span className="mt-1 block text-[10.5px] text-ink-dim">{hint}</span>}
+      {hint && <span className="mt-1 block text-xs text-ink-dim">{hint}</span>}
     </label>
   );
 }

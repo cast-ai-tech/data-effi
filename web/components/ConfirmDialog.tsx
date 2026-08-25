@@ -107,8 +107,8 @@ export function ConfirmDialog({
 
   const accent =
     tone === "danger"
-      ? "border-negative/30 bg-negative/[0.08] text-negative"
-      : "border-warning/30 bg-warning/[0.07] text-warning";
+      ? "border-negative/30 bg-negative/[0.08] text-negative-ink"
+      : "border-warning/30 bg-warning/[0.07] text-warning-ink";
 
   return (
     <div
@@ -116,7 +116,7 @@ export function ConfirmDialog({
       role="presentation"
     >
       <div
-        className="absolute inset-0 bg-black/55"
+        className="absolute inset-0 bg-scrim"
         onClick={pending ? undefined : onCancel}
         aria-hidden
       />
@@ -126,18 +126,18 @@ export function ConfirmDialog({
         aria-modal="true"
         aria-labelledby="confirm-dialog-title"
         aria-describedby="confirm-dialog-body"
-        className="relative w-full max-w-[420px] rounded-[12px] border border-line bg-surface p-5 shadow-2xl"
+        className="relative w-full max-w-[420px] rounded-card border border-line bg-surface p-5 shadow-pop"
       >
         <h2
           id="confirm-dialog-title"
-          className="text-[15px] font-bold leading-tight tracking-tight text-ink"
+          className="text-lg font-bold leading-tight tracking-tight text-ink"
         >
           {title}
         </h2>
 
         <div
           id="confirm-dialog-body"
-          className="mt-2 text-[12px] leading-relaxed text-ink-2"
+          className="mt-2 text-sm leading-relaxed text-ink-2"
         >
           {children}
         </div>
@@ -145,7 +145,7 @@ export function ConfirmDialog({
         {consequence && (
           <p
             className={cx(
-              "mt-3 rounded-[8px] border px-3 py-2.5 text-[11.5px] leading-relaxed",
+              "mt-3 rounded-control border px-3 py-2.5 text-sm leading-relaxed",
               accent,
             )}
           >
@@ -154,13 +154,13 @@ export function ConfirmDialog({
         )}
 
         {details && details.length > 0 && (
-          <dl className="mt-3 space-y-1.5 rounded-[8px] border border-line bg-sunken px-3 py-2.5">
+          <dl className="mt-3 space-y-1.5 rounded-control border border-line bg-sunken px-3 py-2.5">
             {details.map((detail) => (
               <div key={detail.label} className="flex items-baseline gap-3">
-                <dt className="w-[104px] shrink-0 text-[11px] text-ink-dim">
+                <dt className="w-[104px] shrink-0 text-xs text-ink-dim">
                   {detail.label}
                 </dt>
-                <dd className="min-w-0 flex-1 truncate text-[11.5px] text-ink-2">
+                <dd className="min-w-0 flex-1 truncate text-sm text-ink-2">
                   {detail.value}
                 </dd>
               </div>

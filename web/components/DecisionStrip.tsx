@@ -117,10 +117,10 @@ export function DecisionStrip({
     <section
       role="region"
       aria-label={label}
-      className="mb-5 rounded-[12px] border border-line bg-surface"
+      className="mb-5 rounded-card border border-line bg-surface"
     >
       <div className="flex items-center justify-between gap-3 border-b border-line-subtle px-4 py-2.5">
-        <h2 className="text-[10.5px] font-bold uppercase tracking-[0.08em] text-ink-faint">
+        <h2 className="text-xs font-bold uppercase tracking-[0.08em] text-ink-faint">
           {label}
         </h2>
         {narrative === null && (
@@ -128,7 +128,7 @@ export function DecisionStrip({
             type="button"
             onClick={() => void explain()}
             disabled={explaining}
-            className="text-[11.5px] font-medium text-accent disabled:text-ink-dim"
+            className="text-sm font-medium text-accent-ink disabled:text-ink-dim"
           >
             {explaining ? "Explicando…" : "Explicar"}
           </button>
@@ -142,17 +142,17 @@ export function DecisionStrip({
       </ul>
 
       {narrative && (
-        <p className="whitespace-pre-line border-t border-line-subtle px-4 py-3 text-[12.5px] leading-[1.65] text-ink-body">
+        <p className="whitespace-pre-line border-t border-line-subtle px-4 py-3 text-base leading-[1.65] text-ink-body">
           {narrative}
         </p>
       )}
       {narrativeNote && (
-        <p className="border-t border-line-subtle px-4 py-2.5 text-[11.5px] text-ink-dim">
+        <p className="border-t border-line-subtle px-4 py-2.5 text-sm text-ink-dim">
           {narrativeNote}
         </p>
       )}
       {data.degraded && !narrative && !narrativeNote && data.degraded_reason && (
-        <p className="border-t border-line-subtle px-4 py-2.5 text-[11.5px] text-ink-dim">
+        <p className="border-t border-line-subtle px-4 py-2.5 text-sm text-ink-dim">
           {data.degraded_reason}
         </p>
       )}
@@ -178,23 +178,23 @@ function DecisionRow({ item }: { item: Decision }) {
         {meta.label}
       </Chip>
       <div className="min-w-0 flex-1">
-        <p className="text-[12.5px] font-semibold text-ink">{item.label}</p>
-        <p className="mt-0.5 text-[12px] leading-[1.5] text-ink-2">{item.headline}</p>
+        <p className="text-base font-semibold text-ink">{item.label}</p>
+        <p className="mt-0.5 text-sm leading-[1.5] text-ink-2">{item.headline}</p>
       </div>
       <div className="flex shrink-0 flex-col items-end gap-1">
         {money && (
           <span
             className={cx(
-              "text-[11px] font-semibold",
+              "text-xs font-semibold",
               // Money lost is negative; money still to be made reads positive.
-              item.verdict === "keep" || item.verdict === "ok" ? "text-positive" : "text-negative",
+              item.verdict === "keep" || item.verdict === "ok" ? "text-positive-ink" : "text-negative-ink",
             )}
           >
             {money}
           </span>
         )}
         {item.deep_link && (
-          <Link href={item.deep_link} className="text-[11.5px] font-semibold no-underline">
+          <Link href={item.deep_link} className="text-sm font-semibold no-underline">
             Ver →
           </Link>
         )}

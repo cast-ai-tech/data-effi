@@ -45,9 +45,9 @@ export function BatchHistory({ countryCode }: { countryCode?: string | null }) {
 
       {!loading && (data?.items ?? []).length > 0 && (
         <div className="overflow-x-auto">
-          <table className="w-full min-w-[720px] text-[12px]">
+          <table className="w-full min-w-[720px] text-sm">
             <thead>
-              <tr className="text-[10.5px] uppercase tracking-wide text-ink-dim">
+              <tr className="text-xs uppercase tracking-wide text-ink-dim">
                 <th scope="col" className="pb-2 text-left font-semibold">Archivo</th>
                 <th scope="col" className="pb-2 text-left font-semibold">Conexión</th>
                 <th scope="col" className="pb-2 text-right font-semibold">Filas</th>
@@ -72,12 +72,12 @@ export function BatchHistory({ countryCode }: { countryCode?: string | null }) {
                     {countryFlag(batch.country_code)} {batch.connection_name}
                   </td>
                   <td className="py-2.5 text-right text-ink-2">{batch.rows_total}</td>
-                  <td className="py-2.5 text-right text-positive">{batch.rows_inserted}</td>
+                  <td className="py-2.5 text-right text-positive-ink">{batch.rows_inserted}</td>
                   <td className="py-2.5 text-right text-ink-2">{batch.rows_updated}</td>
                   <td
                     className={cx(
                       "py-2.5 text-right",
-                      batch.rows_failed > 0 ? "text-negative" : "text-ink-dim",
+                      batch.rows_failed > 0 ? "text-negative-ink" : "text-ink-dim",
                     )}
                   >
                     {batch.rows_failed}

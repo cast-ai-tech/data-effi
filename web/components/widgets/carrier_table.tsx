@@ -73,7 +73,7 @@ function ShortSampleMark() {
   return (
     <abbr
       title={SHORT_SAMPLE_HINT}
-      className="ml-1 cursor-help align-middle text-[10px] font-semibold text-ink-dim no-underline"
+      className="ml-1 cursor-help align-middle text-xs font-semibold text-ink-dim no-underline"
     >
       ~
     </abbr>
@@ -257,8 +257,8 @@ export default function CarrierTable({ countryCode, country }: WidgetProps) {
                 value === null
                   ? "text-ink-dim"
                   : value < 0
-                    ? "text-negative"
-                    : "text-positive",
+                    ? "text-negative-ink"
+                    : "text-positive-ink",
               )}
             >
               {formatMoney(value, country)}
@@ -312,7 +312,7 @@ export default function CarrierTable({ countryCode, country }: WidgetProps) {
       bodyClassName="p-0"
     >
       <div className="overflow-x-auto">
-        <table className="w-full min-w-[820px] border-collapse text-[12px]">
+        <table className="w-full min-w-[820px] border-collapse text-sm">
           <thead>
             {table.getHeaderGroups().map((headerGroup) => (
               <tr key={headerGroup.id}>
@@ -330,7 +330,7 @@ export default function CarrierTable({ countryCode, country }: WidgetProps) {
                             : "none"
                       }
                       className={cx(
-                        "px-3 py-2 text-[10.5px] font-semibold uppercase tracking-[0.06em] text-ink-dim",
+                        "px-3 py-2 text-xs font-semibold uppercase tracking-[0.06em] text-ink-dim",
                         RIGHT_ALIGNED.has(header.column.id) ? "text-right" : "text-left",
                       )}
                     >
@@ -343,7 +343,7 @@ export default function CarrierTable({ countryCode, country }: WidgetProps) {
                         )}
                       >
                         {flexRender(header.column.columnDef.header, header.getContext())}
-                        <span aria-hidden className="text-[9px]">
+                        <span aria-hidden className="text-xs">
                           {sorted === "asc" ? "▲" : sorted === "desc" ? "▼" : ""}
                         </span>
                       </button>
@@ -374,7 +374,7 @@ export default function CarrierTable({ countryCode, country }: WidgetProps) {
           </tbody>
 
           <tfoot>
-            <tr className="border-t border-line-strong bg-sunken text-[11.5px] font-semibold text-ink-2">
+            <tr className="border-t border-line-strong bg-sunken text-sm font-semibold text-ink-2">
               <td className="px-3 py-2 text-left">Total ponderado</td>
               <td className="px-3 py-2 text-right">
                 {formatNumber(totals.shipments, country, 0)}
@@ -407,7 +407,7 @@ export default function CarrierTable({ countryCode, country }: WidgetProps) {
               <td
                 className={cx(
                   "px-3 py-2 text-right",
-                  totals.contribution < 0 ? "text-negative" : "text-positive",
+                  totals.contribution < 0 ? "text-negative-ink" : "text-positive-ink",
                 )}
               >
                 {formatMoney(totals.contribution, country)}
@@ -420,7 +420,7 @@ export default function CarrierTable({ countryCode, country }: WidgetProps) {
       {/* A lone "~" beside a number is only discreet if something says what it
           means. Shown only when a row actually carries one. */}
       {shortSamples > 0 && (
-        <p className="border-t border-line-subtle px-3 py-2 text-[10.5px] leading-snug text-ink-dim">
+        <p className="border-t border-line-subtle px-3 py-2 text-xs leading-snug text-ink-dim">
           <span className="font-semibold text-ink-2">~</span> {SHORT_SAMPLE_HINT}{" "}
           {shortSamples === 1
             ? "Afecta a 1 transportadora."
@@ -429,12 +429,12 @@ export default function CarrierTable({ countryCode, country }: WidgetProps) {
       )}
 
       {zoneNotes.length > 0 && (
-        <p className="border-t border-line-subtle px-3 py-2 text-[11px] leading-snug text-ink-muted">
+        <p className="border-t border-line-subtle px-3 py-2 text-xs leading-snug text-ink-muted">
           Mejor transportadora aquí:{" "}
           {zoneNotes.map(([zone, winner], index) => (
             <span key={zone}>
               {index > 0 && " · "}
-              {zone} → <span className="font-semibold text-accent">{winner.carrier_name}</span>{" "}
+              {zone} → <span className="font-semibold text-accent-ink">{winner.carrier_name}</span>{" "}
               ({formatPercent(winner.delivery_rate_pct)})
             </span>
           ))}

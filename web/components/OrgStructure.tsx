@@ -65,7 +65,7 @@ export function OrgStructure({ user, orgName }: { user: User | null; orgName: st
       }
     >
       {error && (
-        <p className="mb-3 rounded-[8px] border border-negative/30 bg-negative/[0.08] px-3 py-2 text-[12px] text-negative">
+        <p className="mb-3 rounded-control border border-negative/30 bg-negative/[0.08] px-3 py-2 text-sm text-negative-ink">
           {error}
         </p>
       )}
@@ -77,16 +77,16 @@ export function OrgStructure({ user, orgName }: { user: User | null; orgName: st
           {/* Level 1: the holding. */}
           <div
             data-testid="org-root"
-            className="flex items-center gap-2.5 rounded-[10px] border border-accent/40 bg-accent/[0.06] px-4 py-2.5"
+            className="flex items-center gap-2.5 rounded-control border border-accent/40 bg-accent/[0.06] px-4 py-2.5"
           >
-            <span aria-hidden className="text-[16px]">
+            <span aria-hidden className="text-lg">
               🏢
             </span>
             <div>
-              <p className="text-[13px] font-bold tracking-tight text-ink">
+              <p className="text-base font-bold tracking-tight text-ink">
                 {orgName ?? "Organización"}
               </p>
-              <p className="text-[10.5px] uppercase tracking-[0.06em] text-ink-faint">
+              <p className="text-xs uppercase tracking-[0.06em] text-ink-faint">
                 Organización ·{" "}
                 {pluralize(companies.length, "empresa", "empresas")}
               </p>
@@ -109,7 +109,7 @@ export function OrgStructure({ user, orgName }: { user: User | null; orgName: st
           )}
 
           {companies.length === 0 && editing !== "new" && (
-            <p className="mt-3 text-[12px] text-ink-dim">
+            <p className="mt-3 text-sm text-ink-dim">
               {canEdit
                 ? "Todavía no hay empresas. Crea una por cada operación o socio."
                 : "Todavía no hay empresas en esta organización."}
@@ -174,11 +174,11 @@ function CompanyNode({
   onEdit?: () => void;
 }) {
   return (
-    <article className="h-full rounded-[10px] border border-line bg-surface p-3.5">
+    <article className="h-full rounded-control border border-line bg-surface p-3.5">
       <div className="flex items-start justify-between gap-2">
         <div className="min-w-0">
-          <h3 className="truncate text-[13px] font-bold tracking-tight text-ink">{company.name}</h3>
-          <p className="mt-0.5 text-[10.5px] text-ink-dim">
+          <h3 className="truncate text-base font-bold tracking-tight text-ink">{company.name}</h3>
+          <p className="mt-0.5 text-xs text-ink-dim">
             {pluralize(company.member_count, "persona", "personas")}
             {isMine && " · tienes acceso"}
           </p>
@@ -187,7 +187,7 @@ function CompanyNode({
           <button
             type="button"
             onClick={onEdit}
-            className="shrink-0 text-[11.5px] text-ink-dim underline hover:text-ink-2"
+            className="shrink-0 text-sm text-ink-dim underline hover:text-ink-2"
           >
             Editar
           </button>
@@ -195,18 +195,18 @@ function CompanyNode({
       </div>
 
       {company.notes && (
-        <p className="mt-2 text-[11.5px] leading-relaxed text-ink-2">{company.notes}</p>
+        <p className="mt-2 text-sm leading-relaxed text-ink-2">{company.notes}</p>
       )}
 
       <ul className="mt-3 ml-2 flex flex-col gap-1.5 border-l border-line-strong pl-3">
         {company.countries.length === 0 && (
-          <li className="text-[11.5px] text-ink-dim">Sin países activos</li>
+          <li className="text-sm text-ink-dim">Sin países activos</li>
         )}
         {company.countries.map((code) => (
-          <li key={code} className="flex items-center gap-2 text-[12px] text-ink-2">
+          <li key={code} className="flex items-center gap-2 text-sm text-ink-2">
             <span aria-hidden>{countryFlag(code)}</span>
             <span className="font-medium">{countryName(code)}</span>
-            <span className="text-[10.5px] text-ink-faint">{code}</span>
+            <span className="text-xs text-ink-faint">{code}</span>
           </li>
         ))}
       </ul>
@@ -265,7 +265,7 @@ function CompanyForm({
   return (
     <form
       onSubmit={submit}
-      className="flex h-full flex-col gap-3 rounded-[10px] border border-accent/40 bg-surface p-3.5"
+      className="flex h-full flex-col gap-3 rounded-control border border-accent/40 bg-surface p-3.5"
       aria-label={initial ? `Editar ${initial.name}` : "Nueva empresa"}
     >
       <Field label="Nombre de la empresa">
@@ -281,14 +281,14 @@ function CompanyForm({
 
       <Field label="Países en los que opera" hint="Marca todos los que apliquen">
         {catalogue.length === 0 && (
-          <p className="text-[11.5px] text-ink-dim">Cargando países…</p>
+          <p className="text-sm text-ink-dim">Cargando países…</p>
         )}
         <div className="grid grid-cols-2 gap-x-3 gap-y-1.5">
           {catalogue.map((country) => (
             <label
               key={country.code}
               className={cx(
-                "flex cursor-pointer items-center gap-2 text-[12px]",
+                "flex cursor-pointer items-center gap-2 text-sm",
                 countries.includes(country.code) ? "text-ink" : "text-ink-2",
               )}
             >
@@ -328,7 +328,7 @@ function CompanyForm({
 }
 
 const inputClass =
-  "w-full rounded-[8px] border border-line-input bg-surface px-3 py-2 text-[13px] text-ink outline-none transition-colors placeholder:text-ink-faint focus:border-accent";
+  "w-full rounded-control border border-line-input bg-surface px-3 py-2 text-base text-ink outline-none transition-colors placeholder:text-ink-faint focus:border-accent";
 
 function Field({
   label,
@@ -341,10 +341,10 @@ function Field({
 }) {
   return (
     <div className="flex flex-col gap-1.5">
-      <span className="text-[11px] font-semibold uppercase tracking-[0.06em] text-ink-faint">
+      <span className="text-xs font-semibold uppercase tracking-[0.06em] text-ink-faint">
         {label}
       </span>
-      {hint && <span className="-mt-1 text-[11px] text-ink-dim">{hint}</span>}
+      {hint && <span className="-mt-1 text-xs text-ink-dim">{hint}</span>}
       {children}
     </div>
   );

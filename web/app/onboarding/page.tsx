@@ -40,10 +40,10 @@ export default function OnboardingPage() {
     <main className="mx-auto min-h-screen w-full max-w-[860px] px-6 py-10">
       <div className="mb-8">
         <div className="mb-2 flex items-center gap-2.5">
-          <div className="flex size-7 items-center justify-center rounded-[7px] bg-accent text-[14px] font-extrabold text-on-accent">
+          <div className="flex size-7 items-center justify-center rounded-control bg-accent text-md font-extrabold text-on-accent">
             DE
           </div>
-          <span className="text-[15px] font-bold tracking-tight">Data Effi</span>
+          <span className="text-lg font-bold tracking-tight">Data Effi</span>
         </div>
 
         <div className="mt-5 flex items-center gap-2">
@@ -58,7 +58,7 @@ export default function OnboardingPage() {
                 />
                 <p
                   className={cx(
-                    "mt-1.5 text-[11px]",
+                    "mt-1.5 text-xs",
                     index === step ? "font-semibold text-ink" : "text-ink-dim",
                   )}
                 >
@@ -72,8 +72,8 @@ export default function OnboardingPage() {
 
       {step === 0 && (
         <section>
-          <h1 className="text-[20px] font-bold">¿En qué países operas?</h1>
-          <p className="mt-1.5 text-[13px] text-ink-dim">
+          <h1 className="text-xl font-bold">¿En qué países operas?</h1>
+          <p className="mt-1.5 text-base text-ink-dim">
             Cada país trae su moneda, sus transportadoras y sus plataformas. El país
             principal define la moneda con la que se consolida la vista global.
           </p>
@@ -99,17 +99,17 @@ export default function OnboardingPage() {
                       }
                     }}
                     className={cx(
-                      "flex flex-col items-start gap-1.5 rounded-[12px] border p-3.5 text-left transition-colors",
+                      "flex flex-col items-start gap-1.5 rounded-card border p-3.5 text-left transition-colors",
                       isSelected
                         ? "border-accent bg-accent/[0.08]"
                         : "border-dashed border-line-input bg-sunken hover:border-line-strong",
                     )}
                   >
-                    <span className="text-[22px] leading-none">
+                    <span className="text-2xl leading-none">
                       {countryFlag(country.code)}
                     </span>
-                    <span className="text-[13px] font-semibold text-ink">{country.name}</span>
-                    <span className="text-[11px] text-ink-dim">{country.currency_code}</span>
+                    <span className="text-base font-semibold text-ink">{country.name}</span>
+                    <span className="text-xs text-ink-dim">{country.currency_code}</span>
                     {primary === country.code && (
                       <Chip tone="accent" className="mt-0.5">
                         PRINCIPAL
@@ -139,8 +139,8 @@ export default function OnboardingPage() {
 
       {step === 2 && (
         <section>
-          <h1 className="text-[20px] font-bold">Carga tu histórico</h1>
-          <p className="mt-1.5 text-[13px] text-ink-dim">
+          <h1 className="text-xl font-bold">Carga tu histórico</h1>
+          <p className="mt-1.5 text-base text-ink-dim">
             Con 90 días de reportes las curvas de maduración y las comparaciones tienen
             de dónde salir. Puedes hacerlo después, pero los números iniciales serán
             pobres.
@@ -148,7 +148,7 @@ export default function OnboardingPage() {
 
           <Card className="mt-6">
             <div className="flex flex-col items-center gap-3 py-8 text-center">
-              <p className="text-[13px] text-ink-2">
+              <p className="text-base text-ink-2">
                 La pantalla de carga acepta varios archivos a la vez.
               </p>
               <Link href="/ingest" className="no-underline">
@@ -190,14 +190,14 @@ function ConnectionsStep({
 
   return (
     <section>
-      <h1 className="text-[20px] font-bold">Conecta tus fuentes</h1>
-      <p className="mt-1.5 text-[13px] text-ink-dim">
+      <h1 className="text-xl font-bold">Conecta tus fuentes</h1>
+      <p className="mt-1.5 text-base text-ink-dim">
         Solo aparecen las plataformas que existen en cada país. Empieza por la carga
         manual: funciona siempre y no requiere permisos de nadie.
       </p>
 
       {error && (
-        <p className="mt-4 rounded-[8px] border border-negative/30 bg-negative/[0.08] px-3 py-2 text-[12px] text-negative">
+        <p className="mt-4 rounded-control border border-negative/30 bg-negative/[0.08] px-3 py-2 text-sm text-negative-ink">
           {error}
         </p>
       )}
@@ -271,20 +271,20 @@ function CountryPlatforms({
             if (group.length === 0) return null;
             return (
               <div key={tier}>
-                <p className="mb-2 text-[10.5px] font-bold uppercase tracking-[0.08em] text-ink-faint">
+                <p className="mb-2 text-xs font-bold uppercase tracking-[0.08em] text-ink-faint">
                   {tier === 1 ? "API oficial" : tier === 2 ? "Archivo" : "Sesión (Tier 3)"}
                 </p>
                 <div className="grid gap-2 sm:grid-cols-2">
                   {group.map((platform) => (
                     <div
                       key={platform.platform_code}
-                      className="flex items-center justify-between gap-2 rounded-[10px] border border-line bg-sunken px-3 py-2.5"
+                      className="flex items-center justify-between gap-2 rounded-control border border-line bg-sunken px-3 py-2.5"
                     >
                       <div className="min-w-0">
-                        <p className="truncate text-[12.5px] font-semibold text-ink">
+                        <p className="truncate text-base font-semibold text-ink">
                           {platform.platform_name}
                         </p>
-                        <p className="text-[11px] text-ink-dim">
+                        <p className="text-xs text-ink-dim">
                           {platform.data_domains.join(" · ")}
                         </p>
                       </div>
@@ -299,7 +299,7 @@ function CountryPlatforms({
                   ))}
                 </div>
                 {tier === 3 && (
-                  <p className="mt-2 text-[11px] leading-relaxed text-warning">
+                  <p className="mt-2 text-xs leading-relaxed text-warning-ink">
                     Tier 3 usa tu sesión de usuario y puede ir contra los términos de la
                     plataforma. Lee <code>docs/tier3-politica.md</code> antes de activarla.
                   </p>
@@ -335,8 +335,8 @@ function CalibrationStep({
 
   return (
     <section>
-      <h1 className="text-[20px] font-bold">Calibración de maduración</h1>
-      <p className="mt-1.5 text-[13px] leading-relaxed text-ink-dim">
+      <h1 className="text-xl font-bold">Calibración de maduración</h1>
+      <p className="mt-1.5 text-base leading-relaxed text-ink-dim">
         Una cohorte de guías tarda días en estabilizar su porcentaje de entrega. Data Effi
         mide el p90 real de tu operación y te propone la ventana; no la cambia solo,
         porque eso decide cómo se mide todo lo demás.
@@ -349,20 +349,20 @@ function CalibrationStep({
           {active.map((country) => (
             <div
               key={country.code}
-              className="flex items-center justify-between gap-3 rounded-[10px] border border-line bg-surface px-4 py-3"
+              className="flex items-center justify-between gap-3 rounded-control border border-line bg-surface px-4 py-3"
             >
               <div>
-                <p className="text-[13px] font-semibold">
+                <p className="text-base font-semibold">
                   {countryFlag(country.code)} {country.name}
                 </p>
-                <p className="text-[11.5px] text-ink-dim">
+                <p className="text-sm text-ink-dim">
                   Ventana actual: {country.maturation_days ?? 21} días
                 </p>
               </div>
 
               {country.maturation_days_suggested ? (
                 <div className="flex items-center gap-2.5">
-                  <span className="text-[12px] text-ink-2">
+                  <span className="text-sm text-ink-2">
                     Medimos {country.maturation_days_suggested} días
                   </span>
                   <Button size="sm" onClick={() => apply(country)}>
@@ -370,14 +370,14 @@ function CalibrationStep({
                   </Button>
                 </div>
               ) : (
-                <span className="text-[11.5px] text-ink-dim">
+                <span className="text-sm text-ink-dim">
                   Sin datos suficientes todavía
                 </span>
               )}
             </div>
           ))}
           {active.length === 0 && (
-            <p className="text-[12.5px] text-ink-dim">
+            <p className="text-base text-ink-dim">
               No hay países activos aún.
             </p>
           )}

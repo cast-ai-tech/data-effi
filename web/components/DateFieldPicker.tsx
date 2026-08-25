@@ -31,7 +31,7 @@ export function DateFieldPicker() {
 
   return (
     <div
-      className="hidden items-center gap-0.5 rounded-[8px] border border-line-strong bg-surface p-0.5 md:flex"
+      className="hidden items-center gap-0.5 rounded-control border border-line-strong bg-surface p-0.5 md:flex"
       role="group"
       aria-label="Fecha sobre la que se aplica el rango"
     >
@@ -43,7 +43,7 @@ export function DateFieldPicker() {
           aria-pressed={field === option}
           title={FIELD_QUESTIONS[option]}
           className={cx(
-            "rounded-[6px] px-2.5 py-1 text-[11.5px] font-medium transition-colors",
+            "rounded-md px-2.5 py-1 text-sm font-medium transition-colors",
             field === option
               ? "bg-range-active text-ink"
               : "text-ink-muted hover:text-ink-2",
@@ -83,7 +83,7 @@ export function ExcludedByFieldBand({ country }: { country?: FormatCountry }) {
       role="status"
       className="flex flex-wrap items-center gap-x-3 gap-y-1.5 border-b border-warning/25 bg-warning/[0.08] px-5 py-2"
     >
-      <p className="min-w-0 flex-1 text-[11.5px] leading-snug text-warning">
+      <p className="min-w-0 flex-1 text-sm leading-snug text-warning-ink">
         <span className="font-semibold">{counted} fuera del tablero.</span>{" "}
         {field === "entrega"
           ? "Todavía no tienen fecha de entrega: van en tránsito, en novedad o devueltas. Ninguna cifra de esta pantalla las cuenta."

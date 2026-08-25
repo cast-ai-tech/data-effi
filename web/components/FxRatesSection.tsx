@@ -58,16 +58,16 @@ export function FxRatesSection({ onError }: { onError: (message: string) => void
       {loading && <SkeletonRows rows={4} />}
 
       {!loading && (rates?.length ?? 0) === 0 && (
-        <p className="text-[12px] text-ink-dim">
+        <p className="text-sm text-ink-dim">
           Todavía no hay monedas. Activa un país en la sección de arriba.
         </p>
       )}
 
       {!loading && rates && rates.length > 0 && (
         <div className="overflow-x-auto">
-          <table className="w-full min-w-[640px] border-collapse text-[12px]">
+          <table className="w-full min-w-[640px] border-collapse text-sm">
             <thead>
-              <tr className="border-b border-line-subtle text-left text-[10.5px] uppercase tracking-wide text-ink-dim">
+              <tr className="border-b border-line-subtle text-left text-xs uppercase tracking-wide text-ink-dim">
                 <th className="py-2 font-semibold">Moneda</th>
                 <th className="py-2 font-semibold">Países</th>
                 <th className="py-2 text-right font-semibold">1 unidad en USD</th>
@@ -98,7 +98,7 @@ export function FxRatesSection({ onError }: { onError: (message: string) => void
         </div>
       )}
 
-      <p className="mt-3 text-[11px] text-ink-dim">
+      <p className="mt-3 text-xs text-ink-dim">
         Cada moneda usa la tasa <strong>oficial de su banco central</strong> cuando
         ese banco la publica: la TRM de la Superfinanciera en Colombia, el BCRP en
         Perú, el dólar observado del Banco Central en Chile y el Banguat en
@@ -186,7 +186,7 @@ function FxRow({
             onChange={(event) => setValue(event.target.value)}
             autoFocus
             aria-label="Tasa por dólar"
-            className="w-28 rounded-lg border border-line-subtle bg-transparent px-2 py-1 text-right text-[12px] text-ink outline-none focus:border-line"
+            className="w-28 rounded-lg border border-line-subtle bg-transparent px-2 py-1 text-right text-sm text-ink outline-none focus:border-line"
           />
         ) : rate.per_usd === null ? (
           <SinTasa />
@@ -224,7 +224,7 @@ function FxRow({
               <button
                 type="button"
                 onClick={onCancel}
-                className="text-[11.5px] text-ink-dim underline hover:text-ink-2"
+                className="text-sm text-ink-dim underline hover:text-ink-2"
               >
                 Cancelar
               </button>
@@ -233,7 +233,7 @@ function FxRow({
             <button
               type="button"
               onClick={onEdit}
-              className="text-[11.5px] text-ink-dim underline hover:text-ink-2"
+              className="text-sm text-ink-dim underline hover:text-ink-2"
             >
               Fijar a mano
             </button>

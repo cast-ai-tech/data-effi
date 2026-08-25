@@ -68,18 +68,18 @@ export default function ContributionSplitWidget({ countryCode, country }: Widget
     <Card title={TITLE} subtitle={SUBTITLE}>
       <div className="flex flex-wrap items-end gap-x-10 gap-y-4">
         <div>
-          <p className="text-[10.5px] font-bold uppercase tracking-[0.08em] text-ink-faint">
+          <p className="text-xs font-bold uppercase tracking-[0.08em] text-ink-faint">
             Contribución de lo que ya cerró
           </p>
           <p
             className={cx(
-              "mt-1.5 text-[30px] font-bold leading-none",
-              realised >= 0 ? "text-positive" : "text-negative",
+              "mt-1.5 text-4xl font-bold leading-none",
+              realised >= 0 ? "text-positive-ink" : "text-negative-ink",
             )}
           >
             {formatMoney(row.realised_contribution, country)}
           </p>
-          <p className="mt-1.5 text-[11.5px] text-ink-muted">
+          <p className="mt-1.5 text-sm text-ink-muted">
             {formatPercent(row.realised_margin_pct)} de margen sobre{" "}
             {formatMoney(row.realised_revenue, country)} recaudados ·{" "}
             {pluralize(row.closed_shipments, "guía cerrada", "guías cerradas")}
@@ -87,26 +87,26 @@ export default function ContributionSplitWidget({ countryCode, country }: Widget
         </div>
 
         <div className="self-end">
-          <p className="text-[10.5px] font-bold uppercase tracking-[0.08em] text-ink-faint">
+          <p className="text-xs font-bold uppercase tracking-[0.08em] text-ink-faint">
             Capital todavía en la calle
           </p>
-          <p className="mt-1 text-[18px] font-semibold leading-none text-warning">
+          <p className="mt-1 text-xl font-semibold leading-none text-warning-ink">
             {formatMoney(row.capital_in_street, country)}
           </p>
-          <p className="mt-1.5 text-[11.5px] text-ink-muted">
+          <p className="mt-1.5 text-sm text-ink-muted">
             en {pluralize(row.open_shipments, "guía abierta", "guías abiertas")} · espera
             recaudar {formatMoney(row.committed_revenue, country)}
           </p>
         </div>
 
         <div className="self-end">
-          <p className="text-[10.5px] font-bold uppercase tracking-[0.08em] text-ink-faint">
+          <p className="text-xs font-bold uppercase tracking-[0.08em] text-ink-faint">
             Guías que ya terminaron
           </p>
-          <p className="mt-1 text-[18px] font-semibold leading-none text-ink">
+          <p className="mt-1 text-xl font-semibold leading-none text-ink">
             {formatPercent(row.maturity_pct)}
           </p>
-          <p className="mt-1.5 text-[11.5px] text-ink-muted">
+          <p className="mt-1.5 text-sm text-ink-muted">
             {formatNumber(row.closed_shipments, country, 0)} de{" "}
             {formatNumber(row.shipments, country, 0)}
           </p>
@@ -114,12 +114,12 @@ export default function ContributionSplitWidget({ countryCode, country }: Widget
       </div>
 
       {notice && (
-        <p className="mt-4 max-w-2xl rounded-[8px] border border-line-input bg-sunken px-3 py-2 text-[11.5px] leading-relaxed text-ink-muted">
+        <p className="mt-4 max-w-2xl rounded-control border border-line-input bg-sunken px-3 py-2 text-sm leading-relaxed text-ink-muted">
           {notice}
         </p>
       )}
 
-      <p className="mt-3 max-w-2xl border-t border-line-subtle pt-3 text-[11px] leading-relaxed text-ink-dim">
+      <p className="mt-3 max-w-2xl border-t border-line-subtle pt-3 text-xs leading-relaxed text-ink-dim">
         Si sumas las dos mitades te da {formatMoney(row.net_contribution, country)}. Ese
         es el número que confundía: mezcla guías que ya cerraron con guías que apenas
         pagaron flete, producto y comisión y todavía no han cobrado nada. Mientras haya

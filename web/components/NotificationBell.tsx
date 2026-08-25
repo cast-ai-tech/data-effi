@@ -62,7 +62,7 @@ export function NotificationBell({ countryCode }: { countryCode: string | null }
         aria-haspopup="dialog"
         className={cx(
           "relative flex size-9 items-center justify-center rounded-full border border-line-strong bg-surface text-ink-muted transition-colors hover:text-ink-2",
-          open && "text-accent",
+          open && "text-accent-ink",
         )}
       >
         <BellIcon />
@@ -70,7 +70,7 @@ export function NotificationBell({ countryCode }: { countryCode: string | null }
           <span
             data-testid="bell-badge"
             aria-hidden
-            className="absolute -right-1 -top-1 flex h-[16px] min-w-[16px] items-center justify-center rounded-full bg-negative px-1 text-[10px] font-bold leading-none text-white"
+            className="absolute -right-1 -top-1 flex h-[16px] min-w-[16px] items-center justify-center rounded-full bg-negative px-1 text-xs font-bold leading-none text-on-solid"
           >
             {criticalUnread > 99 ? "99+" : criticalUnread}
           </span>

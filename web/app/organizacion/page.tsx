@@ -46,10 +46,10 @@ export default function OrganizacionPage() {
   return (
     <AppShell>
       <header className="mb-5">
-        <h1 className="text-[22px] font-bold tracking-tight">
+        <h1 className="text-2xl font-bold tracking-tight">
           {data?.org_name ?? "Organización"}
         </h1>
-        <p className="mt-1 text-[12px] text-ink-dim">
+        <p className="mt-1 text-sm text-ink-dim">
           {companies.length > 0
             ? `${companies.length} ${companies.length === 1 ? "empresa" : "empresas"} · todo convertido a ${data?.base_currency ?? "USD"}`
             : "Consolidado de todas tus empresas"}
@@ -75,7 +75,7 @@ export default function OrganizacionPage() {
         <>
           {/* Named before any total is read: these companies are NOT in it. */}
           {data.unavailable.length > 0 && (
-            <div className="mb-4 rounded-[10px] border border-line-strong bg-surface px-4 py-3 text-[12px] text-ink-2">
+            <div className="mb-4 rounded-control border border-line-strong bg-surface px-4 py-3 text-sm text-ink-2">
               No se pudieron leer, y <strong>no están sumadas</strong>:{" "}
               {data.unavailable.join(", ")}.
             </div>
@@ -104,9 +104,9 @@ export default function OrganizacionPage() {
           <div className="grid gap-4 xl:grid-cols-[1.35fr_1fr]">
             <Card title="Por empresa" subtitle="Entra a una empresa para ver su detalle">
               <div className="overflow-x-auto">
-                <table className="w-full min-w-[560px] border-collapse text-[12px]">
+                <table className="w-full min-w-[560px] border-collapse text-sm">
                   <thead>
-                    <tr className="border-b border-line-subtle text-left text-[10.5px] uppercase tracking-[0.06em] text-ink-faint">
+                    <tr className="border-b border-line-subtle text-left text-xs uppercase tracking-[0.06em] text-ink-faint">
                       <th className="py-2 pr-3 font-semibold">Empresa</th>
                       <th className="py-2 pr-3 text-right font-semibold">Guías</th>
                       <th className="py-2 pr-3 text-right font-semibold">Entrega</th>
@@ -128,7 +128,7 @@ export default function OrganizacionPage() {
                             }
                           />
                           <div className="mt-0.5 flex flex-wrap items-center gap-1.5">
-                            <span className="text-[10.5px] text-ink-dim">
+                            <span className="text-xs text-ink-dim">
                               {row.countries.map((code) => countryFlag(code)).join(" ")}{" "}
                               {row.countries.join(", ") || "sin países"}
                             </span>
@@ -160,7 +160,7 @@ export default function OrganizacionPage() {
 
             <Card title="Por país" subtitle="El mismo país en dos empresas se suma aquí">
               {data.by_country.length === 0 && (
-                <p className="text-[12px] text-ink-dim">
+                <p className="text-sm text-ink-dim">
                   Todavía no hay datos cargados en ningún país.
                 </p>
               )}
@@ -171,19 +171,19 @@ export default function OrganizacionPage() {
                     className="flex items-start justify-between gap-3 border-b border-line-subtle/60 pb-2.5 last:border-0 last:pb-0"
                   >
                     <div className="min-w-0">
-                      <p className="text-[12.5px] font-semibold">
+                      <p className="text-base font-semibold">
                         <span className="mr-1.5">{countryFlag(row.country_code)}</span>
                         {row.country_name}
                       </p>
-                      <p className="mt-0.5 truncate text-[10.5px] text-ink-dim">
+                      <p className="mt-0.5 truncate text-xs text-ink-dim">
                         {row.tenants.join(" · ")}
                       </p>
                     </div>
                     <div className="shrink-0 text-right">
-                      <p className="text-[12.5px] font-semibold tabular-nums">
+                      <p className="text-base font-semibold tabular-nums">
                         {usd(row.contribution_usd)}
                       </p>
-                      <p className="text-[10.5px] tabular-nums text-ink-dim">
+                      <p className="text-xs tabular-nums text-ink-dim">
                         {formatNumber(row.shipments, undefined, 0)} guías ·{" "}
                         {formatPercent(row.delivery_rate_pct)}
                       </p>
@@ -195,9 +195,9 @@ export default function OrganizacionPage() {
           </div>
 
           {user?.is_org_admin && (
-            <p className="mt-4 text-[11.5px] text-ink-dim">
+            <p className="mt-4 text-sm text-ink-dim">
               Eres el usuario maestro:{" "}
-              <Link href="/usuarios" className="text-accent">
+              <Link href="/usuarios" className="text-accent-ink">
                 administra quién entra a cada empresa
               </Link>
               .
@@ -223,15 +223,15 @@ function Tile({
   return (
     <div
       className={cx(
-        "rounded-[12px] border bg-surface px-4 py-3.5",
+        "rounded-card border bg-surface px-4 py-3.5",
         strong ? "border-accent/40" : "border-line",
       )}
     >
-      <p className="text-[10.5px] font-bold uppercase tracking-[0.08em] text-ink-faint">
+      <p className="text-xs font-bold uppercase tracking-[0.08em] text-ink-faint">
         {label}
       </p>
-      <p className="mt-1 text-[20px] font-bold tracking-tight tabular-nums">{value}</p>
-      {hint && <p className="mt-0.5 text-[11px] text-ink-dim">{hint}</p>}
+      <p className="mt-1 text-xl font-bold tracking-tight tabular-nums">{value}</p>
+      {hint && <p className="mt-0.5 text-xs text-ink-dim">{hint}</p>}
     </div>
   );
 }
@@ -254,7 +254,7 @@ function OpenCompany({
   const [busy, setBusy] = useState(false);
 
   if (disabled) {
-    return <span className="text-[12.5px] font-semibold text-ink-2">{name}</span>;
+    return <span className="text-base font-semibold text-ink-2">{name}</span>;
   }
 
   async function open() {
@@ -272,7 +272,7 @@ function OpenCompany({
       type="button"
       onClick={open}
       disabled={busy}
-      className="text-left text-[12.5px] font-semibold text-ink-2 hover:text-accent disabled:opacity-60"
+      className="text-left text-base font-semibold text-ink-2 hover:text-accent-ink disabled:opacity-60"
     >
       {name}
       {busy && " …"}

@@ -89,7 +89,7 @@ function ComponentBar({
   const total = parts.reduce((sum, part) => sum + part.value, 0);
 
   if (total <= 0) {
-    return <span className="text-[11px] text-ink-dim">sin desglose</span>;
+    return <span className="text-xs text-ink-dim">sin desglose</span>;
   }
 
   const title = parts
@@ -191,7 +191,7 @@ export default function FreightAnalysis({ countryCode, country }: WidgetProps) {
         header: "Flete por kilo",
         sortingFn: numericSort,
         cell: (info) => (
-          <span className="block text-[13px] font-semibold text-ink">
+          <span className="block text-base font-semibold text-ink">
             {formatMoney(info.getValue(), country)}
           </span>
         ),
@@ -259,7 +259,7 @@ export default function FreightAnalysis({ countryCode, country }: WidgetProps) {
   return (
     <Card title="Análisis de flete" subtitle={SUBTITLE} bodyClassName="p-0">
       <div className="overflow-x-auto">
-        <table className="w-full min-w-[900px] border-collapse text-[12px]">
+        <table className="w-full min-w-[900px] border-collapse text-sm">
           <thead>
             {table.getHeaderGroups().map((headerGroup) => (
               <tr key={headerGroup.id}>
@@ -278,7 +278,7 @@ export default function FreightAnalysis({ countryCode, country }: WidgetProps) {
                             : "none"
                       }
                       className={cx(
-                        "px-3 py-2 text-[10.5px] font-semibold uppercase tracking-[0.06em] text-ink-dim",
+                        "px-3 py-2 text-xs font-semibold uppercase tracking-[0.06em] text-ink-dim",
                         RIGHT_ALIGNED.has(header.column.id) ? "text-right" : "text-left",
                       )}
                     >
@@ -292,7 +292,7 @@ export default function FreightAnalysis({ countryCode, country }: WidgetProps) {
                           )}
                         >
                           {flexRender(header.column.columnDef.header, header.getContext())}
-                          <span aria-hidden className="text-[9px]">
+                          <span aria-hidden className="text-xs">
                             {sorted === "asc" ? "▲" : sorted === "desc" ? "▼" : ""}
                           </span>
                         </button>
@@ -328,12 +328,12 @@ export default function FreightAnalysis({ countryCode, country }: WidgetProps) {
       </div>
 
       <div className="space-y-1.5 border-t border-line-subtle px-4 py-3">
-        <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-[11px] text-ink-dim">
+        <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-ink-dim">
           {COMPONENTS.map((component) => (
             <span key={component.key} className="inline-flex items-center gap-1.5">
               <span
                 aria-hidden
-                className="inline-block size-[8px] rounded-[2px]"
+                className="inline-block size-[8px] rounded-sm"
                 style={{ background: component.colour }}
               />
               {component.label}
@@ -341,14 +341,14 @@ export default function FreightAnalysis({ countryCode, country }: WidgetProps) {
           ))}
         </div>
 
-        <p className="text-[11.5px] leading-relaxed text-ink-dim">
+        <p className="text-sm leading-relaxed text-ink-dim">
           {totals.discount > 0
             ? `Tu descuento negociado (${formatPercent(totals.discountPct)} en promedio) te ahorró ${formatMoney(totals.discount, country)} en el período: sin él, el flete habría costado ${formatMoney(totals.freight + totals.discount, country)} en vez de ${formatMoney(totals.freight, country)}.`
             : "Todavía no hay un descuento negociado registrado en los reportes: el flete se está pagando a tarifa plena."}
         </p>
 
         {totals.returnFreight > 0 && (
-          <p className="text-[11.5px] leading-relaxed text-ink-dim">
+          <p className="text-sm leading-relaxed text-ink-dim">
             Aparte, las devoluciones costaron {formatMoney(totals.returnFreight, country)}{" "}
             en flete de regreso, que ninguna guía entregada compensa.
           </p>
