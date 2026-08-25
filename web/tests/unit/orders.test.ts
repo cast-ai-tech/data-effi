@@ -1,10 +1,8 @@
 import { describe, expect, it } from "vitest";
 
 import {
-  BUCKET_ORDER,
   GRADE_ORDER,
   MATURITY_FLOOR_PCT,
-  bucketMeta,
   contactLabel,
   contactNotice,
   daysOpenTone,
@@ -68,26 +66,6 @@ describe("gradeMeta", () => {
 // ---------------------------------------------------------------------------
 // Shipment status
 // ---------------------------------------------------------------------------
-
-describe("bucketMeta", () => {
-  it("labels the four ends a guide can reach", () => {
-    for (const bucket of BUCKET_ORDER) {
-      expect(bucketMeta(bucket).label).not.toBe("");
-    }
-  });
-
-  /** A parcel in transit is the normal state of a healthy day, not a warning. */
-  it("does not colour a travelling guide as a problem", () => {
-    expect(bucketMeta("pipeline").tone).toBe("accent");
-    expect(bucketMeta("delivered").tone).toBe("positive");
-    expect(bucketMeta("returned").tone).toBe("negative");
-  });
-
-  it("echoes an unknown bucket instead of hiding it", () => {
-    expect(bucketMeta("en_aduana").label).toBe("en_aduana");
-    expect(bucketMeta("en_aduana").tone).toBe("neutral");
-  });
-});
 
 describe("daysOpenTone", () => {
   it("stays neutral while the guide is young", () => {

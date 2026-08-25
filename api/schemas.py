@@ -724,9 +724,9 @@ class DailyStatusRow(BaseModel):
     shipments: int
     entregada: int
     devolucion: int
-    en_camino: int
+    en_transito: int
     novedad: int
-    muerta: int
+    indemnizacion: int
     cerradas: int
     pct_entrega_cerradas: float | None
     pct_devolucion_cerradas: float | None
@@ -747,9 +747,9 @@ class PlatformSummaryRow(BaseModel):
     shipments: int
     entregada: int
     devolucion: int
-    en_camino: int
+    en_transito: int
     novedad: int
-    muerta: int
+    indemnizacion: int
     cerradas: int
     pct_entrega_cerradas: float | None
     pct_devolucion_cerradas: float | None
@@ -915,6 +915,13 @@ class GlobalRow(BaseModel):
     contribution_usd: float | None
     fx_missing: bool
     last_shipment_date: date | None
+    # The five status groups (migration 045). `in_transit` above is every open
+    # guide; `en_transito` here is only the ones actually moving.
+    entregada: int
+    devolucion: int
+    en_transito: int
+    novedad: int
+    indemnizacion: int
 
 
 class DropshippingMarginRow(BaseModel):
@@ -1217,6 +1224,8 @@ class ContributionSplitRow(BaseModel):
 
 CustomerGrade = Literal["nuevo", "excelente", "bueno", "regular", "riesgo"]
 OrderSort = Literal["recent", "contribution", "days_open"]
+# The five words of core.status_canon.status_group (migration 045).
+StatusGroup = Literal["entregada", "devolucion", "en_transito", "novedad", "indemnizacion"]
 CustomerSort = Literal["orders", "contribution", "revenue", "recent"]
 
 
@@ -1231,6 +1240,9 @@ class OrderRow(BaseModel):
     status_code: str
     status_label: str
     status_bucket: str
+    # One of the five words (migration 045): entregada | devolucion |
+    # en_transito | novedad | indemnizacion.
+    status_group: str
     is_terminal: bool
 
     # The route key for /customers/{customer_hash}. Null on a guide that never

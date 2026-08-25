@@ -709,6 +709,34 @@ def test_the_status_filter_returns_only_that_status(client, owner_token, seeded)
     assert all(row["status_label"] == "Entregada" for row in body["rows"])
 
 
+def test_the_group_filter_uses_the_five_words(client, owner_token, seeded):
+    """`group=entregada` is what the screen's "Estado" picker sends (migration 045):
+    one of five words, not a canonical code and not a bucket."""
+    body = orders(client, owner_token, group="entregada")
+    assert body["total"] == 3
+    assert all(row["status_group"] == "entregada" for row in body["rows"])
+
+    moving = orders(client, owner_token, group="en_transito")
+    assert [row["tracking_number"] for row in moving["rows"]] == ["EC-0005"]
+    assert moving["rows"][0]["status_group"] == "en_transito"
+
+    returned = orders(client, owner_token, group="devolucion")
+    assert [row["tracking_number"] for row in returned["rows"]] == ["EC-0003"]
+
+    # Every row carries its group, whatever the filter.
+    for row in orders(client, owner_token)["rows"]:
+        assert row["status_group"] in {
+            "entregada", "devolucion", "en_transito", "novedad", "indemnizacion"
+        }
+
+
+def test_an_unknown_group_is_refused(client, owner_token, seeded):
+    response = client.get(
+        "/orders", params={"country": "EC", "group": "en_calle"}, headers=auth(owner_token)
+    )
+    assert response.status_code == 422
+
+
 def test_the_date_range_filters_on_when_the_guide_was_created(client, owner_token, seeded):
     body = orders(
         client,

@@ -45,6 +45,7 @@ from api.schemas import (
     OrderSort,
     OrdersPage,
     OrderTimelineEvent,
+    StatusGroup,
 )
 
 router = APIRouter(prefix="/orders", tags=["orders"])
@@ -78,6 +79,7 @@ _ORDER_COLUMNS = """
     o.status_code,
     o.status_label,
     o.status_bucket,
+    o.status_group,
     o.is_terminal,
     o.customer_hash,
     CASE WHEN o.customer_hash IS NOT NULL
@@ -115,6 +117,10 @@ def list_orders(
     status: Annotated[
         str | None, Query(min_length=1, max_length=40, description="Código canónico de estado")
     ] = None,
+    group: Annotated[
+        StatusGroup | None,
+        Query(description="Grupo de estado: entregada, devolucion, en_transito, novedad, indemnizacion"),
+    ] = None,
     grade: Annotated[CustomerGrade | None, Query(description="Calidad del cliente")] = None,
     from_date: Annotated[date | None, Query(description="Desde (fecha de creación de la guía)")] = None,
     to_date: Annotated[date | None, Query(description="Hasta (fecha de creación de la guía)")] = None,
@@ -126,6 +132,7 @@ def list_orders(
         country=country,
         search=search,
         status=status,
+        group=group,
         grade=grade,
         from_date=from_date,
         to_date=to_date,
@@ -218,6 +225,7 @@ def _order_filters(
     country: str,
     search: str | None = None,
     status: str | None = None,
+    group: str | None = None,
     grade: CustomerGrade | None = None,
     from_date: date | None = None,
     to_date: date | None = None,
@@ -243,6 +251,11 @@ def _order_filters(
     if status:
         clauses.append("o.status_code = %(status)s")
         params["status"] = status
+    if group:
+        # The five words of migration 045. Validated as a Literal upstream, so
+        # an unknown group is a 422 rather than an empty page.
+        clauses.append("o.status_group = %(group)s")
+        params["group"] = group
     if grade:
         # The grade belongs to the customer, not the guide, so it is looked up
         # where it is computed. EXISTS rather than a JOIN: a customer with two

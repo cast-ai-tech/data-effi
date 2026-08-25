@@ -70,22 +70,36 @@ rango por no tener esa fecha" describa las mismas guías que la pantalla muestra
 
 ## 4. Los cinco grupos de estado
 
-Doce estados canónicos son el grano correcto para fusionar archivos y el incorrecto
-para una tabla diaria con cuatro columnas. `core.status_canon.display_group` es el
-vocabulario de pantalla; **nunca reemplaza al código canónico** (la fila de una guía
-sigue diciendo "En oficina"), solo agrupa.
+Trece estados canónicos son el grano correcto para fusionar archivos y el incorrecto
+para una tabla diaria. `core.status_canon.status_group` (migración 045, antes
+`display_group`) es la fuente de verdad de la agrupación con las cinco palabras que lee el
+operador; **nunca reemplaza al código canónico** (la fila de una guía sigue diciendo "En
+oficina"), solo agrupa. Cada canónico cae en exactamente un grupo (columna NOT NULL +
+CHECK).
 
-| Grupo | Estados canónicos | Por qué juntos |
-|---|---|---|
-| `entregada` | `delivered` | Effi "Entregada a destino" y Dropi "Entregado" son una columna. |
-| `devolucion` | `returning`, `returned` | Desde 024 ambas son terminales y la venta se perdió. |
-| `en_camino` | `created` … `out_for_delivery` | Todavía puede entregarse. |
-| `novedad` | `delivery_issue`, `in_office` | Se detuvo y una llamada aún la rescata. "En oficina" no puede desaparecer en "en camino". |
-| `muerta` | `cancelled`, `lost` | Ni entregada ni devuelta. |
+| Grupo | Etiqueta | Estados canónicos | Por qué juntos |
+|---|---|---|---|
+| `entregada` | Entregado | `delivered` | Effi "Entregada a destino" y Dropi "Entregado" son una columna. |
+| `en_transito` | En tránsito | `created` … `out_for_delivery` | Todavía puede entregarse. |
+| `novedad` | Novedad | `delivery_issue`, `in_office` | Se detuvo y una llamada aún la rescata. "En oficina" no puede desaparecer en "en tránsito". |
+| `devolucion` | Devolución | `returning`, `returned`, `cancelled` | La venta se perdió y el producto volvió (o nunca salió). Decisión del operador: la cancelada cuenta como devolución, así que `% devolución` la incluye. |
+| `indemnizacion` | Indemnización | `lost`, `compensated` | La transportadora perdió el paquete: `lost` es la indemnización pendiente, `compensated` ("Indemnizada", nuevo en 045) la pagada. |
 
-Espejos: `pipeline/mapping.py::DISPLAY_GROUPS` y `web/lib/status.ts`. Los tests
+`compensated` es terminal y es el único destino al que puede moverse una guía ya
+terminal: `core.status_advance` y `merge_shipment` permiten `lost → compensated` y nada
+más. Sus alias (`indemnizada`, `indemnizacion`, `guia indemnizada`…) son **candidatos**:
+aún no se ha visto un export real con la palabra; `resolve_status` reporta la grafía que
+llegue si no coincide.
+
+Espejos: `pipeline/mapping.py::STATUS_GROUPS` y `web/lib/status.ts`. Los tests
 `test_status_groups.py` y `status.test.ts` los mantienen iguales; el test Postgres compara
-el seed SQL con la copia de Python.
+el seed SQL con la copia de Python y verifica que ningún canónico quede sin grupo.
+
+Dónde se ven los grupos: `mart.v_daily_status_by_platform` / `f_daily_status`,
+`mart.v_platform_summary` / `f_platform_summary` (columnas `entregada`, `devolucion`,
+`en_transito`, `novedad`, `indemnizacion`), `mart.v_orders.status_group` (filtro `group`
+en `/orders`) y `mart.v_global_summary` / `f_global_summary` (los cinco conteos al final;
+`in_transit` sigue siendo "toda guía abierta").
 
 Alias nuevos (040): `incidencia en ruta` e `incidencia` → `delivery_issue`, más el
 vocabulario que Effi ya tenía registrado bajo `dropi` para que una búsqueda por

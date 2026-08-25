@@ -54,8 +54,15 @@ STATUS_CANON: dict[str, CanonStatus] = {
         CanonStatus("returned", "Devuelta", 80, True, False, True, "returned"),
         CanonStatus("cancelled", "Cancelada", 90, True, False, False, "dead"),
         CanonStatus("lost", "Extraviada", 95, True, False, False, "dead"),
+        # The carrier lost the parcel and paid it back (migration 045). Terminal
+        # like `lost`, and the ONE status a terminal guide may still move to:
+        # lost -> compensated is the exception in merge_shipment / status_advance.
+        CanonStatus("compensated", "Indemnizada", 96, True, False, False, "dead"),
     )
 }
+
+# The single terminal-to-terminal step the merge allows (migration 045).
+STATUS_TERMINAL_EXCEPTIONS: frozenset[tuple[str, str]] = frozenset({("lost", "compensated")})
 
 # Mirror of core.status_alias (migration 002). Keys are already normalized.
 STATUS_ALIASES: dict[str, str] = {
@@ -110,46 +117,62 @@ STATUS_ALIASES: dict[str, str] = {
     # problem counted as one that had just been generated.
     "incidencia en ruta": "delivery_issue",
     "incidencia": "delivery_issue",
+    # --- Indemnización (mirrors migration 045). CANDIDATE spellings: no real
+    # export with the word has been seen yet. `resolve_status` flags whatever
+    # spelling the first real file carries, so it can be added here by name.
+    "indemnizada": "compensated",
+    "indemnizado": "compensated",
+    "indemnizacion": "compensated",
+    "guia indemnizada": "compensated",
+    "siniestro indemnizado": "compensated",
+    "indemnizada por transportadora": "compensated",
 }
 
 DEFAULT_STATUS = "created"
 
-# Mirror of core.status_canon.display_group (migration 040).
+# Mirror of core.status_canon.status_group (migration 045).
 #
-# Five words for the screen. Twelve canonical statuses are right for merging
-# files and wrong for a daily table with room for four columns: Effi's
-# "Entregada a destino" and Dropi's "Entregado" have to land in the same column,
-# and "en oficina" has to count somewhere the reader can see it. The canonical
-# code is never replaced - a guide's own row still says "En oficina" - it is
-# only GROUPED here.
-DISPLAY_GROUPS: dict[str, str] = {
-    "created": "en_camino",
-    "confirmed": "en_camino",
-    "picked_up": "en_camino",
-    "in_transit": "en_camino",
-    "out_for_delivery": "en_camino",
+# The five words the operator reads. Thirteen canonical statuses are right for
+# merging files and wrong for a daily table: Effi's "Entregada a destino" and
+# Dropi's "Entregado" have to land in the same column, and "en oficina" has to
+# count somewhere the reader can see it. The canonical code is never replaced -
+# a guide's own row still says "En oficina" - it is only GROUPED here.
+#
+# `cancelled` counts as devolución on the operator's decision: the sale is lost
+# and the product is back (or never left). `lost` counts as indemnización: a
+# siniestro is an indemnity still owed; `compensated` is the same parcel paid.
+STATUS_GROUPS: dict[str, str] = {
+    "created": "en_transito",
+    "confirmed": "en_transito",
+    "picked_up": "en_transito",
+    "in_transit": "en_transito",
+    "out_for_delivery": "en_transito",
     "in_office": "novedad",
     "delivery_issue": "novedad",
     "delivered": "entregada",
     "returning": "devolucion",
     "returned": "devolucion",
-    "cancelled": "muerta",
-    "lost": "muerta",
+    "cancelled": "devolucion",
+    "lost": "indemnizacion",
+    "compensated": "indemnizacion",
 }
 
-DISPLAY_GROUP_LABELS: dict[str, str] = {
-    "entregada": "Entregada",
-    "devolucion": "Devolución",
-    "en_camino": "En camino",
+# In the order the operator reads them.
+STATUS_GROUP_LABELS: dict[str, str] = {
+    "entregada": "Entregado",
+    "en_transito": "En tránsito",
     "novedad": "Novedad",
-    "muerta": "Muerta",
+    "devolucion": "Devolución",
+    "indemnizacion": "Indemnización",
 }
 
+DEFAULT_STATUS_GROUP = "en_transito"
 
-def display_group(status_code: str) -> str:
-    """The screen group of a canonical status. Unknown codes read as en camino:
+
+def status_group(status_code: str) -> str:
+    """The screen group of a canonical status. Unknown codes read as en tránsito:
     a guide we cannot place is still moving, not delivered and not lost."""
-    return DISPLAY_GROUPS.get(status_code, "en_camino")
+    return STATUS_GROUPS.get(status_code, DEFAULT_STATUS_GROUP)
 
 
 def resolve_status(raw_value: object) -> tuple[str, bool]:

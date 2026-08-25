@@ -8,7 +8,7 @@
  */
 
 import { formatPercent, parseIsoDate } from "@/lib/format";
-import type { ContributionSplit, CustomerGrade, StatusBucket } from "@/lib/types";
+import type { ContributionSplit, CustomerGrade } from "@/lib/types";
 
 /** Same five tones the shared `Chip` and `StatusDot` understand. */
 export type Tone = "neutral" | "accent" | "positive" | "warning" | "negative";
@@ -88,36 +88,9 @@ export function gradeMeta(grade: string | null | undefined): GradeMeta {
 // ---------------------------------------------------------------------------
 // Shipment status
 // ---------------------------------------------------------------------------
-
-export interface BucketMeta {
-  label: string;
-  tone: Tone;
-}
-
-/**
- * The four ends of a guide.
- *
- * `pipeline` is accent, not warning: a guide in transit is the normal state of
- * a healthy operation, and colouring it amber would paint a good day yellow.
- */
-export const BUCKET_META: Record<StatusBucket, BucketMeta> = {
-  pipeline: { label: "En calle", tone: "accent" },
-  delivered: { label: "Entregada", tone: "positive" },
-  returned: { label: "Devuelta", tone: "negative" },
-  dead: { label: "Perdida", tone: "warning" },
-};
-
-export const BUCKET_ORDER: StatusBucket[] = [
-  "pipeline",
-  "delivered",
-  "returned",
-  "dead",
-];
-
-export function bucketMeta(bucket: string | null | undefined): BucketMeta {
-  if (!bucket) return { label: "Sin estado", tone: "neutral" };
-  return BUCKET_META[bucket as StatusBucket] ?? { label: bucket, tone: "neutral" };
-}
+// The status chip and the "Estado" picker use the five words of
+// `@/lib/status` (statusGroupMeta / STATUS_GROUPS) since migration 045; the
+// four coarse buckets no longer reach the screen.
 
 /**
  * How worried to be about a guide that has been open this long.

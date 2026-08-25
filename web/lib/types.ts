@@ -1,3 +1,5 @@
+import type { StatusGroup } from "@/lib/status";
+
 /**
  * Types mirroring the API responses.
  *
@@ -50,9 +52,9 @@ export interface DailyStatusRow {
   shipments: number;
   entregada: number;
   devolucion: number;
-  en_camino: number;
+  en_transito: number;
   novedad: number;
-  muerta: number;
+  indemnizacion: number;
   cerradas: number;
   pct_entrega_cerradas: number | null;
   pct_devolucion_cerradas: number | null;
@@ -72,9 +74,9 @@ export interface PlatformSummaryRow {
   shipments: number;
   entregada: number;
   devolucion: number;
-  en_camino: number;
+  en_transito: number;
   novedad: number;
-  muerta: number;
+  indemnizacion: number;
   cerradas: number;
   pct_entrega_cerradas: number | null;
   pct_devolucion_cerradas: number | null;
@@ -626,6 +628,13 @@ export interface GlobalRow {
   contribution_usd: number | null;
   fx_missing: boolean;
   last_shipment_date: string | null;
+  /** The five status groups (migration 045). `in_transit` is every open guide;
+   * `en_transito` only the ones actually moving. */
+  entregada: number;
+  devolucion: number;
+  en_transito: number;
+  novedad: number;
+  indemnizacion: number;
 }
 
 export interface LayoutWidget {
@@ -924,6 +933,8 @@ export interface OrderRow {
   status_code: string;
   status_label: string;
   status_bucket: StatusBucket;
+  /** One of the five words (migration 045). */
+  status_group: StatusGroup;
   is_terminal: boolean;
   /**
    * The deterministic hash, and the only key that routes to a customer:

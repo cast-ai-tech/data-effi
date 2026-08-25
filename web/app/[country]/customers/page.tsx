@@ -54,11 +54,11 @@ import {
   GRADE_ORDER,
   PII_HIDDEN_NOTICE,
   PII_MISSING_NOTICE,
-  bucketMeta,
   contactLabel,
   contactNotice,
   gradeMeta,
 } from "@/lib/orders";
+import { statusGroupMeta } from "@/lib/status";
 import type {
   Country,
   CustomerDetail,
@@ -658,7 +658,7 @@ function CustomerOrders({
     <Block title="Sus guías">
       <ul className="space-y-2">
         {shown.map((order) => {
-          const status = bucketMeta(order.status_bucket);
+          const status = statusGroupMeta(order.status_group);
           return (
             <li
               key={order.shipment_id}

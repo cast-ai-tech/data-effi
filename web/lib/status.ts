@@ -1,90 +1,118 @@
 /**
  * The five words a status can be on screen.
  *
- * Twelve canonical statuses are the right grain for merging files and the
- * wrong one for a daily table with four columns. Effi writes "Entregada a
- * destino", Dropi writes "Entregado", and both belong in the same column; "en
- * oficina" has to count somewhere the reader can see. This is the mirror of
- * `core.status_canon.display_group` (migration 040) and of
- * `pipeline/mapping.py::DISPLAY_GROUPS`. The canonical code is never replaced
+ * Thirteen canonical statuses are the right grain for merging files and the
+ * wrong one for a daily table. Effi writes "Entregada a destino", Dropi writes
+ * "Entregado", and both belong in the same column; "en oficina" has to count
+ * somewhere the reader can see. This is the mirror of
+ * `core.status_canon.status_group` (migration 045) and of
+ * `pipeline/mapping.py::STATUS_GROUPS`. The canonical code is never replaced
  * - a guide's own row still says "En oficina" - it is only GROUPED here.
  */
 
 import type { Tone } from "@/components/ui";
 
+/** In the order the operator reads them. */
 export const STATUS_GROUPS = [
   "entregada",
-  "devolucion",
-  "en_camino",
+  "en_transito",
   "novedad",
-  "muerta",
+  "devolucion",
+  "indemnizacion",
 ] as const;
 
 export type StatusGroup = (typeof STATUS_GROUPS)[number];
 
-/** Canonical status code -> screen group. Unknown codes read as en camino. */
+/** Canonical status code -> screen group. Unknown codes read as en tránsito. */
 const GROUP_OF: Record<string, StatusGroup> = {
-  created: "en_camino",
-  confirmed: "en_camino",
-  picked_up: "en_camino",
-  in_transit: "en_camino",
-  out_for_delivery: "en_camino",
+  created: "en_transito",
+  confirmed: "en_transito",
+  picked_up: "en_transito",
+  in_transit: "en_transito",
+  out_for_delivery: "en_transito",
   in_office: "novedad",
   delivery_issue: "novedad",
   delivered: "entregada",
   returning: "devolucion",
   returned: "devolucion",
-  cancelled: "muerta",
-  lost: "muerta",
+  // The operator's decision (045): the sale is lost and the product is back.
+  cancelled: "devolucion",
+  // A siniestro is an indemnity still owed; compensated is the same parcel paid.
+  lost: "indemnizacion",
+  compensated: "indemnizacion",
 };
 
 export function statusGroupOf(statusCode: string | null | undefined): StatusGroup {
-  return (statusCode && GROUP_OF[statusCode]) || "en_camino";
+  return (statusCode && GROUP_OF[statusCode]) || "en_transito";
+}
+
+export function isStatusGroup(value: unknown): value is StatusGroup {
+  return typeof value === "string" && (STATUS_GROUPS as readonly string[]).includes(value);
 }
 
 export const STATUS_GROUP_LABELS: Record<StatusGroup, string> = {
-  entregada: "Entregada",
-  devolucion: "Devolución",
-  en_camino: "En camino",
+  entregada: "Entregado",
+  en_transito: "En tránsito",
   novedad: "Novedad",
-  muerta: "Muerta",
+  devolucion: "Devolución",
+  indemnizacion: "Indemnización",
 };
 
 /**
  * What each column counts, for the header tooltip. Written for someone who
- * has never seen the twelve canonical names.
+ * has never seen the thirteen canonical names.
  */
 export const STATUS_GROUP_HINTS: Record<StatusGroup, string> = {
   entregada: "El cliente ya recibió el paquete.",
-  devolucion: "Va de regreso o ya volvió a la bodega. La venta se perdió.",
-  en_camino: "Generada, recogida, en tránsito o en reparto. Todavía puede entregarse.",
+  en_transito: "Generada, recogida, en tránsito o en reparto. Todavía puede entregarse.",
   novedad:
     "Se detuvo: el cliente no contestó, no estaba, o el paquete espera en oficina. " +
     "Con una llamada todavía se rescata.",
-  muerta: "Cancelada o extraviada. No se entregó ni se devolvió.",
+  devolucion:
+    "Va de regreso, ya volvió a la bodega o la cancelaron. La venta se perdió.",
+  indemnizacion:
+    "La transportadora perdió el paquete. Te debe el valor, o ya te lo pagó.",
 };
 
 /**
  * The same colours the operator's hand-made report uses, so the screen reads
- * like the sheet they already know: green delivered, orange returns, blue in
- * transit, purple issues. `muerta` is grey - it is the absence of an outcome.
+ * like the sheet they already know: green delivered, blue in transit, amber
+ * issues, red returns. `indemnizacion` is grey: the parcel is gone, the money
+ * is a separate conversation.
  */
 export const STATUS_GROUP_TONES: Record<StatusGroup, Tone> = {
   entregada: "positive",
-  devolucion: "negative",
-  en_camino: "accent",
+  en_transito: "accent",
   novedad: "warning",
-  muerta: "neutral",
+  devolucion: "negative",
+  indemnizacion: "neutral",
 };
 
 /** Text colour per group, for numbers in a table cell. */
 export const STATUS_GROUP_TEXT: Record<StatusGroup, string> = {
   entregada: "text-positive",
-  devolucion: "text-negative",
-  en_camino: "text-accent",
+  en_transito: "text-accent",
   novedad: "text-warning",
-  muerta: "text-ink-dim",
+  devolucion: "text-negative",
+  indemnizacion: "text-ink-dim",
 };
+
+export interface StatusGroupMeta {
+  label: string;
+  tone: Tone;
+}
+
+/**
+ * Label and tone for a chip. An unknown value is echoed rather than hidden:
+ * a guide whose group the screen does not know must still say something.
+ */
+export function statusGroupMeta(group: string | null | undefined): StatusGroupMeta {
+  if (!group) return { label: "Sin estado", tone: "neutral" };
+  if (isStatusGroup(group)) {
+    return { label: STATUS_GROUP_LABELS[group], tone: STATUS_GROUP_TONES[group] };
+  }
+  return { label: group, tone: "neutral" };
+}
 
 /**
  * Platform brand colours for the split bar. Anything not listed gets the

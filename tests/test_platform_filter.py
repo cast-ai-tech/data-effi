@@ -212,9 +212,9 @@ def test_daily_status_groups_the_twelve_statuses_into_five_columns(client, owner
     assert effi_day1["shipments"] == 4
     assert effi_day1["entregada"] == 2
     assert effi_day1["devolucion"] == 1
-    assert effi_day1["en_camino"] == 1
+    assert effi_day1["en_transito"] == 1
     assert effi_day1["novedad"] == 0
-    assert effi_day1["muerta"] == 0
+    assert effi_day1["indemnizacion"] == 0
     assert effi_day1["cerradas"] == 3
 
     # The two percentages the migration explains: over all guides of the day

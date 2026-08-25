@@ -37,10 +37,13 @@ export default function GlobalPage() {
     const shipments = list.reduce((sum, row) => sum + row.shipments, 0);
     const delivered = list.reduce((sum, row) => sum + row.delivered, 0);
     const returned = list.reduce((sum, row) => sum + row.returned, 0);
-    const inTransit = list.reduce((sum, row) => sum + row.in_transit, 0);
+    // The five words of migration 045: "en tránsito" is only what moves;
+    // a guide stopped with an issue is a novedad, not transit.
+    const inTransit = list.reduce((sum, row) => sum + row.en_transito, 0);
+    const issues = list.reduce((sum, row) => sum + row.novedad, 0);
     const usd = list.reduce((sum, row) => sum + (row.contribution_usd ?? 0), 0);
     const missingFx = list.some((row) => row.fx_missing);
-    return { shipments, delivered, returned, inTransit, usd, missingFx };
+    return { shipments, delivered, returned, inTransit, issues, usd, missingFx };
   }, [rows]);
 
   const country = active[0] ?? null;
@@ -112,7 +115,11 @@ export default function GlobalPage() {
             <StatTile
               label="En tránsito"
               value={formatNumber(totals.inTransit, { ...FALLBACK_COUNTRY, decimal_places: 0 })}
-              hint="Guías abiertas ahora mismo"
+              hint={
+                totals.issues > 0
+                  ? `Moviéndose ahora mismo · ${formatNumber(totals.issues, { ...FALLBACK_COUNTRY, decimal_places: 0 })} con novedad aparte`
+                  : "Moviéndose ahora mismo"
+              }
             />
           </div>
 

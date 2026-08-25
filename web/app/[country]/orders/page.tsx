@@ -50,21 +50,19 @@ import {
 } from "@/lib/format";
 import { useApi } from "@/lib/hooks";
 import {
-  BUCKET_ORDER,
   PII_HIDDEN_NOTICE,
   PII_MISSING_NOTICE,
-  bucketMeta,
   contactLabel,
   contactNotice,
   daysOpenTone,
   daysToDeliver,
 } from "@/lib/orders";
+import { STATUS_GROUPS, statusGroupMeta, type StatusGroup } from "@/lib/status";
 import type {
   Country,
   OrderDetail,
   OrderRow,
   OrdersPage,
-  StatusBucket,
   TimelineEvent,
 } from "@/lib/types";
 
@@ -95,7 +93,7 @@ function OrdersScreen() {
 
   const [search, setSearch] = useState("");
   const debouncedSearch = useDebounced(search, SEARCH_DEBOUNCE_MS);
-  const [bucket, setBucket] = useState<StatusBucket | "">("");
+  const [group, setGroup] = useState<StatusGroup | "">("");
   const [fromDate, setFromDate] = useState("");
   const [toDate, setToDate] = useState("");
   const [onlyOpen, setOnlyOpen] = useState(false);
@@ -106,7 +104,7 @@ function OrdersScreen() {
   // page 7 of the old filter is not page 7 of the new one.
   useEffect(() => {
     setPage(1);
-  }, [countryCode, debouncedSearch, bucket, fromDate, toDate, onlyOpen]);
+  }, [countryCode, debouncedSearch, group, fromDate, toDate, onlyOpen]);
 
   const path = country
     ? `/orders${qs({
@@ -114,7 +112,7 @@ function OrdersScreen() {
         page,
         page_size: PAGE_SIZE,
         search: debouncedSearch.trim(),
-        status: bucket,
+        group,
         from_date: fromDate,
         to_date: toDate,
         only_open: onlyOpen,
@@ -128,14 +126,14 @@ function OrdersScreen() {
   const notice = contactNotice(rows, piiVisible);
   const hasFilters =
     debouncedSearch.trim() !== "" ||
-    bucket !== "" ||
+    group !== "" ||
     fromDate !== "" ||
     toDate !== "" ||
     onlyOpen;
 
   function clearFilters() {
     setSearch("");
-    setBucket("");
+    setGroup("");
     setFromDate("");
     setToDate("");
     setOnlyOpen(false);
@@ -182,14 +180,14 @@ function OrdersScreen() {
         <label className="block">
           <span className="mb-1 block text-[11px] text-ink-dim">Estado</span>
           <select
-            value={bucket}
-            onChange={(event) => setBucket(event.target.value as StatusBucket | "")}
+            value={group}
+            onChange={(event) => setGroup(event.target.value as StatusGroup | "")}
             className="rounded-[8px] border border-line-input bg-surface px-3 py-1.5 text-[12.5px]"
           >
             <option value="">Todos</option>
-            {BUCKET_ORDER.map((item) => (
+            {STATUS_GROUPS.map((item) => (
               <option key={item} value={item}>
-                {bucketMeta(item).label}
+                {statusGroupMeta(item).label}
               </option>
             ))}
           </select>
@@ -355,7 +353,7 @@ function OrderTableRow({
   piiVisible: boolean;
   onOpen: () => void;
 }) {
-  const status = bucketMeta(row.status_bucket);
+  const status = statusGroupMeta(row.status_group);
   const contact = contactLabel(row, piiVisible);
   const daysTone = daysOpenTone(row.days_open, row.is_terminal);
   // A closed guide has no days open - it has days it took. Different number,
@@ -481,7 +479,7 @@ function OrderCard({
   // only a stand-in until it arrives.
   const cardPii = data?.pii_visible ?? piiVisible;
   const contact = order ? contactLabel(order, cardPii) : null;
-  const status = order ? bucketMeta(order.status_bucket) : null;
+  const status = order ? statusGroupMeta(order.status_group) : null;
   const delivery = order ? daysToDeliver(order.created_date, order.delivered_at) : null;
 
   return (

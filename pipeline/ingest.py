@@ -30,6 +30,7 @@ from pipeline.mapping import (
     MOVEMENT_TYPE_SIGNS,
     REQUIRED_COLUMNS,
     STATUS_CANON,
+    STATUS_TERMINAL_EXCEPTIONS,
     build_header_map,
     resolve_movement_type,
     resolve_status,
@@ -259,7 +260,11 @@ def merge_shipment(existing: ShipmentRecord, incoming: ShipmentInput) -> MergeOu
     current = STATUS_CANON[existing.status_code]
     proposed = STATUS_CANON[incoming.status_code]
 
-    if not current.is_terminal and proposed.sort_order > current.sort_order:
+    # The one terminal-to-terminal step: a lost parcel gets paid back
+    # (lost -> compensated, migration 045). Mirror of core.status_advance.
+    allowed_from_terminal = (existing.status_code, incoming.status_code) in STATUS_TERMINAL_EXCEPTIONS
+
+    if (not current.is_terminal or allowed_from_terminal) and proposed.sort_order > current.sort_order:
         outcome.updates["status_code"] = incoming.status_code
         outcome.updates["status_raw"] = incoming.status_raw
         outcome.status_advanced = True

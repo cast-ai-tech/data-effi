@@ -23,6 +23,7 @@ import type { WidgetProps } from "@/components/widgets/types";
 import { useRangedApi } from "@/lib/date-range";
 import { formatDate, formatNumber, formatPercent, type FormatCountry } from "@/lib/format";
 import {
+  STATUS_GROUPS,
   STATUS_GROUP_HINTS,
   STATUS_GROUP_LABELS,
   STATUS_GROUP_TEXT,
@@ -30,8 +31,8 @@ import {
 } from "@/lib/status";
 import type { DailyStatusRow } from "@/lib/types";
 
-/** The columns, in the order the sheet has them. `muerta` last: it is rare. */
-const COLUMNS: StatusGroup[] = ["entregada", "devolucion", "en_camino", "novedad", "muerta"];
+/** The columns, in the order the operator reads them (migration 045). */
+const COLUMNS: StatusGroup[] = [...STATUS_GROUPS];
 
 const SHORT_SAMPLE_HINT =
   "Menos de 10 guías cerradas ese día: el porcentaje es un estimado, no una medición.";
@@ -47,9 +48,9 @@ export interface BlockTotals {
   shipments: number;
   entregada: number;
   devolucion: number;
-  en_camino: number;
+  en_transito: number;
   novedad: number;
-  muerta: number;
+  indemnizacion: number;
   cerradas: number;
   /** Returns over every guide - what the sheet prints. */
   pctDevolucionTotal: number | null;
@@ -63,18 +64,18 @@ export function sumBlock(rows: readonly DailyStatusRow[]): BlockTotals {
     shipments: 0,
     entregada: 0,
     devolucion: 0,
-    en_camino: 0,
+    en_transito: 0,
     novedad: 0,
-    muerta: 0,
+    indemnizacion: 0,
     cerradas: 0,
   };
   for (const row of rows) {
     totals.shipments += row.shipments;
     totals.entregada += row.entregada;
     totals.devolucion += row.devolucion;
-    totals.en_camino += row.en_camino;
+    totals.en_transito += row.en_transito;
     totals.novedad += row.novedad;
-    totals.muerta += row.muerta;
+    totals.indemnizacion += row.indemnizacion;
     totals.cerradas += row.cerradas;
   }
   return {
@@ -299,9 +300,9 @@ function emptyRow(day: string, block: PlatformBlock): DailyStatusRow {
     shipments: 0,
     entregada: 0,
     devolucion: 0,
-    en_camino: 0,
+    en_transito: 0,
     novedad: 0,
-    muerta: 0,
+    indemnizacion: 0,
     cerradas: 0,
     pct_entrega_cerradas: null,
     pct_devolucion_cerradas: null,

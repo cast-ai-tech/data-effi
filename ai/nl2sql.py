@@ -295,7 +295,9 @@ mart.v_cpa_roas(country_code, day, ad_spend, impressions, clicks, shipments, del
 
 mart.v_global_summary(country_code, country_name, currency_code, shipments, delivered,
     returned, in_transit, delivery_rate_pct, revenue, ad_spend, contribution,
-    fx_rate_to_usd, contribution_usd, fx_missing, last_shipment_date)
+    fx_rate_to_usd, contribution_usd, fx_missing, last_shipment_date,
+    entregada, devolucion, en_transito, novedad, indemnizacion)
+    -- in_transit = toda guía abierta; en_transito = solo las que se mueven (sin novedad).
 
 mart.v_connection_health(connection_name, country_code, platform_name, tier, status,
     last_sync_at, hours_since_sync, health)
@@ -346,16 +348,16 @@ mart.v_carrier_by_zone(country_code, level1_name, city_name, carrier_name, shipm
     -- devueltas); con menos de 30 la tasa es ruido.
 
 mart.v_daily_status_by_platform(country_code, platform_code, platform_name, day, shipments,
-    entregada, devolucion, en_camino, novedad, muerta, cerradas, pct_entrega_cerradas,
+    entregada, devolucion, en_transito, novedad, indemnizacion, cerradas, pct_entrega_cerradas,
     pct_devolucion_cerradas, pct_devolucion_total, sample_quality, declared_value, revenue,
     contribution, currency_code)
-    -- Guías por DÍA y por PLATAFORMA (effi, dropi, manual_xlsx...) agrupadas en cinco
-    -- estados de pantalla. pct_devolucion_total divide por todas las guías del día;
+    -- Guías por DÍA y por PLATAFORMA (effi, dropi, manual_xlsx...) agrupadas en los cinco
+    -- grupos de estado (entregada, en_transito, novedad, devolucion, indemnizacion). pct_devolucion_total divide por todas las guías del día;
     -- pct_devolucion_cerradas solo por las ya resueltas y es la cifra que se cumple.
     -- sample_quality = 'muestra_corta' con menos de 10 cerradas: es un estimado.
 
 mart.v_platform_summary(country_code, platform_code, platform_name, shipments, entregada,
-    devolucion, en_camino, novedad, muerta, cerradas, pct_entrega_cerradas,
+    devolucion, en_transito, novedad, indemnizacion, cerradas, pct_entrega_cerradas,
     pct_devolucion_cerradas, pct_devolucion_total, share_pct, sample_quality,
     declared_value, revenue, contribution, currency_code, first_day, last_day)
     -- Una fila por plataforma: qué parte de las guías del país entró por cada una
