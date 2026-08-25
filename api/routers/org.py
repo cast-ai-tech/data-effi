@@ -647,14 +647,14 @@ def create_tenant(payload: TenantCreateRequest, conn: UnscopedDbDep, user: OrgAd
     The creator gets an owner membership immediately: a company nobody can enter
     is a support ticket waiting to happen.
     """
-    from api.routers.auth import slugify
+    from api.routers.auth import _unique_slug, slugify
 
-    slug = slugify(payload.name)
-    if not slug:
+    base_slug = slugify(payload.name)
+    if not base_slug:
         raise ApiError("invalid_name", "Ese nombre no produce un identificador válido")
-
-    if fetch_one(conn, "SELECT 1 FROM core.tenant WHERE slug = %s", (slug,)):
-        raise Conflict(f"Ya existe una sociedad con el identificador '{slug}'")
+    # Two operators may both call their company "Distrilatam Ecuador": the slug
+    # is an internal handle, never the identity, so it simply gets a suffix.
+    slug = _unique_slug(conn, "core.tenant", base_slug)
 
     # The plan says how many companies the organisation may hold (048). The
     # free month holds one; a requested plan counts only once it is active.

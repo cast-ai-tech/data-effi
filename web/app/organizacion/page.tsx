@@ -47,7 +47,7 @@ export default function OrganizacionPage() {
   return (
     <AppShell>
       <PageHeader
-        title={data?.org_name ?? "Organización"}
+        title="Global"
         subtitle={
           companies.length > 0
             ? `${companies.length} ${companies.length === 1 ? "empresa" : "empresas"} · todo convertido a ${data?.base_currency ?? "USD"}`

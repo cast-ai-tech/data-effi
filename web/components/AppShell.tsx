@@ -197,34 +197,26 @@ export function AppShell({ children }: { children: React.ReactNode }) {
         {/* Which company you are standing in. Above everything else in the menu
             because every number below it means something different depending on
             the answer. Always shown: it is also where a new company is created. */}
+        {/* Global sits ABOVE the company picker on purpose: it measures every
+            company of the account, so it does not belong to the one selected. */}
+        {user && (user.is_org_admin || user.org_role) && (
+          <div className="border-b border-line-subtle p-2.5">
+            <NavItem
+              href="/organizacion"
+              active={pathname.startsWith("/organizacion")}
+              collapsed={rail}
+              icon={<GridIcon />}
+              label="Global · todas las empresas"
+            />
+          </div>
+        )}
         {user && ((user.workspaces?.length ?? 0) > 0 || user.is_org_admin) && (
           <WorkspacePicker user={user} collapsed={rail} />
         )}
 
         <nav className="flex flex-1 flex-col gap-0.5 overflow-y-auto p-2.5">
-          {/* The holding's consolidated view. Only for someone who actually has
-              more than one company to consolidate. */}
-          {(user?.workspaces?.length ?? 0) > 1 && can("read") && (
-            <NavItem
-              href="/organizacion"
-              active={pathname.startsWith("/organizacion")}
-              collapsed={rail}
-              icon={<StackIcon />}
-              label="Consolidado"
-            />
-          )}
-
-          {can("read") && (
-            <NavItem
-              href={`/global${rangeSuffix}`}
-              active={pathname === "/global"}
-              collapsed={rail}
-              icon={<GridIcon />}
-              label={
-                (user?.workspaces?.length ?? 0) > 1 ? "Esta empresa" : "Resumen"
-              }
-            />
-          )}
+          {/* The company's own overview ("Resumen") is its country dashboard:
+              a company lives in one country, so the entry below covers it. */}
 
           {/* A company operates in one country, so its sections show right
               under the company picker - no "Países" heading to read past. */}
