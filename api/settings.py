@@ -46,7 +46,12 @@ class Settings(BaseSettings):
     # --- api ---
     api_host: str = "0.0.0.0"      # noqa: S104 - containers bind all interfaces
     api_port: int = 8000
+    # Browser origins allowed to call the API directly (file uploads do; the
+    # rest goes through the web's own proxy). Comma-separated exact origins,
+    # plus an optional regex for the ones that change with every deploy -
+    # Vercel's preview URLs. Production values live in render.yaml.
     cors_origins: str = "http://localhost:3000"
+    cors_origin_regex: str | None = None
     # The origin an OUTSIDE caller uses to reach this API - what n8n, Make or
     # Zapier will POST to. Behind a proxy the request's own host is the internal
     # one (`http://api:8000`), and a webhook URL built from it is unusable by the

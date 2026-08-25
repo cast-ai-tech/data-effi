@@ -4,8 +4,9 @@ THE SHAPE OF THE WAIT. The request may hold for up to `wait` seconds, but the
 database connection never does. Each iteration checks out a connection, runs
 one indexed SELECT, and hands it back before sleeping - so forty open tabs
 cost forty sleeping coroutines, not forty of the pool's connections. A `wait`
-of six fits under Netlify's ten-second function limit with room for a cold
-start; eight is the hard ceiling for the same reason.
+of six fits under the ten-second function limit the web's serverless host
+enforces at its lowest tier (Vercel Hobby, Netlify) with room for a cold start;
+eight is the hard ceiling for the same reason.
 
 WHO HEARS WHAT. An `uploader` may watch their own loads and nothing else, so
 without `read` the feed is cut to `upload_job.*`. A membership limited to some

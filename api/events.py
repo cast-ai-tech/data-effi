@@ -1,11 +1,12 @@
 """The change feed the browser long-polls.
 
 WHY A TABLE AND NOT A SOCKET. The API runs as one process on Render's free
-plan, the web app sits behind Netlify Functions that buffer every response and
-cut it at ten seconds, and the database is reached through a transaction
-pooler that cannot LISTEN. None of those can hold a connection open. What all
-of them can do is answer "anything after id 4812?" in a few milliseconds - so
-that is the protocol: append here, and `GET /events?since=` reads forward.
+plan, the web app sits behind serverless functions (Vercel today, Netlify
+before) that buffer every response and cut it after seconds, and the database
+is reached through a transaction pooler that cannot LISTEN. None of those can
+hold a connection open. What all of them can do is answer "anything after id
+4812?" in a few milliseconds - so that is the protocol: append here, and
+`GET /events?since=` reads forward.
 
 WHAT GOES IN A PAYLOAD. Identifiers and statuses, never text. A notification
 event says "notification 17 is critical"; the title lives in raw.notification

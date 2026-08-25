@@ -1,44 +1,52 @@
 # Poner Data Effi en producción
 
 Esta guía es para el desarrollador que va a dejar Data Effi funcionando en
-internet. Está escrita paso a paso, sin dar nada por sabido. Si algo aquí ya lo
-sabes, sáltatelo.
+internet, y para quien lo tenga que mantener después. Está escrita paso a paso,
+sin dar nada por sabido. Si algo aquí ya lo sabes, sáltatelo.
 
 Para correrlo en tu computador mientras desarrollas, no uses esta guía: usa el
 [README](README.md), que lo levanta todo con Docker en un solo comando.
 
+> **Regla de esta guía:** aquí van los **nombres** de las variables y dónde se
+> cargan. Los **valores** (contraseñas, secretos, claves) nunca van en este
+> archivo, ni en el repositorio, ni en un issue. Ver la sección 8.
+
 ---
 
-## 1. Antes de empezar: Data Effi son cuatro cosas, no dos
+## 1. Dónde vive cada pieza (estado real, 2026-08-24)
 
-Mucha gente asume que con Supabase y Vercel alcanza. No alcanza. Data Effi tiene
-cuatro piezas y cada una vive en un lugar distinto:
+| Pieza | Qué es | Dónde vive | Cómo se despliega |
+|---|---|---|---|
+| **Base de datos** | PostgreSQL con **44 migraciones** (`migrations/001` … `044`) | **Supabase** | Migraciones a mano desde tu máquina (sección 2) |
+| **API** | FastAPI (Python). Recibe archivos, calcula KPIs, sirve todo | **Render**, servicio `data-effi-api`, plan free, Docker (`render.yaml`) | **Manual Deploy** en Render después de cada push (`autoDeploy: false`) |
+| **Worker** | Los jobs de fondo (sincronizar hojas, relink, FX, digest…) | **No corre como servicio.** Los dispara **GitHub Actions** (`.github/workflows/worker-cron.yml`) llamando a la API | Solo con el push del workflow |
+| **Frontend** | Next.js 15. Lo que el usuario ve | **Vercel**, proyecto `masterdataweb`, Root Directory `web/` | Automático con cada push a `main`; cada rama/PR tiene su preview |
 
-| Pieza | Qué es | Dónde va |
-|---|---|---|
-| **Base de datos** | PostgreSQL con 31 migraciones | **Supabase** |
-| **API** | FastAPI (Python). Recibe archivos, calcula KPIs, sirve todo | Un servidor propio — **NO Vercel** |
-| **Worker** | Proceso Python que procesa las cargas en segundo plano | El mismo servidor de la API |
-| **Frontend** | Next.js. Lo que el usuario ve | **Vercel** |
+**Por qué la API no va en Vercel:** Vercel corre funciones que arrancan,
+responden y mueren. La API necesita un proceso vivo con un pool de conexiones a
+Postgres y una cola de trabajos en memoria. Por eso está en Render.
 
-**Por qué la API no puede ir en Vercel:** Vercel corre funciones que arrancan,
-responden y mueren. La API de Data Effi necesita lo contrario — un proceso vivo
-todo el tiempo, con un pool de conexiones a Postgres y una cola de trabajos en
-memoria. El worker directamente no encaja: su trabajo es correr por minutos
-después de que la petición ya terminó.
+**Por qué el worker no es un servicio:** el plan free de Render no incluye
+Background Workers. En vez de eso `WORKER_ENABLED=false` y GitHub Actions llama
+`POST /worker/trigger/{job}` en los horarios del scheduler. De paso mantiene
+despierto el servicio, que si no duerme a los 15 minutos sin tráfico.
 
-Para la API y el worker sirve cualquiera de estos: Render, Railway, Fly.io,
-DigitalOcean App Platform, o un VPS con Docker. El repositorio ya trae los
-`Dockerfile` que necesitan.
+**Cómo hablan entre sí.** El navegador nunca ve un token: sus peticiones van a
+`/api/backend/...` en el mismo dominio de Vercel, y un pequeño servidor dentro
+de Next (`web/app/api/backend/[...path]/route.ts`) las reenvía a Render con el
+token que vive en una cookie `HttpOnly`. **La única excepción son los
+archivos**: van directo del navegador a Render (sección 5), y por eso la API
+tiene que autorizar el dominio de Vercel por CORS.
 
-**Orden en que hay que hacer las cosas.** Hay una dependencia circular: el
-frontend necesita saber la dirección de la API, y la API necesita saber la
-dirección del frontend para permitirle conectarse. Se rompe así:
+**Orden para un despliegue desde cero.** Hay una dependencia circular: la web
+necesita la dirección de la API, y la API necesita la dirección de la web para
+dejarla conectarse. Se rompe así:
 
 1. Base de datos (Supabase)
-2. API y worker → aquí sale la dirección de la API
-3. Frontend (Vercel) → usa esa dirección; aquí sale la dirección del frontend
-4. Volver a la API, agregarle la dirección del frontend y reiniciarla
+2. API en Render → aquí sale la dirección de la API
+3. Web en Vercel → usa esa dirección; aquí sale la dirección de la web
+4. Volver a Render, poner la dirección de la web en `CORS_ORIGINS`, redesplegar
+5. Cron del worker en GitHub Actions
 
 ---
 
@@ -52,7 +60,8 @@ dirección del frontend para permitirle conectarse. Se rompe así:
 4. Donde dice **Database Password**, haz clic en **Generate a password** y
    **guárdala en tu gestor de contraseñas ahora mismo**. Supabase no te la vuelve
    a mostrar. Esta es la contraseña del usuario `postgres`.
-5. En **Region**, elige la más cercana a donde están los usuarios.
+5. En **Region**, elige `us-east-1` (Virginia): la API en Render está en esa
+   misma costa y cada consulta ahorra el viaje.
 6. Haz clic en **Create new project** y espera unos dos minutos.
 
 ### Paso 2. Copia las dos cadenas de conexión
@@ -62,7 +71,7 @@ usuario y contraseña adentro. Data Effi usa dos formas distintas de conectarse 
 necesitas las dos.
 
 1. Arriba a la derecha, haz clic en **Connect**.
-2. Verás varias opciones. Copia estas dos y guárdalas en un bloc de notas:
+2. Copia estas dos y guárdalas en un bloc de notas:
    - **Session pooler** o **Direct connection** — puerto `5432`
    - **Transaction pooler** — puerto `6543`
 3. En ambas, donde dice `[YOUR-PASSWORD]`, reemplázalo por la contraseña del
@@ -70,14 +79,14 @@ necesitas las dos.
 4. A ambas agrégales `?sslmode=require` al final. Supabase solo acepta
    conexiones cifradas y sin esto la conexión falla.
 
-Te deben quedar así:
+Te deben quedar con esta forma (los valores son de ejemplo):
 
 ```
 # Puerto 5432 — para migraciones y tareas de administración
-postgresql://postgres.abcdefgh:TU_PASSWORD@aws-0-us-east-1.pooler.supabase.com:5432/postgres?sslmode=require
+postgresql://postgres.<ref>:<PASSWORD>@aws-0-us-east-1.pooler.supabase.com:5432/postgres?sslmode=require
 
 # Puerto 6543 — para la aplicación en marcha
-postgresql://postgres.abcdefgh:TU_PASSWORD@aws-0-us-east-1.pooler.supabase.com:6543/postgres?sslmode=require
+postgresql://postgres.<ref>:<PASSWORD>@aws-0-us-east-1.pooler.supabase.com:6543/postgres?sslmode=require
 ```
 
 **Por qué dos.** El puerto 6543 reparte un puñado de conexiones reales entre
@@ -106,6 +115,7 @@ Las migraciones se corren desde tu máquina, apuntando a Supabase.
    openssl rand -hex 32          # para JWT_SECRET
    openssl rand -hex 32          # para PII_HASH_SALT
    openssl rand -hex 32          # para WORKER_TRIGGER_SECRET
+   openssl rand -hex 32          # para PROXY_SHARED_SECRET
    openssl rand -hex 24          # para POSTGRES_APP_PASSWORD
    openssl rand -hex 24          # para POSTGRES_READONLY_PASSWORD
    python -m scripts.generate_pii_key   # imprime la línea PII_ENCRYPTION_KEY= completa
@@ -129,19 +139,31 @@ se recuperan volviendo a subir los archivos originales.
 
 ### Paso 4. Aplica las migraciones
 
+Hay **44** archivos en `migrations/`, numerados `001` a `044`. En una base
+**nueva**:
+
 ```bash
 python -m scripts.migrate --status    # muestra qué falta, sin tocar nada
 python -m scripts.migrate             # las aplica
 ```
 
-El script lleva un registro en la tabla `public.schema_migration`, así que solo
-corre las migraciones nuevas. Es seguro volver a ejecutarlo.
+El script lleva un registro en la tabla `public.schema_migration` (archivo +
+checksum), así que solo corre las migraciones nuevas. En una base nueva es
+seguro volver a ejecutarlo.
+
+⚠️ **En la base de producción que ya existe, NO corras `scripts.migrate`.** Su
+registro `schema_migration` está incompleto (faltan filas de las primeras
+migraciones, que se aplicaron a mano), así que el script intentaría
+re-aplicarlas y rompería las vistas. Para agregar una migración a producción:
+ejecuta el archivo entero contra el puerto 5432 y luego inserta su fila en
+`public.schema_migration` (`filename`, `checksum` = sha256 de los bytes del
+archivo). Producción va en la **044**.
 
 **Si la migración 007 falla diciendo que no puede crear roles:** esa migración
 crea `norte_app` y `norte_readonly`. En Supabase el usuario `postgres` no es
 superusuario, pero sí tiene permiso para crear roles, así que normalmente
-funciona. Si en tu proyecto no funciona, crea los dos roles a mano desde el **SQL
-Editor** de Supabase copiando las sentencias `CREATE ROLE` de
+funciona. Si no, crea los dos roles a mano desde el **SQL Editor** de Supabase
+copiando las sentencias `CREATE ROLE` de
 `migrations/007_row_level_security.sql`, y vuelve a correr el script.
 
 **Verifica que quedó bien** — esto es lo más importante de todo el despliegue.
@@ -171,8 +193,8 @@ Ahora arma las cadenas de conexión definitivas de la aplicación, cambiando
 `postgres` por el rol correspondiente y su contraseña:
 
 ```
-DATABASE_URL=postgresql://norte_app.abcdefgh:PASSWORD_DE_APP@aws-0-...:6543/postgres?sslmode=require
-DATABASE_URL_READONLY=postgresql://norte_readonly.abcdefgh:PASSWORD_READONLY@aws-0-...:6543/postgres?sslmode=require
+DATABASE_URL=postgresql://norte_app.<ref>:<PASSWORD_DE_APP>@aws-0-...:6543/postgres?sslmode=require
+DATABASE_URL_READONLY=postgresql://norte_readonly.<ref>:<PASSWORD_READONLY>@aws-0-...:6543/postgres?sslmode=require
 ```
 
 Fíjate en el punto: a través del pooler de Supabase el usuario se escribe
@@ -183,7 +205,7 @@ va después de `postgres.` en la cadena que copiaste.
 tablas, y PostgreSQL exime al dueño de sus propias políticas de seguridad. Si la
 API se conecta así, el aislamiento entre clientes desaparece sin que nada falle
 ni avise. `POSTGRES_ADMIN_URL` con el usuario `postgres` se usa solo para
-migraciones, desde tu máquina, y no va en el servidor de producción.
+migraciones, desde tu máquina, y no va en ningún servidor.
 
 ### Paso 6 (opcional). Datos de demostración
 
@@ -196,73 +218,76 @@ base que va a producción, sáltatelo.
 
 ---
 
-## 3. La API y el worker
+## 3. La API en Render
 
-Van juntos, en el mismo servidor. El repositorio ya trae `Dockerfile` para la API
-y para el worker, y `docker-compose.yml` sirve de referencia de cómo se conectan.
+El repositorio trae el Blueprint completo en **`render.yaml`**: servicio web
+`data-effi-api`, Docker (`Dockerfile.api`), plan free, región Virginia,
+healthcheck en `/health`, y **`autoDeploy: false`**.
 
-### Requisitos que no son negociables
+### Paso 1. Crea el servicio desde el Blueprint
 
-1. **HTTPS obligatorio.** El frontend en Vercel se sirve por HTTPS, y un
-   navegador bloquea toda petición de una página HTTPS hacia una dirección HTTP.
-   Si la API queda en HTTP, el dashboard se ve pero no carga ningún dato y la
-   consola del navegador se llena de errores de "mixed content". Casi todos los
-   servicios (Render, Railway, Fly) dan HTTPS solo. En un VPS, pon Caddy o Nginx
-   con Let's Encrypt adelante.
-2. **Dirección pública fija.** Algo como `https://api.tu-dominio.com`.
+1. Entra a https://render.com → **New** → **Blueprint**.
+2. Conecta el repositorio `cast-ai-tech/data-effi` y elige la rama `main`.
+3. Render lee `render.yaml` y te pide los valores de las variables marcadas
+   `sync: false`. Son estas — **solo nombres aquí**, los valores van del
+   gestor de contraseñas al formulario de Render:
 
-### Variables de entorno del servidor
+| Variable | Qué es |
+|---|---|
+| `DATABASE_URL` | Cadena del puerto 6543 con `norte_app` (sección 2, paso 5) |
+| `DATABASE_URL_READONLY` | Cadena del puerto 6543 con `norte_readonly` |
+| `JWT_SECRET` | Generado en la sección 2, paso 3 |
+| `PII_HASH_SALT` | Generado; **permanente** |
+| `PII_ENCRYPTION_KEY` | Generado; **permanente** |
+| `WORKER_TRIGGER_SECRET` | Generado; el mismo va en GitHub (sección 6) |
+| `PROXY_SHARED_SECRET` | Generado; el mismo va en Vercel (sección 4) |
+| `PUBLIC_API_URL` | La URL pública de este servicio, sin barra final (`https://data-effi-api.onrender.com`) |
+| `CORS_ORIGINS` | Los dominios de la web, separados por coma, sin barra final. Hoy: la URL de producción en Vercel **y** la de Netlify mientras siga de respaldo |
+| `AI_ENABLED`, `GEMINI_API_KEY`, `AI_MODEL` | Solo si vas a activar el copiloto de IA. Se gestionan desde el panel, no desde el Blueprint |
 
-```
-DATABASE_URL=postgresql://norte_app.xxx:...@...:6543/postgres?sslmode=require
-DATABASE_URL_READONLY=postgresql://norte_readonly.xxx:...@...:6543/postgres?sslmode=require
+Las demás (`ENVIRONMENT`, `API_HOST`, `API_PORT`, `LOG_LEVEL`,
+`WORKER_ENABLED=false`, `MAX_UPLOAD_MB=25`, `INGEST_MAX_CONCURRENCY`,
+`UPLOAD_DIR=/tmp/uploads`, `CORS_ORIGIN_REGEX`, `TIER3_FETCH_ENABLED=false`,
+`FX_PROVIDER_URL`) ya vienen con valor en `render.yaml`. No las repitas en el
+panel: un valor fijo del Blueprint pisa lo que escribas ahí en cada sync.
 
-JWT_SECRET=<el que generaste>
-PII_HASH_SALT=<el que generaste>
-PII_ENCRYPTION_KEY=<el que generaste>
-WORKER_TRIGGER_SECRET=<el que generaste>
+4. **Apply**. El primer build tarda unos minutos. Al terminar, la dirección es
+   `https://data-effi-api.onrender.com`.
 
-PUBLIC_API_URL=https://api.tu-dominio.com
-CORS_ORIGINS=https://data-effi.vercel.app        # se llena en la sección 4
-API_HOST=0.0.0.0
-API_PORT=8000
-LOG_LEVEL=INFO
+### Paso 2. Cada vez que haya un cambio en la API
 
-WORKER_ENABLED=true
+`autoDeploy` está en `false`: un push a `main` **no** despliega la API. Hay que
+entrar a Render → `data-effi-api` → **Manual Deploy** → **Deploy latest
+commit**. (La web en Vercel sí se despliega sola.)
 
-# Solo si vas a activar el copiloto de IA
-GEMINI_API_KEY=<clave de https://aistudio.google.com/apikey>
-AI_ENABLED=true
-```
+### Lo que hay que saber del plan free
 
-`POSTGRES_ADMIN_URL`, `POSTGRES_PASSWORD` y `POSTGRES_APP_PASSWORD` **no** van
-aquí: son para administrar la base, no para correr la aplicación.
+- **Duerme a los 15 minutos sin tráfico** y tarda ~30 s en despertar. El cron
+  del worker (sección 6) lo mantiene despierto en horario útil.
+- **Sin disco persistente.** Los archivos subidos viven en `/tmp/uploads`
+  mientras se procesan. Lo ya ingerido está en Postgres y no se ve afectado;
+  solo se pierde una carga que estuviera a medio procesar en un redeploy.
+- **512 MB de RAM.** `MAX_UPLOAD_MB=25` es seguro porque el upload lee por
+  trozos y corta al pasar el límite; `INGEST_MAX_CONCURRENCY=2` evita procesar
+  demasiados archivos a la vez.
+- **HTTPS lo da Render.** Obligatorio: la web en Vercel se sirve por HTTPS y un
+  navegador bloquea toda petición hacia una API en HTTP.
 
-`PUBLIC_API_URL` es obligatoria en producción. Detrás de un proxy, la API no
-puede adivinar por qué dirección la alcanzan desde afuera, y la usa para armar la
-URL del webhook que le muestra al operador — una URL que se muestra **una sola
-vez**. Si está mal, el operador se lleva una dirección que no funciona y hay que
-regenerar el token.
-
-### Almacenamiento de archivos
-
-La API guarda los archivos subidos en disco antes de procesarlos. Si tu servicio
-de hosting borra el disco en cada despliegue, una carga en curso se pierde.
-Móntale un volumen persistente en la ruta que use `upload_dir`, o cuenta con que
-solo se pierden cargas a medio procesar (los datos ya ingeridos están en la base
-y no se ven afectados).
+`PUBLIC_API_URL` es obligatoria: detrás de un proxy la API no puede adivinar por
+qué dirección la alcanzan desde afuera, y la usa para armar la URL del webhook
+que le muestra al operador **una sola vez**. Si está mal, hay que regenerar el
+token.
 
 ---
 
-## 4. El frontend en Vercel
+## 4. La web en Vercel
 
 ### Paso 1. Importa el repositorio
 
 1. Entra a https://vercel.com e inicia sesión con GitHub.
-2. Haz clic en **Add New** → **Project**.
-3. Busca `cast-ai-tech/data-effi` y haz clic en **Import**.
-   Si no aparece, haz clic en **Adjust GitHub App Permissions** y dale acceso a
-   la organización `cast-ai-tech`.
+2. **Add New** → **Project**.
+3. Busca `cast-ai-tech/data-effi` y haz clic en **Import**. Si no aparece,
+   **Adjust GitHub App Permissions** y dale acceso a la organización.
 
 ### Paso 2. Dile que el frontend está en una subcarpeta
 
@@ -270,90 +295,189 @@ Esto es lo que más se olvida y hace fallar el despliegue.
 
 1. Busca **Root Directory** y haz clic en **Edit**.
 2. Elige la carpeta **`web`**.
-3. El resto (Framework Preset: Next.js, comandos de build) lo detecta solo. No
-   lo toques.
+3. Framework Preset: **Next.js**. Los comandos de build los detecta solo
+   (`npm run build`). No los toques.
 
-### Paso 3. Agrega la variable de entorno
+No hace falta `vercel.json`: el Root Directory es una opción del proyecto (no
+se puede fijar por archivo), las cabeceras de seguridad ya salen de
+`web/next.config.ts` y `web/middleware.ts`, y no hay rewrites hacia la API
+porque el proxy es un route handler de Next (`web/app/api/backend`).
 
-1. Abre la sección **Environment Variables**.
-2. Agrega una sola:
-   - **Name:** `NEXT_PUBLIC_API_URL`
-   - **Value:** `https://api.tu-dominio.com` — la dirección de la sección 3, sin
-     barra al final.
-3. Déjala marcada para los tres entornos (Production, Preview, Development).
+### Paso 3. Variables de entorno
 
-⚠️ Esta variable se incrusta en el código del navegador **en el momento de
-compilar**, no se lee al arrancar. Si mañana cambias la dirección de la API, no
-basta con editarla en Vercel: hay que volver a desplegar para que tenga efecto.
+Tres. Márcalas para **Production** y **Preview** (Development es opcional).
+
+| Variable | Qué es |
+|---|---|
+| `NEXT_PUBLIC_API_URL` | La URL pública de la API en Render, sin barra final. Se **incrusta en el bundle del navegador al compilar**: la usa la pantalla *Cargar* para subir archivos y la de conexiones para comparar la URL del webhook |
+| `API_URL` | La misma URL. La lee el servidor de Next (el proxy `/api/backend`) |
+| `PROXY_SHARED_SECRET` | **El mismo valor** que en Render. Con él la API distingue a cada navegador para el límite de intentos; sin él funciona, pero todos comparten un solo límite |
+
+⚠️ Si cambias `NEXT_PUBLIC_API_URL`, no basta con editarla: hay que
+**Redeploy** para que entre al bundle.
 
 ### Paso 4. Despliega
 
-Haz clic en **Deploy** y espera. Al terminar, Vercel te da una dirección tipo
-`https://data-effi.vercel.app`. Cópiala.
+**Deploy**. Al terminar, Vercel te da la URL de producción del proyecto
+(`https://masterdataweb.vercel.app` o la que tenga asignada). Cópiala.
 
-### Paso 5. Cierra el círculo — sin esto no funciona nada
+### Paso 5. Cierra el círculo — sin esto no cargan archivos
 
-El navegador no deja que una página en `data-effi.vercel.app` le hable a
-`api.tu-dominio.com` a menos que la API lo autorice explícitamente.
+Todas las llamadas del navegador van por el proxy de Next, **menos los
+archivos**, que van directo a Render. Para esos el navegador exige que la API
+autorice el dominio de Vercel (CORS):
 
-1. Vuelve a la configuración de la API (sección 3).
-2. Pon en `CORS_ORIGINS` la dirección exacta que te dio Vercel:
-   ```
-   CORS_ORIGINS=https://data-effi.vercel.app
-   ```
-   Sin barra al final. Si tienes varias direcciones, sepáralas con coma.
-3. Reinicia la API.
+1. Render → `data-effi-api` → **Environment** → `CORS_ORIGINS`: agrega la URL
+   de producción de Vercel, separada por coma de las que ya estén (Netlify
+   sigue ahí mientras sea respaldo). Sin barra al final.
+2. **Manual Deploy**.
 
-**Sobre las URL de preview:** Vercel le da una dirección distinta a cada rama y a
-cada pull request. Ninguna de esas va a estar en `CORS_ORIGINS`, así que los
-previews no van a poder hablar con la API de producción. Es lo correcto — no
-quieres que una rama a medio hacer escriba en los datos reales. Si quieres
-previews funcionales, levanta una segunda API contra un proyecto de Supabase
-aparte.
+**Previews de Vercel.** Cada rama y cada PR tiene su propia URL
+(`masterdataweb-<algo>.vercel.app`). No hay que agregarlas una a una:
+`CORS_ORIGIN_REGEX` en `render.yaml` ya acepta la producción y todos los
+previews del proyecto `masterdataweb`:
+
+```
+^https://masterdataweb(-[a-z0-9-]+)?\.vercel\.app$
+```
+
+Ten en cuenta que un preview habla con la **API de producción** y sus datos
+reales. Si eso no te gusta, quita el regex y levanta una segunda API contra
+otro proyecto de Supabase para los previews.
+
+🔒 **Endurecer el regex (pendiente, necesita el slug del equipo).** Tal como
+está, cualquier proyecto de Vercel que se llame `masterdataweb-<algo>` pasa
+CORS, y cualquiera puede crear uno. No hereda ninguna sesión (la API solo
+acepta bearer, sin cookies), pero lo correcto es anclarlo al slug del equipo
+que Vercel añade al final de cada preview. Abre un preview cualquiera, mira
+qué va después del último guion (`masterdataweb-abc123-<team>.vercel.app`) y
+pon en `render.yaml`:
+
+```
+^https://masterdataweb(-git-[a-z0-9-]+|-[a-z0-9]+)-<team>\.vercel\.app$
+```
+
+dejando la URL de producción solo en `CORS_ORIGINS`.
 
 ---
 
-## 5. Comprobar que quedó bien
+## 5. Por qué los archivos van directo a la API
+
+El proxy de Next corre en Vercel como función serverless, y esas funciones
+cortan el cuerpo de la petición en **4,5 MB** (en Netlify eran 6 MB, unos 4,5
+reales porque el archivo viaja en base64). Un reporte de 5,8 MB daba `413` ahí
+mismo, antes de tocar la API.
+
+Por eso la pantalla *Cargar* le pide al proxy solo el **token de acceso**
+(`POST /api/backend/auth/upload-credential`; dura 15 minutos y el proxy lo
+renueva si está por vencer) y envía el archivo directo a Render con ese token.
+El token de refresco (14 días) **nunca sale** de su cookie `HttpOnly`.
+
+Eso exige, en Render: `CORS_ORIGINS` / `CORS_ORIGIN_REGEX` con el dominio de la
+web, y `MAX_UPLOAD_MB=25`. Y en la web: `NEXT_PUBLIC_API_URL` correcta, porque
+es a esa dirección a la que el navegador envía el archivo.
+
+---
+
+## 6. El cron del worker en GitHub Actions
+
+`.github/workflows/worker-cron.yml` llama `POST /worker/trigger/{job}` en los
+mismos horarios (UTC) que `build_scheduler()` en `worker/main.py`:
+
+| Horario UTC | Jobs |
+|---|---|
+| :05 y :35 de cada hora | `sync_sheets`, `relink_orphans` |
+| 06:15 y 18:15 | `sync_tier3` |
+| 07:30 | `calibrate_maturation` |
+| 10:05 | `refresh_fx` |
+| 10:50, 11:50, 12:50, 13:50 | `daily_digest` (resumen por país a las 7 am locales) |
+
+Configuración, una sola vez:
+
+1. GitHub → repositorio → **Settings** → **Secrets and variables** →
+   **Actions** → **New repository secret**.
+2. Nombre: `WORKER_TRIGGER_SECRET`. Valor: **el mismo** que pusiste en Render.
+
+Disparo manual de un job (útil para probar):
+
+```bash
+gh workflow run worker-cron.yml -f jobs=relink_orphans
+gh run watch
+```
+
+Un job que no aplica todavía (sin conexiones tier 3, sin hojas publicadas)
+devuelve 200 y no hace nada. Eso es correcto, no un error.
+
+---
+
+## 7. Comprobar que quedó bien
 
 En orden. Si uno falla, no sigas al siguiente.
 
 1. **La API está viva:**
    ```bash
-   curl https://api.tu-dominio.com/health
+   curl https://data-effi-api.onrender.com/health
    ```
-   Debe responder algo con `"status": "ok"`.
+   Debe responder `"status": "ok"`. Si tarda 30 s, estaba dormida; es normal.
 
-2. **La API llega a la base:** que el `/health` reporte la base conectada, o
-   revisa los logs al arrancar — el pool de conexiones se abre al inicio y avisa.
+2. **La API deja pasar a la web (CORS).** Simula el preflight que hace el
+   navegador antes de subir un archivo. Con el dominio de producción de Vercel:
+   ```bash
+   curl -s -o /dev/null -D - -X OPTIONS https://data-effi-api.onrender.com/ingest/upload \
+     -H "Origin: https://masterdataweb.vercel.app" \
+     -H "Access-Control-Request-Method: POST" \
+     -H "Access-Control-Request-Headers: authorization"
+   ```
+   Tiene que responder **`HTTP/1.1 200`** con la línea
+   `access-control-allow-origin: https://masterdataweb.vercel.app`. Un `400`
+   sin esa cabecera significa que ese origen no está en `CORS_ORIGINS` ni
+   cumple `CORS_ORIGIN_REGEX`. Repite con la URL de un preview
+   (`https://masterdataweb-<algo>.vercel.app`) para comprobar el regex.
 
-3. **El aislamiento por cliente está activo.** Lo más importante. Desde el SQL
-   Editor de Supabase:
+3. **El aislamiento por cliente está activo.** Desde el SQL Editor de Supabase:
    ```sql
    SELECT rolname, rolsuper, rolbypassrls FROM pg_roles
    WHERE rolname IN ('norte_app', 'norte_readonly');
    ```
    Las cuatro casillas en `false`.
 
-4. **El frontend abre:** entra a la dirección de Vercel. Debe salir la pantalla
-   de inicio de sesión.
+4. **La web abre:** entra a la URL de Vercel. Debe salir la pantalla de inicio
+   de sesión.
 
-5. **El frontend habla con la API:** abre las herramientas de desarrollador del
-   navegador (F12), pestaña **Console**, e intenta iniciar sesión. Si ves un
-   error que menciona `CORS`, la dirección de Vercel no quedó bien puesta en
-   `CORS_ORIGINS`. Si ves `mixed content`, la API está en HTTP y tiene que estar
-   en HTTPS.
+5. **La web habla con la API:** inicia sesión. Si no entra, abre la consola del
+   navegador (F12). Un error que mencione `/api/backend` apunta a `API_URL` en
+   Vercel; uno que mencione `CORS` solo puede venir de la subida de archivos y
+   apunta a `CORS_ORIGINS` en Render.
 
-6. **Una carga completa:** crea una conexión de "Carga manual", sube un archivo
-   de prueba y confirma que el estado pasa a terminado. Eso prueba que el worker
-   está corriendo y que puede escribir en disco y en la base.
+6. **Una carga completa:** en `/<país>/cargar`, elige la plataforma, sube un
+   archivo y confirma que el job pasa a terminado. Eso prueba el camino directo
+   navegador → Render, el disco temporal y la base.
+
+7. **El cron corre:** `gh workflow run worker-cron.yml -f jobs=refresh_fx` y
+   `gh run watch` debe terminar en verde.
 
 ---
 
-## 6. Cosas que conviene hacer, aunque nadie las pida
+## 8. Lo que se comparte por fuera de GitHub
 
-- **Backups.** Supabase hace backups automáticos según el plan. Verifica que tu
-  plan los incluya con la frecuencia que necesitas. En el plan gratuito son
-  limitados.
+Ninguno de estos valores va en el repositorio, ni en un issue, ni en un mensaje
+de commit. Van por el gestor de contraseñas o un canal privado:
+
+- Contraseña de `postgres` en Supabase
+- `POSTGRES_APP_PASSWORD` y `POSTGRES_READONLY_PASSWORD`
+- `JWT_SECRET`, `PII_HASH_SALT`, `WORKER_TRIGGER_SECRET`, `PII_ENCRYPTION_KEY`,
+  `PROXY_SHARED_SECRET`
+- `GEMINI_API_KEY`
+
+Para desarrollar en local no hace falta compartir los de producción: genera unos
+propios con los comandos de la sección 2, paso 3.
+
+---
+
+## 9. Cosas que conviene hacer, aunque nadie las pida
+
+- **Backups.** Supabase hace backups automáticos según el plan. En el plan
+  gratuito son limitados.
 - **Rotar el token del webhook** de cualquier conexión que se haya probado en
   desarrollo antes de pasar a datos reales. Se hace desde la pantalla de
   configuración de la conexión.
@@ -368,43 +492,27 @@ En orden. Si uno falla, no sigas al siguiente.
 
 ---
 
-## 7. Lo que se comparte por fuera de GitHub
+## Legacy: Netlify (respaldo temporal)
 
-Ninguno de estos valores va en el repositorio, ni en un issue, ni en un mensaje
-de commit. Van por el gestor de contraseñas o un canal privado:
+Hasta el 2026-08-24 la web vivía en Netlify (`data-effi.netlify.app`). Queda
+como respaldo mientras Vercel se asienta y **se apagará pronto**. Mientras siga
+encendido:
 
-- Contraseña de `postgres` en Supabase
-- `POSTGRES_APP_PASSWORD` y `POSTGRES_READONLY_PASSWORD`
-- `JWT_SECRET`, `PII_HASH_SALT`, `WORKER_TRIGGER_SECRET`, `PII_ENCRYPTION_KEY`
-- `GEMINI_API_KEY`
+- `netlify.toml` (raíz del repo) sigue siendo su configuración: `base = "web"`,
+  plugin `@netlify/plugin-nextjs`. Sus variables (`NEXT_PUBLIC_API_URL`,
+  `API_URL`, `PROXY_SHARED_SECRET`) viven en el dashboard de Netlify.
+- Su URL sigue en `CORS_ORIGINS` de Render para que también pueda subir
+  archivos.
 
-Para desarrollar en local no hace falta compartir los de producción: genera unos
-propios con los comandos del paso 3. Los de producción solo se comparten cuando
-llega el momento de desplegar.
+**Al apagar Netlify, quitar:**
 
-
----
-
-## Sesión con cookies HttpOnly (desde la auditoría del 2026-08-23)
-
-El navegador **ya no llama a la API directamente**. Todas las peticiones van a
-`/api/backend/...` en el mismo dominio de la web, y un pequeño servidor dentro de
-Next (`web/app/api/backend/[...path]/route.ts`) las reenvía a la API agregando el
-token, que vive en una cookie `HttpOnly` que ningún script puede leer.
-
-Eso agrega **dos variables** al despliegue de la web y **una** al de la API:
-
-| Dónde | Variable | Valor |
-|---|---|---|
-| Netlify (web) | `API_URL` | La URL de la API en Render, p. ej. `https://data-effi-api.onrender.com` |
-| Netlify (web) | `PROXY_SHARED_SECRET` | Un secreto nuevo: `openssl rand -hex 32` |
-| Render (API) | `PROXY_SHARED_SECRET` | **El mismo valor** que en Netlify |
-
-`NEXT_PUBLIC_API_URL` sigue existiendo (la pantalla de conexiones la usa para
-comparar la URL del webhook), y `CORS_ORIGINS` ya no es necesario para la web,
-aunque no estorba.
-
-Sin `PROXY_SHARED_SECRET` todo funciona, pero la API ve a todos los navegadores
-con la misma dirección (la del servidor de Netlify) y el límite de intentos de
-login se comparte entre todos los usuarios. Con el secreto, cada navegador
-tiene su propio límite.
+1. `netlify.toml`.
+2. La URL de Netlify de `CORS_ORIGINS` en Render (+ Manual Deploy).
+3. Esta sección, y las menciones a Netlify en los comentarios de `render.yaml`,
+   `.env.example`, `api/events.py`, `api/routers/events.py`,
+   `web/app/api/backend/[...path]/route.ts`, `web/lib/api.ts` y
+   `web/lib/upload-transport.ts` (son solo comentarios; nada de código depende
+   de Netlify).
+4. En `web/app/api/backend/[...path]/route.ts`, la cabecera
+   `x-nf-client-connection-ip` de `trustedClientIp()` — en Vercel la IP real
+   llega por `x-real-ip`, que ya está contemplada.
