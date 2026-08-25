@@ -103,6 +103,12 @@ class IngestQueue:
 
         try:
             with connection(service=True) as conn:
+                # The whole load is one transaction, and Supabase cancels any
+                # statement over 2 minutes (statement_timeout=2min on the
+                # role). A 1,600-guide file already hit that once and the job
+                # died as "QueryCanceled" with nothing stored. LOCAL: it ends
+                # with this transaction and never leaks to a pooled session.
+                execute(conn, "SET LOCAL statement_timeout = '30min'")
                 country_code, currency_code = self._resolve_country(conn, job, payload)
                 store = PostgresStore(conn)
                 engine = IngestEngine(store, pii_salt=self._settings.pii_hash_salt)
