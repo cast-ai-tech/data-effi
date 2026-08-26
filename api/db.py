@@ -59,11 +59,21 @@ def init_pools(settings: Settings) -> None:
     # query fail on the sixth. The failure is a slow one - the API starts, serves
     # the first few requests, and only then begins throwing - which is why it has
     # to be off by construction rather than discovered in production.
+    # El pooler de Supabase (Supavisor, puerto 6543) cierra por su cuenta las
+    # conexiones de servidor que quedan inactivas. Sin las dos líneas de abajo el
+    # pool acaba prestando una conexión que el pooler ya mató, y la primera query
+    # revienta con «the connection is lost» / «SSL error: unexpected eof while
+    # reading» - justo el fallo que tumbaba el login. `check` valida cada
+    # conexión antes de entregarla (descarta la muerta y abre una fresca, de
+    # forma transparente); `max_lifetime` la recicla antes de que el pooler
+    # llegue a cerrarla por inactividad.
     _pool = ConnectionPool(
         settings.database_url,
         min_size=settings.db_pool_min,
         max_size=settings.db_pool_max,
         kwargs={"autocommit": False, "prepare_threshold": None},
+        check=ConnectionPool.check_connection,
+        max_lifetime=300,
         open=True,
     )
     logger.info("database pool ready (min=%s max=%s)", settings.db_pool_min, settings.db_pool_max)
@@ -74,6 +84,8 @@ def init_pools(settings: Settings) -> None:
             min_size=0,
             max_size=4,
             kwargs={"autocommit": True, "prepare_threshold": None},
+            check=ConnectionPool.check_connection,
+            max_lifetime=300,
             open=True,
         )
         logger.info("read-only pool ready (NL->SQL)")
