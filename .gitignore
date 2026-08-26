@@ -46,3 +46,7 @@ Thumbs.db
 # Artefacto generado por scripts/empaquetar_captura.py: se reconstruye con un
 # comando y no tiene por que vivir en el historial.
 captura-effi.zip
+
+# La extension empaquetada y firmada: se reconstruye desde tools/effi-capture/
+# extension/. El repo versiona el fuente, no el binario.
+tools/effi-capture/extension.crx
