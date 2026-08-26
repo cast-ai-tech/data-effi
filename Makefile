@@ -45,13 +45,16 @@ worker-job: ## Ejecuta un job del worker: make worker-job JOB=refresh_fx
 shell-db: ## Abre psql contra la base de datos
 	docker compose exec db psql -U $${POSTGRES_USER:-norte} -d $${POSTGRES_DB:-norte}
 
-test: test-backend test-frontend ## Corre todos los tests
+test: test-backend test-frontend test-extension ## Corre todos los tests
 
 test-backend: ## Tests de Python (pipeline, API, RLS, NL->SQL)
 	.venv/Scripts/python.exe -m pytest -q || python -m pytest -q
 
 test-frontend: ## Tests unitarios del frontend
 	cd web && npm test
+
+test-extension: ## Prueba del capturador de Effi (solo node, sin instalar nada)
+	node tools/effi-capture/prueba-worker.mjs
 
 test-e2e: ## Tests end-to-end con Playwright (requiere la plataforma corriendo)
 	cd web && npx playwright test

@@ -109,14 +109,39 @@ diseño evita, y hay un test que lo vigila
 El contrato trae esto:
 
 ```
-EFFI_BASE_URL=https://app.effi.com.co
-EFFI_LOGIN_PATH=/auth/ingresar
-EFFI_LOGIN_USER_FIELD=usuario
-EFFI_LOGIN_PASS_FIELD=clave
-EFFI_LOGIN_CSRF_FIELD=_token
+EFFI_BASE_URL=https://effi.com.co
+EFFI_LOGIN_PATH=/ingreso/validar_usuario
+EFFI_LOGIN_USER_FIELD=email
+EFFI_LOGIN_PASS_FIELD=password
+EFFI_LOGIN_CSRF_FIELD=token
 EFFI_SESSION_CARRIER=cookie
-EFFI_SESSION_COOKIE=effi_sesion
+EFFI_SESSION_COOKIE=ci_session
 ```
+
+Esos valores no son de ejemplo: son los que se leen en el formulario de
+`https://effi.com.co/ingreso` a 2026-08-26. El Effi real es CodeIgniter — de ahí
+la cookie `ci_session` y el CSRF llamado `token`, que se emite en la propia
+página de entrada y va atado a esa cookie. El formulario manda además
+`email_no_verificado` y `password_encrypt`, los dos vacíos: ningún JavaScript de
+la página los rellena.
+
+Ojo con `app.effi.com.co`, que aparece como `DEFAULT_BASE_URL` en
+`connectors/effi/auth.py` y en `session_fetcher.py`: ese host **no existe**, no
+resuelve en DNS. El bueno es el dominio pelado.
+
+## El muro: el login lleva reCAPTCHA
+
+El botón «Ingresar» de `/ingreso` es un reCAPTCHA v2 invisible (`class="g-recaptcha"`,
+`data-sitekey`, `data-callback="onSubmit"`), y el envío solo ocurre dentro del
+callback que Google invoca al resolverlo. Es decir: el POST a
+`/ingreso/validar_usuario` viaja con un `g-recaptcha-response` que **solo Google
+emite**, y un cliente nuestro no puede fabricar.
+
+Eso no lo arregla una captura mejor. Mientras siga ahí, entrar a Effi con usuario
+y contraseña desde el servidor no es un problema de contrato sino de diseño, y
+hay que resolverlo por otro lado: pedirle a Effi una API con token, o que el
+comerciante entregue la sesión ya hecha. Antes de tocar
+`LOGIN_CONTRACT_VERIFIED` conviene decidir eso.
 
 1. Pega esas líneas en el `.env` del servidor (y en Render).
 2. Compara las **descargas de reportes** que trae la captura con

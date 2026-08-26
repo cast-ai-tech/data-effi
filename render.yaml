@@ -45,6 +45,28 @@ services:
       # the connection screen says so and everyone uploads by hand instead.
       - key: CONNECTION_VAULT_KEY
         sync: false
+      # La forma del login de Effi. Van aqui, y no en el codigo, porque es la
+      # parte con mas probabilidad de cambiar del lado de Effi: cuando cambie,
+      # se ajusta en el dashboard y se reinicia, sin tocar el repo ni esperar
+      # un build. Vacias mientras el contrato siga sin verificarse contra una
+      # cuenta real - connectors/effi/auth.py se niega a entrar hasta entonces,
+      # asi que dejarlas en blanco es el estado correcto, no un olvido.
+      - key: EFFI_BASE_URL
+        sync: false
+      - key: EFFI_LOGIN_PATH
+        sync: false
+      - key: EFFI_LOGIN_USER_FIELD
+        sync: false
+      - key: EFFI_LOGIN_PASS_FIELD
+        sync: false
+      - key: EFFI_LOGIN_CSRF_FIELD
+        sync: false
+      - key: EFFI_SESSION_CARRIER
+        sync: false
+      - key: EFFI_SESSION_COOKIE
+        sync: false
+      - key: EFFI_TOKEN_JSON_KEY
+        sync: false
       - key: WORKER_TRIGGER_SECRET
         sync: false
       - key: PUBLIC_API_URL

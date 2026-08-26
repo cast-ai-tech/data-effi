@@ -59,6 +59,27 @@ async function cargarEstado() {
   peticiones = guardado.peticiones || [];
 }
 
+/**
+ * El estado restaurado, empezando AQUÍ - al evaluar el archivo, no dentro de un
+ * manejador.
+ *
+ * MV3 duerme el service worker a los 30 segundos sin actividad, y al despertarlo
+ * vuelve a evaluar este archivo desde cero: `grabando` arriba vuelve a valer
+ * false. Una petición posterior despierta al worker, pero cuando su listener
+ * corre la memoria está en blanco - y si decidiera ahí mismo, tiraría la
+ * petición creyendo que nadie está grabando.
+ *
+ * Eso no es un caso raro. Entre pulsar «Empezar a grabar» y terminar de teclear
+ * una contraseña pasan de sobra 30 segundos: era EL caso, y se llevaba por
+ * delante justo lo único que hay que capturar, el login. El síntoma era una
+ * captura con peticiones sueltas y un «NO SE CAPTURÓ EL LOGIN» al final.
+ *
+ * Por eso los listeners ya no deciden nada de forma síncrona: extraen lo suyo en
+ * el acto - que es cuando el detalle vale, y cuanto antes se suelte la
+ * contraseña mejor - y esperan a esta promesa para decidir si lo anotan.
+ */
+let estadoListo = cargarEstado();
+
 // -- captura ---------------------------------------------------------------
 
 /**
@@ -91,17 +112,26 @@ function nombresDeCampos(requestBody) {
   return [];
 }
 
+/** Anota una petición, ya despojada de valores, si es que estamos grabando. */
+async function anotar(registro) {
+  await estadoListo;
+  if (!grabando || peticiones.length >= MAX_PETICIONES) return;
+  peticiones.push(registro);
+  await guardarEstado();
+}
+
 chrome.webRequest.onBeforeRequest.addListener(
   (detalles) => {
-    if (!grabando || peticiones.length >= MAX_PETICIONES) return;
-
+    // Los nombres se leen AQUÍ, antes de esperar a nada: este es el instante en
+    // que la contraseña pasa por este archivo, y lo que viene después ya no la
+    // tiene delante.
     const url = new URL(detalles.url);
     const campos = nombresDeCampos(detalles.requestBody).map((name) => ({
       name,
       role: clasificarCampo(name),
     }));
 
-    peticiones.push({
+    anotar({
       id: detalles.requestId,
       metodo: detalles.method,
       base: `${url.protocol}//${url.host}`,
@@ -112,25 +142,44 @@ chrome.webRequest.onBeforeRequest.addListener(
       tipo: "",
       cookies: [],
     });
-    guardarEstado();
   },
   { urls: ["*://*.effi.com.co/*", "*://*.efficommerce.com/*"] },
   ["requestBody"],
 );
 
+/**
+ * Completa una petición ya anotada con lo que devolvió el servidor.
+ *
+ * Entra en la cola de la misma promesa que `anotar`, y Chrome manda siempre
+ * onBeforeRequest antes que onHeadersReceived para una misma petición: cuando
+ * esto corre, su registro ya está puesto.
+ */
+async function completar(id, estado, tipo, cookies) {
+  await estadoListo;
+  if (!grabando) return;
+  const registro = peticiones.find((p) => p.id === id);
+  if (!registro) return;
+
+  registro.estado = estado;
+  if (tipo) registro.tipo = tipo;
+  for (const nombre of cookies) {
+    if (!registro.cookies.includes(nombre)) registro.cookies.push(nombre);
+  }
+  await guardarEstado();
+}
+
 chrome.webRequest.onHeadersReceived.addListener(
   (detalles) => {
-    if (!grabando) return;
-    const registro = peticiones.find((p) => p.id === detalles.requestId);
-    if (!registro) return;
-
-    registro.estado = detalles.statusCode;
+    // Igual que arriba: se saca en el acto, y el valor de la cookie de sesión -
+    // que es la sesión entera - se queda aquí sin que nadie lo mire.
+    let tipo = "";
+    const cookies = [];
 
     for (const cabecera of detalles.responseHeaders || []) {
       const nombre = (cabecera.name || "").toLowerCase();
       if (nombre === "content-type") {
         // El tipo, sin el charset. No es un secreto.
-        registro.tipo = String(cabecera.value || "")
+        tipo = String(cabecera.value || "")
           .split(";")[0]
           .trim();
       }
@@ -139,12 +188,13 @@ chrome.webRequest.onHeadersReceived.addListener(
         const nombreCookie = String(cabecera.value || "")
           .split("=")[0]
           .trim();
-        if (nombreCookie && !registro.cookies.includes(nombreCookie)) {
-          registro.cookies.push(nombreCookie);
+        if (nombreCookie && !cookies.includes(nombreCookie)) {
+          cookies.push(nombreCookie);
         }
       }
     }
-    guardarEstado();
+
+    completar(detalles.requestId, detalles.statusCode, tipo, cookies);
   },
   { urls: ["*://*.effi.com.co/*", "*://*.efficommerce.com/*"] },
   ["responseHeaders", "extraHeaders"],
@@ -206,7 +256,9 @@ function construirContrato() {
 
 chrome.runtime.onMessage.addListener((mensaje, _remitente, responder) => {
   (async () => {
-    await cargarEstado();
+    // El estado ya está en memoria; recargarlo aquí pisaría lo que las
+    // peticiones en vuelo acaban de anotar.
+    await estadoListo;
 
     if (mensaje.accion === "empezar") {
       grabando = true;
@@ -281,5 +333,11 @@ chrome.runtime.onMessage.addListener((mensaje, _remitente, responder) => {
 });
 
 chrome.runtime.onInstalled.addListener(() => {
-  chrome.storage.session.set({ grabando: false, peticiones: [] });
+  // Encadenado a la restauración en curso, no en paralelo: si fueran a la vez,
+  // la carga podría resolverse después y devolverle la vida a lo ya borrado.
+  estadoListo = estadoListo.then(async () => {
+    grabando = false;
+    peticiones = [];
+    await guardarEstado();
+  });
 });
