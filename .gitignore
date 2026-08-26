@@ -42,3 +42,7 @@ Reporte*.xlsx
 Thumbs.db
 .idea/
 .vscode/
+
+# Artefacto generado por scripts/empaquetar_captura.py: se reconstruye con un
+# comando y no tiene por que vivir en el historial.
+captura-effi.zip

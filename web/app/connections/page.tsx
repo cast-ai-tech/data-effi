@@ -7,9 +7,13 @@
  * they will need. That is deliberate and it matches how blocked widgets
  * behave: showing what is missing beats pretending the list is shorter.
  *
- * Nothing on this screen ever touches a credential. A connection stores the
- * NAME of the environment variable the server reads at sync time, and the
- * webhook token is displayed once and kept only as a SHA-256.
+ * CREDENTIALS. This screen used to touch none at all: a connection stored the
+ * NAME of an environment variable, and the webhook token was shown once and
+ * kept only as a SHA-256. That is still true of everything here EXCEPT the
+ * "Gestionar" panel, which sends a platform username and password once, over
+ * the same proxy as everything else, to be encrypted server-side (migration
+ * 051). It is never read back: there is no endpoint that returns one. See
+ * components/ConnectionCredentialPanel.tsx.
  */
 
 import Link from "next/link";
@@ -17,6 +21,7 @@ import { useEffect, useMemo, useState } from "react";
 
 import { AppShell } from "@/components/AppShell";
 import { ConfirmDialog } from "@/components/ConfirmDialog";
+import { ConnectionCredentialPanel } from "@/components/ConnectionCredentialPanel";
 import type { ConfirmDetail } from "@/components/ConfirmDialog";
 import { Button, Chip, Drawer, EmptyState, ErrorState, SectionTitle, SkeletonRows, StatusDot, cx } from "@/components/ui";
 import { TIER_LABELS } from "@/lib/glossary";
@@ -167,6 +172,8 @@ export default function ConnectionsPage() {
   // Creating and revoking a webhook token are owner-only on the API. Showing
   // those buttons to an analyst would be offering a door that always slams.
   const isOwner = me.data?.role === "owner";
+  // The connection whose "Gestionar conexión" panel is open, if any.
+  const [managing, setManaging] = useState<Connection | null>(null);
 
   const activeCountries = useMemo(
     () => (countries.data ?? []).filter((country) => country.is_active),
@@ -333,6 +340,7 @@ export default function ConnectionsPage() {
                     onDelete={requestDelete}
                     onCreateWebhook={createWebhook}
                     onRevokeWebhook={requestRevoke}
+                    onManage={setManaging}
                   />
                 ))}
               </div>
@@ -366,6 +374,20 @@ export default function ConnectionsPage() {
             </section>
           )}
         </div>
+      )}
+
+      {managing && (
+        <SidePanel
+          title="Gestionar conexión"
+          subtitle={`${managing.platform_name} · ${managing.connection_name}`}
+          onClose={() => setManaging(null)}
+        >
+          <ConnectionCredentialPanel
+            connection={managing}
+            isOwner={isOwner}
+            onChanged={reload}
+          />
+        </SidePanel>
       )}
 
       {connecting && (
@@ -464,6 +486,7 @@ function PlatformCard({
   onDelete,
   onCreateWebhook,
   onRevokeWebhook,
+  onManage,
 }: {
   platform: Platform;
   connections: Connection[];
@@ -472,6 +495,7 @@ function PlatformCard({
   onDelete: (connection: Connection) => void;
   onCreateWebhook: (connection: Connection) => void;
   onRevokeWebhook: (connection: Connection) => void;
+  onManage: (connection: Connection) => void;
 }) {
   const planned = platform.availability === "planned";
   const domains = platform.data_domains.map(domainLabel);
@@ -537,10 +561,12 @@ function PlatformCard({
               key={connection.connection_id}
               connection={connection}
               webhookCapable={platform.auth_type === "webhook"}
+              sessionCapable={platform.auth_type === "session"}
               isOwner={isOwner}
               onDelete={onDelete}
               onCreateWebhook={onCreateWebhook}
               onRevokeWebhook={onRevokeWebhook}
+              onManage={onManage}
             />
           ))}
         </div>
@@ -571,17 +597,22 @@ function PlatformCard({
 function ConnectionRow({
   connection,
   webhookCapable,
+  sessionCapable = false,
   isOwner,
   onDelete,
   onCreateWebhook,
   onRevokeWebhook,
+  onManage,
 }: {
   connection: Connection;
   webhookCapable: boolean;
+  /** The platform is entered with a username and password (Effi). */
+  sessionCapable?: boolean;
   isOwner: boolean;
   onDelete: (connection: Connection) => void;
   onCreateWebhook: (connection: Connection) => void;
   onRevokeWebhook: (connection: Connection) => void;
+  onManage?: (connection: Connection) => void;
 }) {
   return (
     <div className="flex flex-wrap items-start justify-between gap-2">
@@ -607,6 +638,11 @@ function ConnectionRow({
       </div>
 
       <div className="flex shrink-0 items-center gap-1.5">
+        {sessionCapable && onManage && (
+          <Button size="sm" variant="ghost" onClick={() => onManage(connection)}>
+            Gestionar
+          </Button>
+        )}
         {webhookCapable &&
           (isOwner ? (
             connection.has_webhook ? (

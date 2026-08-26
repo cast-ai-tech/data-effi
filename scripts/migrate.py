@@ -13,7 +13,20 @@ silently skipped, because an edited migration means the database and the
 repository disagree about what the schema is.
 
     python -m scripts.migrate
-    python -m scripts.migrate --status     # list without applying
+    python -m scripts.migrate --status            # list without applying
+    python -m scripts.migrate --sync-checksums    # accept the files as the truth
+
+WHAT --sync-checksums IS FOR, AND WHAT IT COSTS. The warning above is the only
+signal that a file was edited after it ran. Sometimes that signal is real - a
+migration was changed and the database never saw the change. Sometimes it is
+noise left over from edits that were verified against the database by hand, and
+then it drowns the next real warning in a wall of filenames nobody reads.
+
+--sync-checksums records the files as they stand right now, which silences the
+warning and, in the same stroke, throws that signal away. It never touches the
+schema: it cannot make the database match the files, only stop reporting that
+they differ. So it is right only after the schema has actually been verified,
+and wrong as a way to make a nagging message go away.
 """
 
 from __future__ import annotations
@@ -105,6 +118,7 @@ def main() -> int:
         return 1
 
     status_only = "--status" in sys.argv
+    sync_checksums = "--sync-checksums" in sys.argv
 
     conn = wait_for_database(dsn)
     try:
@@ -115,20 +129,43 @@ def main() -> int:
 
         pending: list[Path] = []
         changed: list[str] = []
+        digests: dict[str, str] = {}
 
         for path in files:
             digest = checksum(path)
+            digests[path.name] = digest
             if path.name not in applied:
                 pending.append(path)
             elif applied[path.name] != digest:
                 changed.append(path.name)
 
-        if changed:
+        if changed and not sync_checksums:
             print("\n  AVISO: estas migraciones cambiaron después de aplicarse:")
             for name in changed:
                 print(f"    · {name}")
             print("  La base de datos NO se modificó. Crea una migración nueva en vez")
             print("  de editar una ya aplicada.\n")
+
+        if sync_checksums:
+            if not changed:
+                print("Nada que sincronizar: los archivos coinciden con lo aplicado.")
+                return 0
+            # Se imprime la lista antes de tocar nada. Quien corre esto está
+            # borrando una señal, y merece ver exactamente cuál.
+            print("\n  Se aceptan estos archivos como la verdad, tal como están hoy:")
+            for name in changed:
+                print(f"    · {name}")
+            with conn.cursor() as cur:
+                for name in changed:
+                    cur.execute(
+                        "UPDATE public.schema_migration SET checksum = %s "
+                        "WHERE filename = %s",
+                        (digests[name], name),
+                    )
+            print(f"\n  {len(changed)} checksums sincronizados. El esquema NO se tocó:")
+            print("  si algún archivo traía un cambio que la base nunca vio, ese")
+            print("  cambio sigue sin estar aplicado y ya nadie lo va a avisar.\n")
+            return 0
 
         if status_only:
             print(f"  aplicadas: {len(applied)}   pendientes: {len(pending)}")

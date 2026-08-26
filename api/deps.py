@@ -188,6 +188,50 @@ def require_any_cap(*capabilities: str):
     return dependency
 
 
+def require_platform_admin(user: CurrentUserDep) -> CurrentUser:
+    """Quien opera la plataforma. El único rol que existe por encima de una org.
+
+    SE LEE DE LA BASE EN CADA PETICIÓN, A PROPÓSITO
+    -----------------------------------------------
+    Todos los demás roles viajan dentro del JWT, que es más rápido y está bien
+    para ellos: si alguien deja de ser `owner` de una empresa, lo peor que pasa
+    es que siga siéndolo hasta que su token caduque, dentro de la empresa donde
+    ya estaba.
+
+    Este rol no. Cruza organizaciones, así que un token viejo con el flag dentro
+    seguiría abriendo la pantalla de plataforma después de habérselo quitado a
+    alguien - y quitárselo a alguien es justo el momento en que más importa que
+    deje de funcionar. Una consulta por petición, en una pantalla que se abre
+    tres veces al día, es un precio que no se nota.
+
+    LO QUE ESTE ROL NO ABRE
+    -----------------------
+    Nada de los datos de un comerciante. No aparece en ninguna política de RLS
+    (migración 053): aunque este guardia dejara pasar a quien no debe, las guías,
+    los movimientos y los compradores siguen fuera de su alcance.
+    """
+    from api.db import fetch_one
+
+    with connection(service=True) as conn:
+        row = fetch_one(
+            conn,
+            "SELECT is_platform_admin FROM core.app_user WHERE id = %s",
+            (user.id,),
+        )
+
+    if not row or not row["is_platform_admin"]:
+        # El mismo mensaje tanto si la cuenta no existe como si no tiene el rol:
+        # la diferencia solo le sirve a quien está probando ids ajenos.
+        raise Forbidden(
+            "Esta pantalla es para quien opera la plataforma. Si crees que "
+            "deberías tener acceso, pídeselo a quien administra el servidor."
+        )
+    return user
+
+
+PlatformAdminDep = Annotated[CurrentUser, Depends(require_platform_admin)]
+
+
 def _guard_country(user: CurrentUser, request: Request) -> None:
     """A limited membership may not read a country outside its scope.
 

@@ -111,6 +111,12 @@ class EffiSessionFetcher:
         self._min_interval = min_interval_seconds
         self._last_request_at: float = 0.0
 
+    @property
+    def base_url(self) -> str:
+        """Where this connection points. Public so the preflight can build paths
+        without reaching into a private attribute."""
+        return self._base_url
+
     # -- construction ---------------------------------------------------
     @classmethod
     def from_env(
@@ -138,6 +144,33 @@ class EffiSessionFetcher:
 
         return cls(
             session_token=token,
+            consent_granted_at=consent_granted_at,
+            base_url=base_url or os.environ.get("EFFI_BASE_URL") or DEFAULT_BASE_URL,
+            **kwargs,
+        )
+
+    @classmethod
+    def from_session(
+        cls,
+        session: Any,
+        *,
+        consent_granted_at: datetime | None,
+        base_url: str | None = None,
+        **kwargs: Any,
+    ) -> EffiSessionFetcher:
+        """Build from a session the authenticator produced (migration 051).
+
+        The env-var path above is still the safest place to keep a secret and is
+        still preferred where an operator maintains it. This is the path that
+        lets a merchant connect their own account without anyone touching the
+        server - see pipeline/vault.py for the trade that makes.
+
+        Both paths converge here: from this line on, a session fetched with a
+        stored password and a session pasted into an env var are the same object
+        under the same rules.
+        """
+        return cls(
+            session_token=session.token,
             consent_granted_at=consent_granted_at,
             base_url=base_url or os.environ.get("EFFI_BASE_URL") or DEFAULT_BASE_URL,
             **kwargs,
@@ -198,6 +231,66 @@ class EffiSessionFetcher:
             kind=kind,
             fetched_at=datetime.now(UTC),
         )
+
+    # -- preflight ------------------------------------------------------
+    def probe(self, url: str, params: dict[str, str]) -> str:
+        """Ask "may we read this?" and answer in one word, without downloading.
+
+        Used only by connectors/effi/permissions.py to check a merchant's Effi
+        role before a sync fails at 3am for a reason they could have fixed in two
+        minutes. It differs from `fetch_report` in exactly two ways, both of them
+        deliberate limits:
+
+          - the range is one day, set by the caller, so a permission check never
+            pulls a year of a merchant's data to answer a yes/no question;
+          - the body is discarded. Nothing a probe reads is ever ingested.
+
+        A 403 is `denied` rather than an exception because being denied is a
+        NORMAL, expected result here - it is the answer the merchant asked for -
+        while in `fetch_report` the same 403 is a genuine failure. Only 401 and a
+        login redirect still raise, because those mean the session is gone and
+        every further probe would report `denied` for the wrong reason.
+        """
+        self._respect_rate_limit()
+
+        try:
+            import httpx
+        except ImportError as exc:  # pragma: no cover - declared dependency
+            raise FetchError("Falta la dependencia httpx para el conector de Effi") from exc
+
+        headers = {
+            "User-Agent": USER_AGENT,
+            "Accept": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,text/csv",
+            "Cookie": self._token,
+        }
+
+        try:
+            with httpx.Client(timeout=self._timeout, follow_redirects=False) as client:
+                response = client.get(url, params=params, headers=headers)
+        except Exception as exc:
+            logger.info("effi probe unreachable: %s", type(exc).__name__)
+            return "unreachable"
+
+        if response.status_code == 401:
+            raise SessionExpiredError(
+                "Effi rechazó la sesión durante la comprobación de permisos."
+            )
+        if response.status_code in (301, 302, 303, 307, 308):
+            raise SessionExpiredError(
+                "Effi redirigió al login durante la comprobación de permisos."
+            )
+        if response.status_code == 403:
+            return "denied"
+        if response.status_code == 429:
+            return "unreachable"
+        if response.status_code >= 400:
+            return "unreachable"
+
+        # A 200 carrying HTML where a spreadsheet belongs is the panel rendering
+        # its own "no tienes permiso" page with a success code.
+        if "text/html" in response.headers.get("content-type", ""):
+            return "denied"
+        return "granted"
 
     # -- internals ------------------------------------------------------
     def _request(self, url: str, params: dict[str, str]) -> Any:

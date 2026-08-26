@@ -19,6 +19,7 @@ from __future__ import annotations
 import os
 import sys
 
+import psycopg
 from psycopg import sql
 
 from pipeline.dbconn import connect as db_connect
@@ -66,11 +67,33 @@ def main() -> int:
             )
 
             # Belt and braces: neither role may ever bypass row-level security.
+            #
+            # ALTER ROLE ... NOSUPERUSER requires the SUPERUSER attribute, even
+            # to take away what the target does not have. On a managed Postgres
+            # (Supabase) the admin role is NOT a superuser, so this statement
+            # fails with InsufficientPrivilege and takes the grants below down
+            # with it. The attributes are what matter, not who set them, so the
+            # state is asserted first and only enforced when it is both wrong
+            # and enforceable.
             cur.execute(
-                sql.SQL("ALTER ROLE {} WITH NOSUPERUSER NOBYPASSRLS").format(
-                    sql.Identifier(role)
-                )
+                "SELECT rolsuper, rolbypassrls FROM pg_roles WHERE rolname = %s", (role,)
             )
+            is_super, bypasses_rls = cur.fetchone()
+            if is_super or bypasses_rls:
+                try:
+                    cur.execute(
+                        sql.SQL("ALTER ROLE {} WITH NOSUPERUSER NOBYPASSRLS").format(
+                            sql.Identifier(role)
+                        )
+                    )
+                except psycopg.errors.InsufficientPrivilege:
+                    print(
+                        f"{role} bypasses row-level security and this connection "
+                        "cannot fix it. Fix it with a superuser before using it: "
+                        f"ALTER ROLE {role} WITH NOSUPERUSER NOBYPASSRLS",
+                        file=sys.stderr,
+                    )
+                    return 1
             print(f"  {role}: password set, NOSUPERUSER NOBYPASSRLS confirmed")
 
         # Re-assert grants in case new tables or views appeared since 007.

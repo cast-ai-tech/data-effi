@@ -41,6 +41,10 @@ services:
         sync: false
       - key: PII_ENCRYPTION_KEY
         sync: false
+      # Migration 051. Encrypts each merchant's platform password. Without it
+      # the connection screen says so and everyone uploads by hand instead.
+      - key: CONNECTION_VAULT_KEY
+        sync: false
       - key: WORKER_TRIGGER_SECRET
         sync: false
       - key: PUBLIC_API_URL

@@ -1,0 +1,21 @@
+{
+  "manifest_version": 3,
+  "name": "Captura de conexión Effi — Master Data",
+  "version": "1.0.0",
+  "description": "Graba cómo entra tu navegador a Effi y lo envía solo. Nunca lee contraseñas ni cookies.",
+  "permissions": [
+    "webRequest",
+    "storage"
+  ],
+  "host_permissions": [
+    "*://*.effi.com.co/*",
+    "*://*.efficommerce.com/*"
+  ],
+  "background": {
+    "service_worker": "background.js"
+  },
+  "action": {
+    "default_popup": "popup.html",
+    "default_title": "Captura de conexión Effi"
+  }
+}

@@ -432,6 +432,153 @@ export interface Connection {
   has_webhook: boolean;
 }
 
+// ---------------------------------------------------------------------------
+// Connecting a platform account (migration 051)
+//
+// A password goes UP through `ConnectionCredentialBody` and there is no type
+// here that brings one back down. That asymmetry is the design, not an
+// oversight: see api/credentials.py. If you ever need to add a `password` field
+// to a response type, the answer is no.
+// ---------------------------------------------------------------------------
+
+export type CredentialStatus =
+  | "none"
+  | "ok"
+  | "invalid"
+  | "expired"
+  | "insufficient_permissions"
+  | "locked";
+
+/** `PUT /config/connections/{id}/credential`. Owner only, write-only. */
+export interface ConnectionCredentialBody {
+  username: string;
+  password: string;
+  consent_granted: boolean;
+}
+
+/** What the screen may know about a stored credential. Never the password. */
+export interface ConnectionCredential {
+  connection_id: string;
+  username: string;
+  credential_status: CredentialStatus;
+  last_login_at: string | null;
+  last_login_error: string | null;
+  session_expires_at: string | null;
+  rotated_at: string | null;
+  message: string;
+}
+
+/** One permission we ask for on the source platform, and whether we have it. */
+export interface ConnectionPermission {
+  permission_code: string;
+  permission_name: string;
+  /** Always read-only: "consultar" and/or "ver_reportes". */
+  actions: string[];
+  /** What the merchant loses by not granting it. This is the useful half. */
+  why: string;
+  requirement: "required" | "optional";
+  admin_only: boolean;
+  status: "unknown" | "granted" | "denied" | "unreachable";
+  detail: string | null;
+  checked_at: string | null;
+}
+
+// ---------------------------------------------------------------------------
+// El buzón de capturas (migración 052)
+//
+// Lo que manda la extensión de tools/effi-capture: rutas y nombres de campos.
+// Nunca una contraseña ni una cookie - la extensión no las lee y el motor las
+// rechaza si llegaran.
+// ---------------------------------------------------------------------------
+
+/** El contrato de login tal como llegó. Todo son nombres, ningún valor. */
+export interface CaptureContract {
+  base?: string;
+  ruta?: string;
+  campoUsuario?: string;
+  campoClave?: string;
+  campoCsrf?: string;
+  carrier?: "cookie" | "json" | "";
+  carrierNombre?: string;
+  estado?: number | null;
+  otrosCampos?: string[];
+  exportaciones?: Array<{
+    metodo?: string;
+    ruta?: string;
+    params?: string;
+    estado?: number | null;
+    tipo?: string;
+  }>;
+}
+
+/** Una captura recibida. `GET /captures`. */
+export interface CaptureRow {
+  id: number;
+  platform_code: string;
+  platform_name: string;
+  /** Cómo la etiquetaste al invitar: "Juan, de Distrilatam". */
+  invited_label: string | null;
+  source: "extension" | "analizador" | "manual";
+  /** False = la persona grabó tarde y hay que pedirle que repita. */
+  found_login: boolean;
+  export_count: number;
+  contract: CaptureContract;
+  base_url: string | null;
+  login_path: string | null;
+  created_at: string;
+  reviewed_at: string | null;
+  is_new: boolean;
+}
+
+/**
+ * Una organización, como la ve quien opera la plataforma. `GET /captures/orgs`.
+ *
+ * Fíjate en lo que NO tiene: ni ventas, ni guías, ni dinero. Ese vacío es
+ * deliberado (migración 053) — el tablero de una empresa es de su dueño.
+ */
+export interface PlatformOrgRow {
+  org_id: string;
+  org_name: string;
+  slug: string;
+  created_at: string;
+  subscription_status: string;
+  plan_code: string | null;
+  plan_name: string | null;
+  trial_ends_at: string | null;
+  current_period_end: string | null;
+  tenant_count: number;
+  user_count: number;
+  /** Salud operativa, no negocio. */
+  connection_count: number;
+  connection_errors: number;
+}
+
+/** `POST /captures/tokens`. El código se muestra una sola vez. */
+export interface CaptureToken {
+  token_id: string;
+  token: string;
+  label: string;
+  platform_code: string;
+  platform_name: string;
+  /** La URL que va en el paquete: lleva el código dentro. */
+  submit_url: string;
+  max_uses: number;
+  expires_at: string;
+  created_at: string;
+  message: string;
+}
+
+/** `GET .../permissions` and `POST .../test` answer with the same shape. */
+export interface ConnectionPreflight {
+  connection_id: string;
+  credential_status: CredentialStatus;
+  /** False only when a REQUIRED permission is missing or the login failed. */
+  is_usable: boolean;
+  /** One line that says what to do next, not what went wrong. */
+  summary: string;
+  permissions: ConnectionPermission[];
+}
+
 /** What a webhook connection accepts, when the caller does not say. */
 export type WebhookKind = "shipments" | "movements" | "ads" | "cs";
 
@@ -1079,7 +1226,12 @@ export type CustomersPage = Paged<CustomerRow>;
  * orders there is no basis for either, and saying so is more useful than
  * inventing a 50%.
  */
-export type CustomerGrade = "nuevo" | "excelente" | "bueno" | "regular" | "riesgo";
+export type CustomerGrade =
+  | "nuevo"
+  | "excelente"
+  | "bueno"
+  | "regular"
+  | "riesgo";
 
 /** One row of `mart.v_customer_metrics`: one person, in one country. */
 export interface CustomerRow {
@@ -1242,7 +1394,14 @@ export type DecisionScope = "products" | "carriers" | "office" | "cash";
  * The verb. `cut/call/switch` ask for an action, `keep/ok` say leave it alone,
  * `watch/hold` say not yet.
  */
-export type Verdict = "keep" | "cut" | "watch" | "switch" | "call" | "hold" | "ok";
+export type Verdict =
+  | "keep"
+  | "cut"
+  | "watch"
+  | "switch"
+  | "call"
+  | "hold"
+  | "ok";
 
 export interface Decision {
   key: string;

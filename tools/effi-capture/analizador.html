@@ -1,0 +1,402 @@
+<!doctype html>
+<html lang="es">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Analizador de captura Effi</title>
+    <style>
+      /*
+        PLAN B, PARA CUANDO LA EXTENSIÓN NO ES UNA OPCIÓN.
+
+        Sirve si la persona usa Firefox, si en su empresa no dejan instalar
+        extensiones, o si ya tiene un .har grabado de antes. Se abre haciendo
+        doble clic en este archivo: no instala nada, no pide internet, y el
+        archivo que arrastra NO se sube a ningún lado - se lee aquí mismo, en su
+        navegador, y no sale de su computador.
+
+        Eso último no es una promesa que haya que creerse: esta página no tiene
+        ni una sola llamada de red. Se puede desconectar el wifi y funciona igual.
+      */
+      :root {
+        --tinta: #14181f;
+        --tinta-2: #48505e;
+        --tinta-suave: #6b7484;
+        --linea: #e2e5ea;
+        --fondo: #ffffff;
+        --fondo-2: #f6f7f9;
+        --acento: #1f5fd0;
+        --ok: #157a4a;
+        --ok-fondo: #e8f5ee;
+        --aviso: #8a5a00;
+        --aviso-fondo: #fdf3e0;
+        --rojo: #b3261e;
+      }
+      @media (prefers-color-scheme: dark) {
+        :root {
+          --tinta: #eef1f6;
+          --tinta-2: #b6bdc9;
+          --tinta-suave: #8a94a3;
+          --linea: #2b313b;
+          --fondo: #171b21;
+          --fondo-2: #1f242c;
+          --acento: #6fa2ff;
+          --ok: #6ede9f;
+          --ok-fondo: #16301f;
+          --aviso: #f0c675;
+          --aviso-fondo: #33280f;
+          --rojo: #ff8b82;
+        }
+      }
+      * {
+        box-sizing: border-box;
+      }
+      body {
+        max-width: 760px;
+        margin: 0 auto;
+        padding: 32px 20px 60px;
+        font:
+          16px/1.6 system-ui,
+          -apple-system,
+          "Segoe UI",
+          sans-serif;
+        color: var(--tinta);
+        background: var(--fondo);
+      }
+      h1 {
+        font-size: 24px;
+        margin: 0 0 4px;
+      }
+      .sub {
+        margin: 0 0 28px;
+        color: var(--tinta-suave);
+      }
+      h2 {
+        font-size: 15px;
+        margin: 28px 0 10px;
+        text-transform: uppercase;
+        letter-spacing: 0.04em;
+        color: var(--tinta-suave);
+      }
+
+      #zona {
+        padding: 44px 24px;
+        border: 2px dashed var(--linea);
+        border-radius: 14px;
+        background: var(--fondo-2);
+        text-align: center;
+        cursor: pointer;
+        transition:
+          border-color 0.15s,
+          background 0.15s;
+      }
+      #zona:hover,
+      #zona.encima {
+        border-color: var(--acento);
+        background: transparent;
+      }
+      #zona strong {
+        display: block;
+        font-size: 17px;
+        margin-bottom: 4px;
+      }
+      #zona span {
+        color: var(--tinta-suave);
+        font-size: 14px;
+      }
+      input[type="file"] {
+        display: none;
+      }
+
+      .caja {
+        padding: 12px 15px;
+        border-radius: 10px;
+        margin: 18px 0;
+        font-size: 15px;
+      }
+      .caja.ok {
+        background: var(--ok-fondo);
+        color: var(--ok);
+      }
+      .caja.aviso {
+        background: var(--aviso-fondo);
+        color: var(--aviso);
+      }
+
+      pre {
+        padding: 14px;
+        border: 1px solid var(--linea);
+        border-radius: 10px;
+        background: var(--fondo-2);
+        overflow-x: auto;
+        font:
+          12.5px/1.55 ui-monospace,
+          "Cascadia Code",
+          Consolas,
+          monospace;
+        white-space: pre-wrap;
+        word-break: break-word;
+        color: var(--tinta-2);
+      }
+      button {
+        padding: 11px 18px;
+        font: inherit;
+        font-weight: 600;
+        color: #fff;
+        background: var(--acento);
+        border: 0;
+        border-radius: 9px;
+        cursor: pointer;
+      }
+      .pie {
+        font-size: 13.5px;
+        color: var(--tinta-suave);
+        border-top: 1px solid var(--linea);
+        margin-top: 30px;
+        padding-top: 16px;
+      }
+      .oculto {
+        display: none;
+      }
+      code {
+        background: var(--fondo-2);
+        padding: 1px 5px;
+        border-radius: 4px;
+        font-size: 0.9em;
+      }
+    </style>
+  </head>
+  <body>
+    <h1>Analizador de captura Effi</h1>
+    <p class="sub">
+      Arrastra aquí el archivo <code>.har</code> que grabaste. Se lee en tu
+      navegador: no se sube a ningún sitio.
+    </p>
+
+    <label id="zona" for="archivo">
+      <strong>Suelta el archivo .har aquí</strong>
+      <span>o haz clic para buscarlo</span>
+    </label>
+    <input type="file" id="archivo" accept=".har,application/json" />
+
+    <div id="salida" class="oculto">
+      <div class="caja" id="veredicto"></div>
+      <h2>Esto es lo que hay que enviar</h2>
+      <pre id="texto"></pre>
+      <button id="copiar">Copiar para enviar</button>
+    </div>
+
+    <p class="pie">
+      Lo que sale son <strong>nombres de campos y direcciones</strong>: ni una
+      contraseña, ni una cookie, ni un valor. Puedes leerlo entero antes de
+      mandarlo. El archivo <code>.har</code> original <strong>sí</strong> tiene
+      tu contraseña dentro — no lo envíes, y bórralo cuando termines.
+    </p>
+
+    <script src="extension/contrato.js"></script>
+    <script>
+      /*
+        Lee un HAR y arma el mismo contrato que la extensión, con la misma
+        lógica (extension/contrato.js) para que las dos vías nunca den
+        respuestas distintas sobre el mismo Effi.
+      */
+      const $ = (id) => document.getElementById(id);
+
+      /** Nombres de los campos de un envío. Los valores se descartan aquí. */
+      function camposDe(entrada) {
+        const post = (entrada.request && entrada.request.postData) || {};
+        const campos = [];
+
+        for (const p of post.params || []) {
+          if (p.name)
+            campos.push({ name: p.name, role: clasificarCampo(p.name) });
+        }
+
+        if (!campos.length && (post.mimeType || "").includes("json")) {
+          try {
+            const cuerpo = JSON.parse(post.text || "{}");
+            if (cuerpo && typeof cuerpo === "object") {
+              for (const k of Object.keys(cuerpo)) {
+                campos.push({ name: k, role: clasificarCampo(k) });
+              }
+            }
+          } catch {
+            /* un cuerpo ilegible no es un campo */
+          }
+        }
+        return campos;
+      }
+
+      /** Solo los NOMBRES de las cookies que el servidor manda de vuelta. */
+      function cookiesDe(entrada) {
+        const respuesta = entrada.response || {};
+        const nombres = [];
+        for (const c of respuesta.cookies || []) {
+          if (c.name) nombres.push(c.name);
+        }
+        if (!nombres.length) {
+          for (const h of respuesta.headers || []) {
+            if ((h.name || "").toLowerCase() === "set-cookie") {
+              const n = String(h.value || "")
+                .split("=")[0]
+                .trim();
+              if (n) nombres.push(n);
+            }
+          }
+        }
+        return nombres;
+      }
+
+      function analizar(har) {
+        const entradas = (har.log && har.log.entries) || [];
+
+        const login = entradas.find(
+          (e) =>
+            ((e.request && e.request.method) || "").toUpperCase() === "POST" &&
+            pareceLogin(camposDe(e)),
+        );
+
+        const exportaciones = [];
+        const vistas = new Set();
+        for (const e of entradas) {
+          const url = new URL(e.request.url);
+          const tipo =
+            ((e.response && e.response.content) || {}).mimeType || "";
+          if (vistas.has(url.pathname)) continue;
+          if (!pareceExportacion(url.pathname, tipo)) continue;
+          vistas.add(url.pathname);
+          exportaciones.push({
+            metodo: (e.request.method || "GET").toUpperCase(),
+            ruta: url.pathname,
+            params: (e.request.queryString || []).map((q) => q.name).join(", "),
+            estado: (e.response || {}).status,
+            tipo: tipo.split(";")[0],
+          });
+        }
+
+        if (!login) return { ruta: "", exportaciones };
+
+        const url = new URL(login.request.url);
+        const campos = camposDe(login);
+        const cookies = cookiesDe(login);
+        const tipoRespuesta =
+          ((login.response || {}).content || {}).mimeType || "";
+
+        let carrier = "";
+        let carrierNombre = "";
+        if (cookies.length) {
+          carrier = "cookie";
+          carrierNombre = elegirCookieDeSesion(cookies);
+        } else if (tipoRespuesta.includes("json")) {
+          carrier = "json";
+          // La clave del token sí se puede leer del cuerpo: es un nombre, no un
+          // valor. El valor nunca se toca.
+          try {
+            const cuerpo = JSON.parse(
+              ((login.response || {}).content || {}).text || "{}",
+            );
+            carrierNombre =
+              Object.keys(cuerpo).find((k) =>
+                ["token", "jwt", "access", "session"].some((h) =>
+                  k.toLowerCase().includes(h),
+                ),
+              ) || "";
+          } catch {
+            /* sin cuerpo legible, se queda vacío */
+          }
+        }
+
+        return {
+          base: `${url.protocol}//${url.host}`,
+          ruta: url.pathname,
+          campoUsuario: campoConRol(campos, "username"),
+          campoClave: campoConRol(campos, "password"),
+          campoCsrf: campoConRol(campos, "csrf"),
+          carrier,
+          carrierNombre,
+          estado: (login.response || {}).status,
+          otrosCampos: campos.filter((c) => !c.role).map((c) => c.name),
+          exportaciones,
+        };
+      }
+
+      function mostrar(contrato) {
+        $("salida").classList.remove("oculto");
+        $("texto").textContent = formatearContrato(contrato);
+
+        const caja = $("veredicto");
+        const exps = (contrato.exportaciones || []).length;
+
+        if (!contrato.ruta) {
+          caja.className = "caja aviso";
+          caja.textContent =
+            "No aparece el momento de entrar. La grabación empezó tarde: cierra " +
+            "sesión en Effi y graba de nuevo desde la pantalla de entrar.";
+        } else if (exps > 0) {
+          caja.className = "caja ok";
+          caja.textContent = `Salió bien. Se encontró la entrada y ${exps} ${exps === 1 ? "descarga" : "descargas"} de reportes.`;
+        } else {
+          caja.className = "caja ok";
+          caja.textContent =
+            "Se encontró la entrada. No hay descargas: si puedes, graba otra vez " +
+            "exportando Guías, Novedades y Trazabilidad de dinero.";
+        }
+        $("salida").scrollIntoView({ behavior: "smooth", block: "nearest" });
+      }
+
+      function leer(archivo) {
+        const lector = new FileReader();
+        lector.onload = () => {
+          try {
+            mostrar(analizar(JSON.parse(lector.result)));
+          } catch (error) {
+            $("salida").classList.remove("oculto");
+            $("veredicto").className = "caja aviso";
+            $("veredicto").textContent =
+              "Ese archivo no se pudo leer como una grabación (.har). " +
+              "Comprueba que sea el que guardaste desde la pestaña Red.";
+            $("texto").textContent = String(error);
+          }
+        };
+        lector.readAsText(archivo);
+      }
+
+      $("archivo").addEventListener("change", (e) => {
+        if (e.target.files[0]) leer(e.target.files[0]);
+      });
+
+      const zona = $("zona");
+      for (const evento of ["dragenter", "dragover"]) {
+        zona.addEventListener(evento, (e) => {
+          e.preventDefault();
+          zona.classList.add("encima");
+        });
+      }
+      for (const evento of ["dragleave", "drop"]) {
+        zona.addEventListener(evento, (e) => {
+          e.preventDefault();
+          zona.classList.remove("encima");
+        });
+      }
+      zona.addEventListener("drop", (e) => {
+        const archivo = e.dataTransfer.files[0];
+        if (archivo) leer(archivo);
+      });
+
+      $("copiar").addEventListener("click", async () => {
+        const boton = $("copiar");
+        try {
+          await navigator.clipboard.writeText($("texto").textContent);
+          boton.textContent = "Copiado — pégalo en el chat";
+          setTimeout(() => (boton.textContent = "Copiar para enviar"), 2500);
+        } catch {
+          const rango = document.createRange();
+          rango.selectNodeContents($("texto"));
+          const sel = window.getSelection();
+          sel.removeAllRanges();
+          sel.addRange(rango);
+          boton.textContent = "Seleccionado — copia con Ctrl+C";
+        }
+      });
+    </script>
+  </body>
+</html>

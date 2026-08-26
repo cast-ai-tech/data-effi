@@ -626,6 +626,223 @@ class WebhookTokenResponse(BaseModel):
 
 
 # =============================================================================
+# Connecting a platform account (migration 051)
+#
+# THE ASYMMETRY IS THE POINT. A password comes IN through
+# ConnectionCredentialRequest and there is no model anywhere that sends one back
+# out. If you ever find yourself adding a `password` field to a response, stop:
+# api/credentials.py explains why that door stays shut.
+# =============================================================================
+
+
+class ConnectionCredentialRequest(BaseModel):
+    """The merchant's login for the source platform. Write-only, always."""
+
+    username: Annotated[str, StringConstraints(min_length=1, max_length=200)] = Field(
+        description="El usuario con el que entras a la plataforma. Se guarda tal cual "
+                    "para que puedas ver cuál cuenta está conectada."
+    )
+    password: Annotated[str, StringConstraints(min_length=1, max_length=500)] = Field(
+        description="Se cifra antes de guardarse y no se puede volver a ver desde "
+                    "aquí. Si la olvidas, recupérala en la plataforma."
+    )
+    # Typing a password is not the same as agreeing to have it used on your
+    # behalf, so the consent is asked for again here rather than inherited from
+    # whenever the connection happened to be created.
+    consent_granted: bool = Field(
+        default=False,
+        description="Autorizas que Master Data entre a la plataforma con tu cuenta para "
+                    "descargar tus propios reportes. Sin esto no se guarda nada.",
+    )
+
+
+class ConnectionCredentialResponse(BaseModel):
+    """Everything a screen may know about a stored credential. No password."""
+
+    connection_id: UUID
+    username: str
+    credential_status: Literal[
+        "none", "ok", "invalid", "expired", "insufficient_permissions", "locked"
+    ]
+    last_login_at: datetime | None = None
+    last_login_error: str | None = None
+    session_expires_at: datetime | None = None
+    rotated_at: datetime | None = None
+    message: str
+
+
+class ConnectionPermissionRow(BaseModel):
+    """One permission we ask for, why, and whether the platform granted it."""
+
+    permission_code: str
+    permission_name: str
+    actions: list[str] = Field(
+        description="Siempre solo lectura: consultar y/o ver reportes."
+    )
+    why: str = Field(description="Qué se pierde si no lo das.")
+    requirement: Literal["required", "optional"]
+    admin_only: bool = False
+    status: Literal["unknown", "granted", "denied", "unreachable"] = "unknown"
+    detail: str | None = None
+    checked_at: datetime | None = None
+
+
+class ConnectionPreflightResponse(BaseModel):
+    """The answer to "Probar conexión": what works, what is missing, what to do."""
+
+    connection_id: UUID
+    credential_status: str
+    is_usable: bool = Field(
+        description="True cuando el tablero se puede calcular. Un permiso opcional "
+                    "que falta no lo pone en false."
+    )
+    summary: str = Field(description="Una línea que dice qué hacer, no qué pasó.")
+    permissions: list[ConnectionPermissionRow]
+
+
+# =============================================================================
+# El buzón de capturas (migración 052)
+#
+# Lo que llega aquí lo manda una extensión que corre en el computador de alguien
+# de fuera. El modelo de entrada es DELIBERADAMENTE cerrado: se declara campo por
+# campo lo que puede venir, y todo lo demás se descarta antes de tocar la base.
+#
+# La extensión promete no mandar valores. Este modelo lo comprueba, y el trigger
+# `core.reject_capture_secrets` lo comprueba otra vez en el motor. Tres capas
+# para lo mismo, porque el cliente es un .zip que cualquiera puede editar antes
+# de instalarlo.
+# =============================================================================
+
+
+class CaptureExport(BaseModel):
+    """Una descarga de reporte que la captura vio. Ruta y nombres, nada más."""
+
+    model_config = {"extra": "ignore"}
+
+    metodo: Annotated[str, StringConstraints(max_length=10)] = "GET"
+    ruta: Annotated[str, StringConstraints(max_length=500)]
+    # Los NOMBRES de los parámetros, separados por coma. Nunca sus valores.
+    params: Annotated[str, StringConstraints(max_length=500)] = ""
+    estado: int | None = None
+    tipo: Annotated[str, StringConstraints(max_length=200)] = ""
+
+
+class CaptureSubmission(BaseModel):
+    """El contrato de login que manda la extensión.
+
+    `extra: ignore` es la primera defensa y la más importante: una extensión
+    modificada que añadiera `password` al JSON no provoca un error, simplemente
+    no llega a ninguna parte. Se descarta en la puerta.
+    """
+
+    model_config = {"extra": "ignore"}
+
+    base: Annotated[str, StringConstraints(max_length=300)] = ""
+    ruta: Annotated[str, StringConstraints(max_length=500)] = ""
+    # Los NOMBRES de los campos del formulario. "usuario", "clave", "_token".
+    campoUsuario: Annotated[str, StringConstraints(max_length=200)] = ""  # noqa: N815
+    campoClave: Annotated[str, StringConstraints(max_length=200)] = ""  # noqa: N815
+    campoCsrf: Annotated[str, StringConstraints(max_length=200)] = ""  # noqa: N815
+    carrier: Literal["cookie", "json", ""] = ""
+    carrierNombre: Annotated[str, StringConstraints(max_length=200)] = ""  # noqa: N815
+    estado: int | None = None
+    otrosCampos: list[Annotated[str, StringConstraints(max_length=200)]] = Field(  # noqa: N815
+        default_factory=list, max_length=40
+    )
+    exportaciones: list[CaptureExport] = Field(default_factory=list, max_length=40)
+    source: Literal["extension", "analizador", "manual"] = "extension"
+
+    def contract_for_storage(self) -> dict[str, Any]:
+        """Exactamente lo que se guarda. Nada que no esté declarado arriba."""
+        return {
+            "base": self.base,
+            "ruta": self.ruta,
+            "campoUsuario": self.campoUsuario,
+            "campoClave": self.campoClave,
+            "campoCsrf": self.campoCsrf,
+            "carrier": self.carrier,
+            "carrierNombre": self.carrierNombre,
+            "estado": self.estado,
+            "otrosCampos": self.otrosCampos,
+            "exportaciones": [e.model_dump() for e in self.exportaciones],
+        }
+
+
+class CaptureTokenResponse(BaseModel):
+    """El código de invitación, mostrado UNA vez. Owner only."""
+
+    token_id: UUID
+    token: str = Field(
+        description="Se muestra una sola vez. La base guarda solo su SHA-256."
+    )
+    label: str
+    platform_code: str
+    platform_name: str
+    submit_url: str = Field(description="A dónde manda la extensión la captura.")
+    max_uses: int
+    expires_at: datetime
+    created_at: datetime
+    message: str
+
+
+class CaptureReceivedResponse(BaseModel):
+    """Lo único que ve quien capturó. Tiene que decirle si sirvió.
+
+    Todavía tiene Effi abierto cuando lee esto, así que si le faltó algo puede
+    repetir en el momento en vez de enterarse mañana.
+    """
+
+    received: bool
+    found_login: bool
+    export_count: int
+    usable: bool
+    message: str
+
+
+class PlatformOrgRow(BaseModel):
+    """Una organización, como la ve quien opera la plataforma (migración 053).
+
+    FÍJATE EN LO QUE NO ESTÁ: ni ventas, ni guías, ni dinero, ni un solo
+    comprador. Este modelo es el contrato de privacidad escrito en código —
+    añadir aquí una cifra de negocio sería dársela a alguien que no es el dueño
+    de esos datos.
+    """
+
+    org_id: UUID
+    org_name: str
+    slug: str
+    created_at: datetime
+    subscription_status: str
+    plan_code: str | None = None
+    plan_name: str | None = None
+    trial_ends_at: datetime | None = None
+    current_period_end: datetime | None = None
+    tenant_count: int = 0
+    user_count: int = 0
+    # Salud operativa, no negocio: cuántas conexiones hay y cuántas fallan.
+    connection_count: int = 0
+    connection_errors: int = 0
+
+
+class CaptureInboxRow(BaseModel):
+    """Una captura recibida, como la ve la pantalla de conexiones."""
+
+    id: int
+    platform_code: str
+    platform_name: str
+    invited_label: str | None = None
+    source: str
+    found_login: bool
+    export_count: int
+    contract: dict[str, Any]
+    base_url: str | None = None
+    login_path: str | None = None
+    created_at: datetime
+    reviewed_at: datetime | None = None
+    is_new: bool
+
+
+# =============================================================================
 # Ingestion
 # =============================================================================
 

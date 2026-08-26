@@ -1,9 +1,21 @@
 """Workspace configuration: countries, platforms, connections, users.
 
-Note what is NOT here: any endpoint that accepts a credential. Connections store
-the NAME of an environment variable (`secret_ref`); the value is put on the
-server by whoever administers it. That is the whole point - a compromised API
-cannot hand out passwords it never had.
+CREDENTIALS. This file used to accept none at all: a connection stored the NAME
+of an environment variable (`secret_ref`) and the value was put on the server by
+whoever administered it, so a compromised API could not hand out passwords it
+never had.
+
+That is still true of everything here except `PUT /connections/{id}/credential`,
+added by migration 051 so a merchant can connect their own Effi account without
+anyone touching the server. The property that mattered is preserved in a
+different way: passwords go IN and never come back OUT. There is no endpoint in
+this file, or anywhere else, that returns a stored credential - not to the
+merchant, not to an owner, not to support. A compromised API can still be made
+to STORE a password, but it cannot read the ones already there without also
+holding the vault key, which is not in the database.
+
+`secret_ref` still works and still wins when both are present. See
+api/credentials.py and docs/tier3-politica.md.
 """
 
 from __future__ import annotations
@@ -15,6 +27,7 @@ from uuid import UUID
 
 from fastapi import APIRouter, Depends, Query, Request, Response, status
 
+from api import credentials
 from api.db import execute, fetch_all, fetch_one, fetch_required
 from api.deps import (
     CurrentUser,
@@ -27,9 +40,14 @@ from api.deps import (
     require_role,
 )
 from api.errors import ApiError, Conflict, NotFound
+from api.preflight import run_preflight_for_connection
 from api.schemas import (
     ActivateCountryRequest,
     ConnectionCreateRequest,
+    ConnectionCredentialRequest,
+    ConnectionCredentialResponse,
+    ConnectionPermissionRow,
+    ConnectionPreflightResponse,
     ConnectionResponse,
     ConnectionUpdateRequest,
     CountryResponse,
@@ -776,3 +794,288 @@ def _connection_health(conn, connection_id: UUID) -> ConnectionResponse:
     if row is None:      # pragma: no cover - only if the tenant GUC is unset
         raise NotFound("No se pudo leer la salud de la conexión")
     return ConnectionResponse(**row)
+
+
+# =============================================================================
+# Connecting a platform account (migration 051)
+#
+# THE HEADER OF THIS FILE USED TO SAY that no endpoint here accepts a credential.
+# That was true, and it was also the reason a merchant could not connect their
+# own Effi account without somebody editing the server. These four endpoints
+# change it, under conditions the rest of this file did not need:
+#
+#   - the password is encrypted before it reaches a row (pipeline/vault.py) and
+#     there is no endpoint anywhere that reads one back;
+#   - consent is re-asked HERE, at the moment the password is typed, not
+#     inherited from whenever the connection happened to be created;
+#   - only an owner may do any of it.
+#
+# `secret_ref` still works and is still the better option wherever an operator
+# is willing to maintain an environment variable. This is the path for everyone
+# else. See api/credentials.py and docs/tier3-politica.md.
+# =============================================================================
+
+
+def _connection_for_credential(conn, user: CurrentUser, connection_id: UUID) -> dict:
+    """The connection, plus what its platform expects of a credential."""
+    _assert_connection_in_scope(conn, user, connection_id)
+    row = fetch_one(
+        conn,
+        """
+        SELECT c.id, c.platform_code, c.source_mode, c.consent_granted_at,
+               c.credential_status, p.name AS platform_name, p.auth_type,
+               p.requires_consent
+          FROM core.connection c
+          JOIN core.platform p ON p.code = c.platform_code
+         WHERE c.id = %s AND c.tenant_id = %s
+        """,
+        (connection_id, user.tenant_id),
+    )
+    if row is None:
+        raise NotFound("Esa conexión no existe en tu workspace")
+    return row
+
+
+@router.get(
+    "/connections/{connection_id}/permissions",
+    response_model=ConnectionPreflightResponse,
+    summary="Los permisos que esta conexión necesita en la plataforma",
+)
+def list_connection_permissions(
+    connection_id: UUID, conn: DbDep, user: CurrentUserDep
+) -> ConnectionPreflightResponse:
+    """The checklist the merchant works through, with what each permission is for.
+
+    Readable BEFORE anything is connected, and that is the point: the merchant
+    opens this, creates a dedicated user in Effi with exactly these permissions,
+    and only then types a password. Showing the list only after a failure would
+    make every merchant learn it the hard way.
+    """
+    row = _connection_for_credential(conn, user, connection_id)
+
+    permissions = fetch_all(
+        conn,
+        """
+        SELECT permission_code, permission_name, actions, why, requirement,
+               admin_only, status, detail, checked_at
+          FROM mart.v_connection_permissions
+         WHERE connection_id = %s AND tenant_id = %s
+         ORDER BY sort_order
+        """,
+        (connection_id, user.tenant_id),
+    )
+
+    if not permissions:
+        return ConnectionPreflightResponse(
+            connection_id=connection_id,
+            credential_status=row["credential_status"],
+            is_usable=True,
+            summary=(
+                f"{row['platform_name']} no necesita permisos especiales: los datos "
+                "llegan por archivo o por webhook."
+            ),
+            permissions=[],
+        )
+
+    denied_required = [
+        p for p in permissions
+        if p["requirement"] == "required" and p["status"] == "denied"
+    ]
+    return ConnectionPreflightResponse(
+        connection_id=connection_id,
+        credential_status=row["credential_status"],
+        is_usable=row["credential_status"] == "ok",
+        summary=_permission_summary(row, permissions, denied_required),
+        permissions=[ConnectionPermissionRow(**p) for p in permissions],
+    )
+
+
+def _permission_summary(
+    row: dict, permissions: list[dict], denied_required: list[dict]
+) -> str:
+    """One line, written for whoever is looking at the screen right now."""
+    if row["credential_status"] == "none":
+        required = sum(1 for p in permissions if p["requirement"] == "required")
+        return (
+            f"Antes de conectar: crea en {row['platform_name']} un usuario dedicado "
+            f"con los {required} permisos obligatorios de esta lista. No uses tu "
+            "cuenta de dueño."
+        )
+    if denied_required:
+        names = ", ".join(p["permission_name"] for p in denied_required)
+        return f"Falta este permiso en {row['platform_name']}: {names}."
+    if row["credential_status"] == "invalid":
+        return "El usuario o la contraseña no son correctos. Vuelve a ingresarlos."
+    if row["credential_status"] == "locked":
+        return (
+            f"{row['platform_name']} bloqueó la cuenta. Desbloquéala allá antes de "
+            "reconectar; no se seguirá intentando solo."
+        )
+    if row["credential_status"] == "expired":
+        return "La sesión venció. Vuelve a ingresar tu usuario y contraseña."
+    return "La conexión funciona."
+
+
+@router.put(
+    "/connections/{connection_id}/credential",
+    response_model=ConnectionCredentialResponse,
+    summary="Conectar una cuenta de la plataforma (usuario y contraseña)",
+    dependencies=[Depends(require_role("owner"))],
+)
+def put_connection_credential(
+    connection_id: UUID,
+    payload: ConnectionCredentialRequest,
+    conn: DbDep,
+    user: CurrentUserDep,
+) -> ConnectionCredentialResponse:
+    """Store one merchant's platform login, encrypted.
+
+    Deliberately does NOT log in. Storing and proving are separate steps because
+    a login attempt against a mistyped password is how accounts get locked: the
+    merchant saves, reads the permission list, fixes their Effi user, and presses
+    "Probar conexión" once, when they are actually ready.
+    """
+    row = _connection_for_credential(conn, user, connection_id)
+
+    if row["auth_type"] != "session":
+        raise ApiError(
+            "credential_not_supported",
+            f"{row['platform_name']} no se conecta con usuario y contraseña. Sus "
+            "datos llegan por archivo, webhook o URL.",
+        )
+
+    if not credentials.vault_available():
+        raise ApiError(
+            "vault_unavailable",
+            "Este servidor todavía no tiene bóveda de credenciales configurada. "
+            "Mientras tanto puedes seguir subiendo el reporte a mano: produce "
+            "exactamente el mismo tablero.",
+        )
+
+    # Consent is asked again at the moment the password is typed. A consent
+    # recorded weeks ago, for a connection created for something else, is not
+    # consent to use a password that did not exist then.
+    if not payload.consent_granted:
+        raise ApiError(
+            "consent_required",
+            "Necesitamos tu autorización explícita para entrar a "
+            f"{row['platform_name']} con tu cuenta y descargar tus propios "
+            "reportes. Lee qué implica antes de aceptar.",
+        )
+
+    try:
+        summary = credentials.store_credential(
+            conn,
+            connection_id=connection_id,
+            tenant_id=user.tenant_id,
+            username=payload.username,
+            password=payload.password,
+        )
+    except ValueError as exc:
+        raise ApiError("credential_invalid", str(exc)) from None
+
+    # The connection becomes a session connection now that it has a session to
+    # use. The consent timestamp is refreshed for the same reason it was
+    # re-asked: it must date from this decision, not an older one.
+    #
+    # AND THE CONNECTION IS REVIVED. This is the whole point of the update path.
+    # When a merchant changes their password in Effi, the next sync fails, the
+    # worker writes `status = 'error'`, and the row stops matching the worker's
+    # `status = 'active'` filter. Storing the new password without clearing that
+    # would leave the merchant staring at a connection they just fixed, that
+    # never syncs again, with nothing on screen explaining why.
+    #
+    # Only 'error' and 'disabled' are revived. A connection somebody deliberately
+    # paused for another reason is not restarted by a password change - but those
+    # two states are precisely the ones a broken credential produces, and
+    # `disabled` here also covers "disconnected the account, now reconnecting".
+    execute(
+        conn,
+        """
+        UPDATE core.connection
+           SET source_mode        = 'session',
+               consent_granted_at = %s,
+               consent_granted_by = %s,
+               status             = CASE WHEN status IN ('error', 'disabled')
+                                         THEN 'active' ELSE status END,
+               last_error         = NULL
+         WHERE id = %s AND tenant_id = %s
+        """,
+        (datetime.now(UTC), user.id, connection_id, user.tenant_id),
+    )
+
+    return ConnectionCredentialResponse(
+        connection_id=connection_id,
+        username=summary.username,
+        credential_status=summary.credential_status,
+        last_login_at=summary.last_login_at,
+        last_login_error=summary.last_login_error,
+        session_expires_at=summary.session_expires_at,
+        rotated_at=summary.rotated_at,
+        message=(
+            "Cuenta guardada y cifrada. Todavía no se ha comprobado: pulsa "
+            "«Probar conexión» cuando el usuario ya tenga los permisos de la lista."
+        ),
+    )
+
+
+@router.delete(
+    "/connections/{connection_id}/credential",
+    status_code=status.HTTP_204_NO_CONTENT,
+    summary="Desconectar la cuenta de la plataforma",
+    dependencies=[Depends(require_role("owner"))],
+)
+def delete_connection_credential(
+    connection_id: UUID, conn: DbDep, user: CurrentUserDep
+) -> Response:
+    """Forget the credential. Data already ingested stays: it belongs to them.
+
+    The screen that calls this has to say the other half out loud: deleting here
+    stops Master Data, and only closing the session inside the platform actually
+    revokes access. Letting a merchant believe otherwise would be the dangerous
+    kind of reassuring.
+    """
+    _assert_connection_in_scope(conn, user, connection_id)
+    credentials.delete_credential(
+        conn, connection_id=connection_id, tenant_id=user.tenant_id
+    )
+    execute(
+        conn,
+        """
+        UPDATE core.connection
+           SET source_mode = 'file', status = 'disabled'
+         WHERE id = %s AND tenant_id = %s
+        """,
+        (connection_id, user.tenant_id),
+    )
+    logger.info(
+        "credential disconnected tenant=%s connection=%s", user.tenant_id, connection_id
+    )
+    return Response(status_code=status.HTTP_204_NO_CONTENT)
+
+
+@router.post(
+    "/connections/{connection_id}/test",
+    response_model=ConnectionPreflightResponse,
+    summary="Probar la conexión y comprobar los permisos",
+    dependencies=[Depends(require_role("owner"))],
+)
+def test_connection(
+    connection_id: UUID, conn: DbDep, user: CurrentUserDep
+) -> ConnectionPreflightResponse:
+    """Log in once, probe each permission, and write down what was found.
+
+    This is what turns "HTTP 403 a las 3am" into a checklist the merchant fixes
+    themselves while they are still looking at the screen. It logs in AT MOST
+    once and never retries a rejected password - connectors/effi/auth.py explains
+    why retrying is the one thing that must not happen here.
+    """
+    row = _connection_for_credential(conn, user, connection_id)
+    return run_preflight_for_connection(
+        conn,
+        connection_id=connection_id,
+        tenant_id=user.tenant_id,
+        platform_code=row["platform_code"],
+        platform_name=row["platform_name"],
+        consent_granted_at=row["consent_granted_at"],
+    )

@@ -22,6 +22,7 @@ from api.routers import (
     ai,
     auth,
     billing,
+    captures,
     config,
     customers,
     events,
@@ -157,6 +158,12 @@ def create_app() -> FastAPI:
     app.include_router(
         notifications.router, dependencies=[Depends(require_any_cap("read", "ingest"))]
     )
+    # Same reasoning as `ingest`: `POST /captures/{token}` is called by the
+    # capture extension, running on the computer of someone who has no account
+    # here and should not need one to do us a favour. The token in its path is
+    # the whole credential. The owner-facing endpoints in the router assert
+    # their own role guard.
+    app.include_router(captures.router)
     app.include_router(worker.router)
 
     return app

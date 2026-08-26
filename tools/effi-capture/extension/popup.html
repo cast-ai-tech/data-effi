@@ -1,0 +1,219 @@
+<!doctype html>
+<html lang="es">
+  <head>
+    <meta charset="utf-8" />
+    <title>Captura de conexión Effi</title>
+    <style>
+      /* Sin librerías ni fuentes externas: la extensión funciona sin internet y
+         no pide un solo byte a nadie. */
+      :root {
+        --tinta: #14181f;
+        --tinta-2: #48505e;
+        --tinta-suave: #6b7484;
+        --linea: #e2e5ea;
+        --fondo: #ffffff;
+        --fondo-2: #f6f7f9;
+        --acento: #1f5fd0;
+        --ok: #157a4a;
+        --ok-fondo: #e8f5ee;
+        --aviso: #8a5a00;
+        --aviso-fondo: #fdf3e0;
+        --rojo: #b3261e;
+      }
+      @media (prefers-color-scheme: dark) {
+        :root {
+          --tinta: #eef1f6;
+          --tinta-2: #b6bdc9;
+          --tinta-suave: #8a94a3;
+          --linea: #2b313b;
+          --fondo: #171b21;
+          --fondo-2: #1f242c;
+          --acento: #6fa2ff;
+          --ok: #6ede9f;
+          --ok-fondo: #16301f;
+          --aviso: #f0c675;
+          --aviso-fondo: #33280f;
+          --rojo: #ff8b82;
+        }
+      }
+      * {
+        box-sizing: border-box;
+      }
+      body {
+        width: 380px;
+        margin: 0;
+        padding: 16px;
+        font:
+          14px/1.5 system-ui,
+          -apple-system,
+          "Segoe UI",
+          sans-serif;
+        color: var(--tinta);
+        background: var(--fondo);
+      }
+      h1 {
+        margin: 0 0 2px;
+        font-size: 15px;
+      }
+      .sub {
+        margin: 0 0 14px;
+        font-size: 12.5px;
+        color: var(--tinta-suave);
+      }
+
+      .estado {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        padding: 10px 12px;
+        border-radius: 8px;
+        background: var(--fondo-2);
+        margin-bottom: 12px;
+      }
+      .punto {
+        width: 10px;
+        height: 10px;
+        border-radius: 50%;
+        background: var(--tinta-suave);
+        flex: none;
+      }
+      .punto.vivo {
+        background: var(--rojo);
+        animation: latido 1.2s ease-in-out infinite;
+      }
+      .punto.listo {
+        background: var(--ok);
+      }
+      @keyframes latido {
+        50% {
+          opacity: 0.35;
+        }
+      }
+      .estado-txt {
+        font-weight: 600;
+        font-size: 13px;
+      }
+      .contador {
+        margin-left: auto;
+        font-size: 12px;
+        color: var(--tinta-suave);
+        font-variant-numeric: tabular-nums;
+      }
+
+      button {
+        width: 100%;
+        padding: 11px 14px;
+        margin-bottom: 8px;
+        font: inherit;
+        font-weight: 600;
+        color: #fff;
+        background: var(--acento);
+        border: 0;
+        border-radius: 8px;
+        cursor: pointer;
+      }
+      button.gris {
+        background: transparent;
+        color: var(--tinta-2);
+        border: 1px solid var(--linea);
+      }
+      button:disabled {
+        opacity: 0.45;
+        cursor: not-allowed;
+      }
+
+      ol {
+        margin: 0 0 12px;
+        padding-left: 20px;
+        color: var(--tinta-2);
+        font-size: 13px;
+      }
+      ol li {
+        margin-bottom: 3px;
+      }
+
+      pre {
+        max-height: 190px;
+        overflow: auto;
+        margin: 0 0 8px;
+        padding: 10px;
+        border: 1px solid var(--linea);
+        border-radius: 8px;
+        background: var(--fondo-2);
+        font:
+          11px/1.45 ui-monospace,
+          "Cascadia Code",
+          Consolas,
+          monospace;
+        white-space: pre-wrap;
+        word-break: break-word;
+        color: var(--tinta-2);
+      }
+
+      .caja {
+        padding: 9px 11px;
+        border-radius: 8px;
+        font-size: 12.5px;
+        margin-bottom: 10px;
+      }
+      .caja.ok {
+        background: var(--ok-fondo);
+        color: var(--ok);
+      }
+      .caja.aviso {
+        background: var(--aviso-fondo);
+        color: var(--aviso);
+      }
+      .pie {
+        margin: 10px 0 0;
+        font-size: 11.5px;
+        color: var(--tinta-suave);
+      }
+      .oculto {
+        display: none;
+      }
+    </style>
+  </head>
+  <body>
+    <h1>Captura de conexión Effi</h1>
+    <p class="sub">Graba cómo entra tu navegador a Effi. No lee contraseñas.</p>
+
+    <div class="estado">
+      <span class="punto" id="punto"></span>
+      <span class="estado-txt" id="estadoTxt">Sin grabar</span>
+      <span class="contador" id="contador"></span>
+    </div>
+
+    <div id="instrucciones">
+      <ol>
+        <li><strong>Cierra sesión</strong> en Effi si ya entraste.</li>
+        <li>Pulsa <strong>Empezar a grabar</strong>.</li>
+        <li>Entra a Effi con tu usuario y contraseña.</li>
+        <li>
+          Exporta <strong>Guías</strong>, <strong>Novedades</strong> y
+          <strong>Trazabilidad de dinero</strong>.
+        </li>
+        <li>Vuelve aquí y pulsa <strong>Terminar</strong>.</li>
+      </ol>
+    </div>
+
+    <button id="empezar">Empezar a grabar</button>
+    <button id="parar" class="gris oculto">Terminar y ver resultado</button>
+
+    <div id="resultado" class="oculto">
+      <div class="caja ok" id="veredicto"></div>
+      <pre id="salida"></pre>
+      <button id="enviar" class="oculto">Enviar automáticamente</button>
+      <div class="caja ok oculto" id="enviado"></div>
+      <button id="copiar">Copiar para enviar</button>
+      <button id="otra" class="gris">Grabar otra vez</button>
+      <p class="pie">
+        Esto son nombres de campos y direcciones. Ni una contraseña, ni una
+        cookie, ni un valor: la extensión no los guarda. Puedes leerlo antes de
+        enviarlo.
+      </p>
+    </div>
+
+    <script src="popup.js"></script>
+  </body>
+</html>

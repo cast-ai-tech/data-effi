@@ -396,14 +396,28 @@ def job_sync_tier3(
     """Fetch reports for consented tier-3 connections and ingest them normally.
 
     Off by default (TIER3_FETCH_ENABLED). Only touches connections that are
-    active AND carry a consent timestamp AND name an env var holding the session.
+    active AND carry a consent timestamp AND are wired as `session`.
+
+    TWO WAYS TO HOLD A SESSION, ONE WAY TO USE IT (migration 051).
+
+      secret_ref  an env var on the server holds a session somebody pasted.
+                  Safest, unbeatable against a database dump, and it needs an
+                  administrator every time the session dies.
+
+      vault       the merchant's own username and password, encrypted in
+                  core.connection_credential. The connector logs in and renews
+                  the session itself, which is what lets a merchant connect
+                  their own account without anyone touching the server.
+
+    `secret_ref` WINS when both are present. An operator who deliberately wired
+    an env var is making a stronger security choice than the default, and a
+    credential added later must not silently downgrade it.
     """
     if not enabled:
         return {"skipped": True, "reason": "TIER3_FETCH_ENABLED is false"}
 
     from connectors.effi.session_fetcher import (
         ConsentError,
-        EffiSessionFetcher,
         FetchError,
         SessionExpiredError,
     )
@@ -416,7 +430,7 @@ def job_sync_tier3(
         cur.execute(
             """
             SELECT c.id, c.tenant_id, c.country_code, c.platform_code, c.secret_ref,
-                   c.consent_granted_at, c.name, co.currency_code
+                   c.consent_granted_at, c.name, c.credential_status, co.currency_code
             FROM core.connection c
             JOIN core.platform p ON p.code = c.platform_code
             JOIN core.country co ON co.code = c.country_code
@@ -424,6 +438,16 @@ def job_sync_tier3(
               -- Migration 042: an Effi connection fed by uploaded files has no
               -- session to replay. Only the ones the operator wired as one.
               AND c.source_mode = 'session'
+              -- Migration 051: THE MOST IMPORTANT LINE IN THIS QUERY.
+              --
+              -- `invalid` means the platform already rejected this password.
+              -- `locked` means it already locked the account. Trying either one
+              -- again - even twelve hours later, even politely - is a retry loop
+              -- against a merchant's real account, and the merchant is the one
+              -- who gets locked out of their own Effi over it. Both states are
+              -- terminal until a human re-enters the credential, which sets the
+              -- status back to 'none' and lets this query see the row again.
+              AND c.credential_status NOT IN ('invalid', 'locked')
             """
         )
         connections = cur.fetchall()
@@ -434,10 +458,7 @@ def job_sync_tier3(
             "name": connection_row["name"],
         }
         try:
-            fetcher = EffiSessionFetcher.from_env(
-                secret_ref=connection_row["secret_ref"],
-                consent_granted_at=connection_row["consent_granted_at"],
-            )
+            fetcher = _build_tier3_fetcher(conn, connection_row)
             store = PostgresStore(conn)
             engine = IngestEngine(store, pii_salt=pii_salt)
             ingested = []
@@ -481,6 +502,162 @@ def job_sync_tier3(
         results.append(entry)
 
     return {"connections": results, "count": len(results)}
+
+
+def _build_tier3_fetcher(conn: psycopg.Connection, row: dict[str, Any]) -> Any:
+    """Get a fetcher for one tier-3 connection, from an env var or from the vault.
+
+    Raises FetchError with a message aimed at whoever has to fix it - which is a
+    different person in each case. A missing env var is for the administrator; a
+    missing credential is for the merchant.
+    """
+    from connectors.effi.auth import (
+        AccountLocked,
+        EffiAuthenticator,
+        InvalidCredentials,
+        LoginContractUnverified,
+        LoginUnavailable,
+    )
+    from connectors.effi.session_fetcher import EffiSessionFetcher, FetchError, SessionExpiredError
+
+    if row.get("secret_ref"):
+        return EffiSessionFetcher.from_env(
+            secret_ref=row["secret_ref"],
+            consent_granted_at=row["consent_granted_at"],
+        )
+
+    from api import credentials
+    from pipeline.vault import CredentialUnreadable, VaultKeyMissing
+
+    stored = credentials.load_session(
+        conn, connection_id=row["id"], tenant_id=row["tenant_id"]
+    )
+    try:
+        with credentials.use_credential(
+            conn, connection_id=row["id"], tenant_id=row["tenant_id"]
+        ) as credential:
+            session, did_login = EffiAuthenticator().ensure_session(
+                credential,
+                existing_token=stored.token,
+                existing_expires_at=stored.expires_at,
+            )
+    except LookupError as exc:
+        raise FetchError(str(exc)) from None
+    except (CredentialUnreadable, VaultKeyMissing) as exc:
+        raise FetchError(str(exc)) from None
+    except InvalidCredentials as exc:
+        # A wrong password is terminal. Writing `invalid` here is what stops the
+        # next scheduled pass from trying the same password again and walking the
+        # merchant's account into a lockout, one sync at a time.
+        _mark_credential_status(
+            conn, row["id"], row["tenant_id"], "invalid", str(exc),
+            connection_name=row.get("name", ""), country_code=row.get("country_code"),
+        )
+        raise SessionExpiredError(str(exc)) from None
+    except AccountLocked as exc:
+        _mark_credential_status(
+            conn, row["id"], row["tenant_id"], "locked", str(exc),
+            connection_name=row.get("name", ""), country_code=row.get("country_code"),
+        )
+        raise SessionExpiredError(str(exc)) from None
+    except LoginContractUnverified as exc:
+        raise FetchError(str(exc)) from None
+    except LoginUnavailable as exc:
+        raise FetchError(str(exc)) from None
+
+    if did_login:
+        credentials.save_session(
+            conn,
+            connection_id=row["id"],
+            tenant_id=row["tenant_id"],
+            token=session.token,
+            expires_at=session.expires_at,
+        )
+        conn.commit()
+
+    return EffiSessionFetcher.from_session(
+        session, consent_granted_at=row["consent_granted_at"]
+    )
+
+
+def _mark_credential_status(
+    conn: psycopg.Connection, connection_id: UUID, tenant_id: UUID,
+    credential_status: str, message: str, connection_name: str = "",
+    country_code: str | None = None,
+) -> None:
+    """Record a terminal credential outcome AND tell the merchant about it.
+
+    WHY THE NOTIFICATION IS NOT OPTIONAL HERE.
+
+    The overwhelmingly common way a credential goes bad is the merchant changing
+    their own password in Effi - for a perfectly good reason, having completely
+    forgotten that anything else was using it. From their side nothing happens:
+    no error, no email, no broken screen. The dashboard just quietly stops
+    getting new guides, and it looks EXACTLY like a slow week.
+
+    That is the worst failure this system can have, because the number on screen
+    stays plausible. A merchant would go on making decisions from a dashboard
+    that stopped updating a fortnight ago. So a dead credential has to announce
+    itself, in the same place every other urgent finding shows up.
+    """
+    from ai.alerts import persist_findings
+    from api import credentials
+
+    credentials.record_login_failure(
+        conn,
+        connection_id=connection_id,
+        tenant_id=tenant_id,
+        credential_status=credential_status,
+        message=message,
+    )
+
+    label = connection_name or "tu plataforma"
+    if credential_status == "locked":
+        title = f"{label}: la cuenta está bloqueada"
+        finding = (
+            "La plataforma bloqueó la cuenta que Master Data usa para descargar tus "
+            "reportes. Desde este momento no entra ningún dato nuevo y el tablero "
+            "se quedó con lo último que alcanzó a cargar."
+        )
+        action = (
+            "Entra a la plataforma y desbloquea esa cuenta. Master Data no lo va a "
+            "reintentar solo: insistir contra una cuenta bloqueada la mantendría "
+            "bloqueada."
+        )
+    else:
+        title = f"{label}: la contraseña dejó de servir"
+        finding = (
+            "La plataforma rechazó el usuario o la contraseña que Master Data tiene "
+            "guardados. Suele pasar cuando alguien cambia la contraseña allá. Desde "
+            "este momento no entra ningún dato nuevo, así que el tablero puede "
+            "verse normal y estar desactualizado."
+        )
+        action = (
+            "Ve a Configuración → Conexiones → Gestionar y vuelve a escribir el "
+            "usuario y la contraseña. Nada más se reanuda solo."
+        )
+
+    try:
+        persist_findings(
+            conn,
+            tenant_id,
+            country_code,
+            [{
+                "code": "connection_credential_failed",
+                "severity": "critical",
+                "title": title,
+                "finding": finding,
+                "action": action,
+                "deep_link": "/connections",
+            }],
+        )
+    except Exception:
+        # A notification that cannot be written must never swallow the status
+        # write above - that one is what stops the retry loop, and it matters
+        # more than telling anybody about it.
+        logger.exception("no se pudo notificar la credencial caída")
+
+    conn.commit()
 
 
 def _mark_connection_error(conn: psycopg.Connection, connection_id: UUID, message: str) -> None:
