@@ -24,6 +24,7 @@ logger = logging.getLogger(__name__)
 
 _pool: ConnectionPool | None = None
 _readonly_pool: ConnectionPool | None = None
+_ingest_pool: ConnectionPool | None = None
 
 
 def init_pools(settings: Settings) -> None:
@@ -40,7 +41,7 @@ def init_pools(settings: Settings) -> None:
     global and the first shutdown then closes the SECOND pool. Closing first
     makes a repeated startup idempotent instead.
     """
-    global _pool, _readonly_pool
+    global _pool, _readonly_pool, _ingest_pool
 
     close_pools()
 
@@ -90,14 +91,34 @@ def init_pools(settings: Settings) -> None:
         )
         logger.info("read-only pool ready (NL->SQL)")
 
+    # Pool para la ingesta (service=True). Apunta al SESSION pooler (5432), donde
+    # una carga - UNA transacción larga que sube su statement_timeout a 30min -
+    # sí completa. El transaction pooler (6543) del `_pool` de arriba ni preserva
+    # ese SET ni tolera la transacción larga, y mata la carga de un archivo
+    # grande. Concurrencia baja a propósito (ingest_max_concurrency), para no
+    # agotar el cupo del session pooler. Si no está configurada, la ingesta cae
+    # al `_pool` y los archivos grandes vuelven a fallar (ver connection()).
+    if settings.database_url_ingest:
+        _ingest_pool = ConnectionPool(
+            settings.database_url_ingest,
+            min_size=0,
+            max_size=max(settings.ingest_max_concurrency + 1, 2),
+            kwargs={"autocommit": False, "prepare_threshold": None},
+            check=ConnectionPool.check_connection,
+            max_lifetime=300,
+            open=True,
+        )
+        logger.info("ingest pool ready (session pooler)")
+
 
 def close_pools() -> None:
-    global _pool, _readonly_pool
-    for pool in (_pool, _readonly_pool):
+    global _pool, _readonly_pool, _ingest_pool
+    for pool in (_pool, _readonly_pool, _ingest_pool):
         if pool is not None:
             pool.close()
     _pool = None
     _readonly_pool = None
+    _ingest_pool = None
 
 
 def get_pool() -> ConnectionPool:
@@ -121,9 +142,13 @@ def connection(
 
     `service=True` is the worker/ingestion context: those processes legitimately
     touch every tenant, so RLS lets them through (see migration 007). Never set
-    it on a path that serves a user request.
+    it on a path that serves a user request. Service work also goes to the ingest
+    pool (session pooler) when one is configured: a file load is one long
+    transaction that the transaction pooler would cut short. It falls back to the
+    main pool when `_ingest_pool` is unset.
     """
-    with get_pool().connection() as conn:
+    pool = _ingest_pool if (service and _ingest_pool is not None) else get_pool()
+    with pool.connection() as conn:
         try:
             with conn.cursor() as cur:
                 if tenant_id is not None:

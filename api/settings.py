@@ -32,6 +32,18 @@ class Settings(BaseSettings):
         default=None,
         description="Read-only role restricted to mart. Required only when AI is enabled.",
     )
+    database_url_ingest: str | None = Field(
+        default=None,
+        description=(
+            "Conexión para la ingesta (service=True). Debe apuntar al SESSION "
+            "pooler de Supabase (puerto 5432), no al de transacciones (6543): la "
+            "carga de un archivo es UNA transacción larga que sube el "
+            "statement_timeout a 30min con SET LOCAL, y el pooler de "
+            "transacciones ni preserva ese SET ni tolera transacciones largas "
+            "(las corta con QueryCanceled/OperationalError). Si queda vacía, la "
+            "ingesta usa database_url y los archivos grandes fallan."
+        ),
+    )
     db_pool_min: int = 1
     db_pool_max: int = 10
 

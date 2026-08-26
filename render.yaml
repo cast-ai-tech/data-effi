@@ -35,6 +35,12 @@ services:
         sync: false
       - key: DATABASE_URL_READONLY
         sync: false
+      # La ingesta va por el SESSION pooler de Supabase (puerto 5432): la misma
+      # cadena que DATABASE_URL pero con :6543 -> :5432. Una carga es una
+      # transaccion larga que el transaction pooler (6543) corta a los 2min. Si
+      # queda vacia, la ingesta usa DATABASE_URL y los archivos grandes fallan.
+      - key: DATABASE_URL_INGEST
+        sync: false
       - key: JWT_SECRET
         sync: false
       - key: PII_HASH_SALT

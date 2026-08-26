@@ -12,6 +12,9 @@ x-app-env: &app-env
   # data - the same one production reads.
   DATABASE_URL: ${DATABASE_URL:-postgresql://norte_app:${POSTGRES_APP_PASSWORD:?POSTGRES_APP_PASSWORD is required}@db:5432/${POSTGRES_DB:-norte}}
   DATABASE_URL_READONLY: ${DATABASE_URL_READONLY-postgresql://norte_readonly:${POSTGRES_READONLY_PASSWORD:-}@db:5432/${POSTGRES_DB:-norte}}
+  # Ingesta por el session pooler (5432): una carga es una transacción larga que
+  # el transaction pooler (6543) corta. Vacía = la ingesta usa DATABASE_URL.
+  DATABASE_URL_INGEST: ${DATABASE_URL_INGEST:-}
   POSTGRES_ADMIN_URL: postgresql://${POSTGRES_USER:-norte}:${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}@db:5432/${POSTGRES_DB:-norte}
   POSTGRES_APP_PASSWORD: ${POSTGRES_APP_PASSWORD}
   POSTGRES_READONLY_PASSWORD: ${POSTGRES_READONLY_PASSWORD:-}
