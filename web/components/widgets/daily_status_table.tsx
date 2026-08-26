@@ -18,10 +18,22 @@
 
 import { Fragment, useMemo } from "react";
 
-import { Card, EmptyState, ErrorState, MicroBar, SkeletonRows, cx } from "@/components/ui";
+import {
+  Card,
+  EmptyState,
+  ErrorState,
+  MicroBar,
+  SkeletonRows,
+  cx,
+} from "@/components/ui";
 import type { WidgetProps } from "@/components/widgets/types";
 import { useRangedApi } from "@/lib/date-range";
-import { formatDate, formatNumber, formatPercent, type FormatCountry } from "@/lib/format";
+import {
+  formatDate,
+  formatNumber,
+  formatPercent,
+  type FormatCountry,
+} from "@/lib/format";
 import {
   STATUS_GROUPS,
   STATUS_GROUP_HINTS,
@@ -78,13 +90,22 @@ export function sumBlock(rows: readonly DailyStatusRow[]): BlockTotals {
     totals.indemnizacion += row.indemnizacion;
     totals.cerradas += row.cerradas;
   }
+  // El % de devolución del total general cuenta TODO lo no-entregado salvo la
+  // indemnización, sobre todas las guías - la misma regla que f_daily_status
+  // aplica por día. Antes recalculaba `devolucion / shipments` (solo el bucket
+  // de devueltas), así que las filas diarias medían bien pero el total no.
+  const noEntregadasNiIndemnizadas =
+    totals.shipments - totals.entregada - totals.indemnizacion;
   return {
     ...totals,
     pctDevolucionTotal:
-      totals.shipments > 0 ? (totals.devolucion / totals.shipments) * 100 : null,
+      totals.shipments > 0
+        ? (noEntregadasNiIndemnizadas / totals.shipments) * 100
+        : null,
     pctDevolucionCerradas:
       totals.cerradas > 0 ? (totals.devolucion / totals.cerradas) * 100 : null,
-    pctEntregaCerradas: totals.cerradas > 0 ? (totals.entregada / totals.cerradas) * 100 : null,
+    pctEntregaCerradas:
+      totals.cerradas > 0 ? (totals.entregada / totals.cerradas) * 100 : null,
   };
 }
 
@@ -94,7 +115,9 @@ export function sumBlock(rows: readonly DailyStatusRow[]): BlockTotals {
  * Grouped here rather than in SQL so the same rows can also be read as one
  * flat series by the report page.
  */
-export function groupByPlatform(rows: readonly DailyStatusRow[]): PlatformBlock[] {
+export function groupByPlatform(
+  rows: readonly DailyStatusRow[],
+): PlatformBlock[] {
   const blocks = new Map<string, PlatformBlock>();
   for (const row of rows) {
     let block = blocks.get(row.platform_code);
@@ -113,7 +136,9 @@ export function groupByPlatform(rows: readonly DailyStatusRow[]): PlatformBlock[
     block.rows.sort((a, b) => (a.day < b.day ? -1 : a.day > b.day ? 1 : 0));
     block.totals = sumBlock(block.rows);
   }
-  return [...blocks.values()].sort((a, b) => b.totals.shipments - a.totals.shipments);
+  return [...blocks.values()].sort(
+    (a, b) => b.totals.shipments - a.totals.shipments,
+  );
 }
 
 /** Every day between `from` and `to`, inclusive, as ISO strings. */
@@ -137,7 +162,9 @@ export function daysBetween(from: string, to: string): string[] {
   return days;
 }
 
-function pctTone(value: number | null): "positive" | "warning" | "negative" | "neutral" {
+function pctTone(
+  value: number | null,
+): "positive" | "warning" | "negative" | "neutral" {
   if (value === null || !Number.isFinite(value)) return "neutral";
   if (value <= 20) return "positive";
   if (value <= 35) return "warning";
@@ -175,7 +202,8 @@ export function DailyStatusTable({
   compact?: boolean;
 }) {
   const rows = useMemo(() => {
-    if (!fillDays || fillDays.length === 0) return block.rows.map((row) => ({ row, empty: false }));
+    if (!fillDays || fillDays.length === 0)
+      return block.rows.map((row) => ({ row, empty: false }));
     const byDay = new Map(block.rows.map((row) => [row.day, row]));
     return fillDays.map((day) => {
       const row = byDay.get(day);
@@ -186,14 +214,20 @@ export function DailyStatusTable({
   }, [block, fillDays]);
 
   const { totals } = block;
-  const cell = cx("px-2.5 text-right tabular-nums", compact ? "py-1" : "py-1.5");
+  const cell = cx(
+    "px-2.5 text-right tabular-nums",
+    compact ? "py-1" : "py-1.5",
+  );
 
   return (
     <div className="data-table">
       <table className="w-full min-w-[720px] border-collapse text-sm">
         <thead>
           <tr className="text-xs font-semibold uppercase tracking-[0.06em] text-ink-dim">
-            <th scope="col" className={cx("px-2.5 text-left", compact ? "py-1" : "py-1.5")}>
+            <th
+              scope="col"
+              className={cx("px-2.5 text-left", compact ? "py-1" : "py-1.5")}
+            >
               Fecha
             </th>
             {COLUMNS.map((group) => (
@@ -230,10 +264,19 @@ export function DailyStatusTable({
           {rows.map(({ row, empty }) => (
             <tr
               key={row.day}
-              className={cx("border-t border-line-row", empty && "text-ink-faint")}
+              className={cx(
+                "border-t border-line-row",
+                empty && "text-ink-faint",
+              )}
               data-empty-day={empty || undefined}
             >
-              <td className={cx("px-2.5 text-left font-medium", compact ? "py-1" : "py-1.5", empty ? "text-ink-faint" : "text-ink-body")}>
+              <td
+                className={cx(
+                  "px-2.5 text-left font-medium",
+                  compact ? "py-1" : "py-1.5",
+                  empty ? "text-ink-faint" : "text-ink-body",
+                )}
+              >
                 {formatDate(row.day, country)}
                 {empty && (
                   <span className="ml-1.5 text-xs font-normal uppercase tracking-wide">
@@ -244,7 +287,10 @@ export function DailyStatusTable({
               {COLUMNS.map((group) => (
                 <td
                   key={group}
-                  className={cx(cell, !empty && row[group] > 0 && STATUS_GROUP_TEXT[group])}
+                  className={cx(
+                    cell,
+                    !empty && row[group] > 0 && STATUS_GROUP_TEXT[group],
+                  )}
                 >
                   {formatNumber(row[group], country, 0)}
                 </td>
@@ -261,7 +307,9 @@ export function DailyStatusTable({
                 ) : (
                   <Fragment>
                     {formatPercent(row.pct_devolucion_cerradas)}
-                    {row.sample_quality === "muestra_corta" && <ShortSampleMark />}
+                    {row.sample_quality === "muestra_corta" && (
+                      <ShortSampleMark />
+                    )}
                   </Fragment>
                 )}
               </td>
@@ -271,13 +319,17 @@ export function DailyStatusTable({
 
         <tfoot>
           <tr className="border-t border-line-strong bg-sunken text-sm font-semibold text-ink">
-            <td className={cx("px-2.5 text-left", compact ? "py-1" : "py-1.5")}>TOTAL GENERAL</td>
+            <td className={cx("px-2.5 text-left", compact ? "py-1" : "py-1.5")}>
+              TOTAL GENERAL
+            </td>
             {COLUMNS.map((group) => (
               <td key={group} className={cx(cell, STATUS_GROUP_TEXT[group])}>
                 {formatNumber(totals[group], country, 0)}
               </td>
             ))}
-            <td className={cell}>{formatNumber(totals.shipments, country, 0)}</td>
+            <td className={cell}>
+              {formatNumber(totals.shipments, country, 0)}
+            </td>
             <td className={cell}>{formatPercent(totals.pctDevolucionTotal)}</td>
             <td className={cell}>
               {formatPercent(totals.pctDevolucionCerradas)}
@@ -328,7 +380,9 @@ export function BlockSummary({
     <dl className="flex flex-wrap items-center gap-x-5 gap-y-1 text-sm">
       <div className="flex items-baseline gap-1.5">
         <dt className="text-ink-dim">Guías</dt>
-        <dd className="font-semibold text-ink">{formatNumber(totals.shipments, country, 0)}</dd>
+        <dd className="font-semibold text-ink">
+          {formatNumber(totals.shipments, country, 0)}
+        </dd>
       </div>
       <div className="flex items-baseline gap-1.5">
         <dt className="text-ink-dim">Devoluciones</dt>
@@ -362,7 +416,20 @@ export function BlockSummary({
 // The matrix the operator's sheet prints: states down, days across
 // ---------------------------------------------------------------------------
 
-const MONTHS_SHORT = ["ene", "feb", "mar", "abr", "may", "jun", "jul", "ago", "sep", "oct", "nov", "dic"];
+const MONTHS_SHORT = [
+  "ene",
+  "feb",
+  "mar",
+  "abr",
+  "may",
+  "jun",
+  "jul",
+  "ago",
+  "sep",
+  "oct",
+  "nov",
+  "dic",
+];
 
 /** "2026-08-01" -> "1-ago", the way the sheet heads its columns. */
 export function shortDayLabel(iso: string): string {
@@ -381,9 +448,15 @@ export interface MatrixColumn {
  * without guides prints as zeros, as a column that is simply missing reads
  * like a day that never happened), else the block's own days.
  */
-export function matrixColumns(block: PlatformBlock, fillDays?: readonly string[]): MatrixColumn[] {
+export function matrixColumns(
+  block: PlatformBlock,
+  fillDays?: readonly string[],
+): MatrixColumn[] {
   const byDay = new Map(block.rows.map((row) => [row.day, row]));
-  const days = fillDays && fillDays.length > 0 ? fillDays : block.rows.map((row) => row.day);
+  const days =
+    fillDays && fillDays.length > 0
+      ? fillDays
+      : block.rows.map((row) => row.day);
   return days.map((day) => ({ day, row: byDay.get(day) ?? null }));
 }
 
@@ -405,12 +478,17 @@ export function DailyStatusMatrix({
   /** Header band colour: the platform's own, so Effi and Dropi read apart. */
   accentClass?: string;
 }) {
-  const columns = useMemo(() => matrixColumns(block, fillDays), [block, fillDays]);
+  const columns = useMemo(
+    () => matrixColumns(block, fillDays),
+    [block, fillDays],
+  );
   const { totals } = block;
   const cell = "px-2 py-1.5 text-right tabular-nums text-sm";
   const count = (value: number, group?: StatusGroup) =>
     value > 0 ? (
-      <span className={group ? STATUS_GROUP_TEXT[group] : undefined}>{formatNumber(value, country, 0)}</span>
+      <span className={group ? STATUS_GROUP_TEXT[group] : undefined}>
+        {formatNumber(value, country, 0)}
+      </span>
     ) : (
       <span className="text-ink-faint">{group ? "" : "0"}</span>
     );
@@ -419,12 +497,22 @@ export function DailyStatusMatrix({
     <div className="data-table">
       <table className="w-full min-w-[640px] border-collapse">
         <thead>
-          <tr className={cx("text-xs font-bold uppercase tracking-[0.05em] text-on-solid", accentClass)}>
+          <tr
+            className={cx(
+              "text-xs font-bold uppercase tracking-[0.05em] text-on-solid",
+              accentClass,
+            )}
+          >
             <th scope="col" className="px-2.5 py-2 text-left">
               Estado
             </th>
             {columns.map((column) => (
-              <th key={column.day} scope="col" className="px-2 py-2 text-right" title={formatDate(column.day, country)}>
+              <th
+                key={column.day}
+                scope="col"
+                className="px-2 py-2 text-right"
+                title={formatDate(column.day, country)}
+              >
                 {shortDayLabel(column.day)}
               </th>
             ))}
@@ -439,7 +527,10 @@ export function DailyStatusMatrix({
               <th
                 scope="row"
                 title={STATUS_GROUP_HINTS[group]}
-                className={cx("cursor-help px-2.5 py-1.5 text-left text-sm font-medium", STATUS_GROUP_TEXT[group])}
+                className={cx(
+                  "cursor-help px-2.5 py-1.5 text-left text-sm font-medium",
+                  STATUS_GROUP_TEXT[group],
+                )}
               >
                 {STATUS_GROUP_LABELS[group]}
               </th>
@@ -448,7 +539,9 @@ export function DailyStatusMatrix({
                   {count(column.row?.[group] ?? 0, group)}
                 </td>
               ))}
-              <td className={cx(cell, "font-semibold")}>{count(totals[group], group)}</td>
+              <td className={cx(cell, "font-semibold")}>
+                {count(totals[group], group)}
+              </td>
             </tr>
           ))}
         </tbody>
@@ -462,7 +555,9 @@ export function DailyStatusMatrix({
                 {formatNumber(column.row?.shipments ?? 0, country, 0)}
               </td>
             ))}
-            <td className={cell}>{formatNumber(totals.shipments, country, 0)}</td>
+            <td className={cell}>
+              {formatNumber(totals.shipments, country, 0)}
+            </td>
           </tr>
           <tr className="border-t border-line-row text-sm text-negative-ink">
             <th scope="row" className="px-2.5 py-1.5 text-left font-medium">
@@ -473,7 +568,9 @@ export function DailyStatusMatrix({
                 {formatNumber(column.row?.devolucion ?? 0, country, 0)}
               </td>
             ))}
-            <td className={cx(cell, "font-semibold")}>{formatNumber(totals.devolucion, country, 0)}</td>
+            <td className={cx(cell, "font-semibold")}>
+              {formatNumber(totals.devolucion, country, 0)}
+            </td>
           </tr>
           <tr className="border-t border-line-row bg-negative/10 text-sm font-bold text-negative-ink">
             <th
@@ -488,7 +585,9 @@ export function DailyStatusMatrix({
                 {column.row ? (
                   <Fragment>
                     {formatPercent(column.row.pct_devolucion_total, 0)}
-                    {column.row.sample_quality === "muestra_corta" && <ShortSampleMark />}
+                    {column.row.sample_quality === "muestra_corta" && (
+                      <ShortSampleMark />
+                    )}
                   </Fragment>
                 ) : (
                   "—"
@@ -509,7 +608,10 @@ export function DailyStatusMatrix({
 const TITLE = "Resumen diario por estados";
 const SUBTITLE = "Cada día con sus guías por estado, un bloque por plataforma";
 
-export default function DailyStatusTableWidget({ countryCode, country }: WidgetProps) {
+export default function DailyStatusTableWidget({
+  countryCode,
+  country,
+}: WidgetProps) {
   const { data, error, loading, reload } = useRangedApi<DailyStatusRow[]>(
     `/kpis/daily-status?country=${countryCode}`,
   );
@@ -546,7 +648,10 @@ export default function DailyStatusTableWidget({ countryCode, country }: WidgetP
   return (
     <Card title={TITLE} subtitle={SUBTITLE} bodyClassName="p-0">
       {blocks.map((block) => (
-        <section key={block.code} className="border-b border-line-subtle last:border-b-0">
+        <section
+          key={block.code}
+          className="border-b border-line-subtle last:border-b-0"
+        >
           <header className="flex flex-wrap items-center justify-between gap-3 px-4 py-2.5">
             <h4 className="text-base font-semibold text-ink">{block.name}</h4>
             <BlockSummary block={block} country={country} />

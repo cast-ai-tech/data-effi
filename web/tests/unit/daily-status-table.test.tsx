@@ -53,17 +53,49 @@ function row(overrides: Partial<DailyStatusRow>): DailyStatusRow {
   };
   const merged = { ...base, ...overrides };
   merged.shipments =
-    merged.entregada + merged.devolucion + merged.en_transito + merged.novedad + merged.indemnizacion;
+    merged.entregada +
+    merged.devolucion +
+    merged.en_transito +
+    merged.novedad +
+    merged.indemnizacion;
   if (overrides.pct_devolucion_total === undefined && merged.shipments > 0) {
-    merged.pct_devolucion_total = (merged.devolucion / merged.shipments) * 100;
+    // Igual que f_daily_status: todo lo no-entregado salvo indemnización / total.
+    merged.pct_devolucion_total =
+      ((merged.shipments - merged.entregada - merged.indemnizacion) /
+        merged.shipments) *
+      100;
   }
   return merged;
 }
 
 const ROWS: DailyStatusRow[] = [
-  row({ day: "2026-08-01", entregada: 26, devolucion: 15, en_transito: 0, novedad: 0, cerradas: 41 }),
-  row({ day: "2026-08-03", entregada: 52, devolucion: 13, en_transito: 1, novedad: 2, indemnizacion: 1, cerradas: 66 }),
-  row({ platform_code: "dropi", platform_name: "Dropi", day: "2026-08-10", entregada: 18, devolucion: 4, en_transito: 3, novedad: 1, cerradas: 22 }),
+  row({
+    day: "2026-08-01",
+    entregada: 26,
+    devolucion: 15,
+    en_transito: 0,
+    novedad: 0,
+    cerradas: 41,
+  }),
+  row({
+    day: "2026-08-03",
+    entregada: 52,
+    devolucion: 13,
+    en_transito: 1,
+    novedad: 2,
+    indemnizacion: 1,
+    cerradas: 66,
+  }),
+  row({
+    platform_code: "dropi",
+    platform_name: "Dropi",
+    day: "2026-08-10",
+    entregada: 18,
+    devolucion: 4,
+    en_transito: 3,
+    novedad: 1,
+    cerradas: 22,
+  }),
 ];
 
 afterEach(cleanup);
@@ -72,11 +104,21 @@ describe("sumBlock", () => {
   it("adds the five groups and they account for every guide", () => {
     const totals = sumBlock(ROWS.filter((r) => r.platform_code === "effi"));
     expect(totals.shipments).toBe(110);
-    expect(totals.entregada + totals.devolucion + totals.en_transito + totals.novedad + totals.indemnizacion).toBe(
-      totals.shipments,
-    );
+    expect(
+      totals.entregada +
+        totals.devolucion +
+        totals.en_transito +
+        totals.novedad +
+        totals.indemnizacion,
+    ).toBe(totals.shipments);
     expect(totals.indemnizacion).toBe(1);
-    expect(totals.pctDevolucionTotal).toBeCloseTo((28 / 110) * 100, 5);
+    // Devolución = todo lo no-entregado salvo indemnización, sobre el total:
+    // (110 - 78 entregadas - 1 indemnizada) / 110 = 31/110. Antes medía solo el
+    // bucket de devueltas (28/110), y el total no cuadraba con las filas diarias.
+    expect(totals.pctDevolucionTotal).toBeCloseTo(
+      ((110 - 78 - 1) / 110) * 100,
+      5,
+    );
   });
 });
 
@@ -84,7 +126,10 @@ describe("groupByPlatform", () => {
   it("makes one block per platform, biggest first", () => {
     const blocks = groupByPlatform(ROWS);
     expect(blocks.map((b) => b.code)).toEqual(["effi", "dropi"]);
-    expect(blocks[0].rows.map((r) => r.day)).toEqual(["2026-08-01", "2026-08-03"]);
+    expect(blocks[0].rows.map((r) => r.day)).toEqual([
+      "2026-08-01",
+      "2026-08-03",
+    ]);
   });
 });
 
@@ -93,7 +138,9 @@ describe("DailyStatusTable", () => {
     const [block] = groupByPlatform(ROWS);
     render(<DailyStatusTable block={block} country={COUNTRY} />);
 
-    const headers = screen.getAllByRole("columnheader").map((th) => th.textContent?.trim());
+    const headers = screen
+      .getAllByRole("columnheader")
+      .map((th) => th.textContent?.trim());
     expect(headers.slice(1, 6)).toEqual([
       STATUS_GROUP_LABELS.entregada,
       STATUS_GROUP_LABELS.en_transito,
@@ -110,7 +157,9 @@ describe("DailyStatusTable", () => {
 
     const body = screen.getAllByRole("rowgroup")[1];
     const secondDay = within(body).getAllByRole("row")[1];
-    const cells = within(secondDay).getAllByRole("cell").map((td) => td.textContent?.trim());
+    const cells = within(secondDay)
+      .getAllByRole("cell")
+      .map((td) => td.textContent?.trim());
     // Fecha, Entregado, En tránsito, Novedad, Devolución, Indemnización, Total
     expect(cells.slice(1, 7)).toEqual(["52", "1", "2", "13", "1", "69"]);
   });
@@ -118,7 +167,11 @@ describe("DailyStatusTable", () => {
   it("fills a missing day with zeros instead of skipping it", () => {
     const [block] = groupByPlatform(ROWS);
     render(
-      <DailyStatusTable block={block} country={COUNTRY} fillDays={["2026-08-01", "2026-08-02", "2026-08-03"]} />,
+      <DailyStatusTable
+        block={block}
+        country={COUNTRY}
+        fillDays={["2026-08-01", "2026-08-02", "2026-08-03"]}
+      />,
     );
     expect(screen.getByText("sin guías")).toBeInTheDocument();
   });
@@ -139,13 +192,24 @@ describe("shortDayLabel", () => {
 describe("matrixColumns", () => {
   it("uses the block's own days when no calendar is given", () => {
     const [block] = groupByPlatform(ROWS);
-    expect(matrixColumns(block).map((c) => c.day)).toEqual(["2026-08-01", "2026-08-03"]);
+    expect(matrixColumns(block).map((c) => c.day)).toEqual([
+      "2026-08-01",
+      "2026-08-03",
+    ]);
   });
 
   it("fills a calendar with empty columns for the days without guides", () => {
     const [block] = groupByPlatform(ROWS);
-    const columns = matrixColumns(block, ["2026-08-01", "2026-08-02", "2026-08-03"]);
-    expect(columns.map((c) => c.day)).toEqual(["2026-08-01", "2026-08-02", "2026-08-03"]);
+    const columns = matrixColumns(block, [
+      "2026-08-01",
+      "2026-08-02",
+      "2026-08-03",
+    ]);
+    expect(columns.map((c) => c.day)).toEqual([
+      "2026-08-01",
+      "2026-08-02",
+      "2026-08-03",
+    ]);
     expect(columns[1].row).toBeNull();
   });
 });
@@ -155,10 +219,14 @@ describe("DailyStatusMatrix", () => {
     const [block] = groupByPlatform(ROWS);
     render(<DailyStatusMatrix block={block} country={COUNTRY} />);
 
-    const headers = screen.getAllByRole("columnheader").map((th) => th.textContent?.trim());
+    const headers = screen
+      .getAllByRole("columnheader")
+      .map((th) => th.textContent?.trim());
     expect(headers).toEqual(["Estado", "1-ago", "3-ago", "Total general"]);
 
-    const rowHeaders = screen.getAllByRole("rowheader").map((th) => th.textContent?.trim());
+    const rowHeaders = screen
+      .getAllByRole("rowheader")
+      .map((th) => th.textContent?.trim());
     expect(rowHeaders).toEqual([
       STATUS_GROUP_LABELS.entregada,
       STATUS_GROUP_LABELS.en_transito,
@@ -178,10 +246,18 @@ describe("DailyStatusMatrix", () => {
     const foot = screen.getAllByRole("rowgroup")[2];
     const [totalRow, returnsRow, pctRow] = within(foot).getAllByRole("row");
     const cells = (row: HTMLElement) =>
-      within(row).getAllByRole("cell").map((td) => td.textContent?.trim());
+      within(row)
+        .getAllByRole("cell")
+        .map((td) => td.textContent?.trim());
     expect(cells(totalRow)).toEqual(["41", "69", "110"]);
     expect(cells(returnsRow)).toEqual(["15", "13", "28"]);
-    // 15/41 = 36,6% -> "37%"; 13/69 = 18,8% -> "19%"; 28/110 = 25,5% -> "25%".
-    expect(cells(pctRow).map((c) => c?.replace("~", ""))).toEqual(["37%", "19%", "25%"]);
+    // % = todo lo no-entregado salvo indemnización / total (no solo el bucket de
+    // devueltas). Día 1: (41-26-0)/41 = 15/41 -> "37%". Día 2: (69-52-1)/69 =
+    // 16/69 -> "23%". Total: (110-78-1)/110 = 31/110 -> "28%".
+    expect(cells(pctRow).map((c) => c?.replace("~", ""))).toEqual([
+      "37%",
+      "23%",
+      "28%",
+    ]);
   });
 });
