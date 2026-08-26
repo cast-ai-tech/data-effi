@@ -195,6 +195,42 @@ def _build_shipment_upsert() -> str:
 
 SHIPMENT_UPSERT_SQL = _build_shipment_upsert()
 
+# El upsert de un movimiento, extraído a constante para que el camino fila-a-fila
+# y el camino por lotes usen EXACTAMENTE el mismo SQL (la subconsulta que enlaza
+# el movimiento con su guía incluida). El `RETURNING (xmax=0)` distingue inserción
+# de actualización, y el `WHERE` del DO UPDATE hace que una fila idéntica no
+# escriba y RETURNING no devuelva nada (= SKIPPED).
+MOVEMENT_UPSERT_SQL = """
+    INSERT INTO core.movement (
+        tenant_id, connection_id, country_code, shipment_id,
+        tracking_number_raw, movement_type_code, movement_date,
+        amount, currency_code, external_ref, description,
+        dedupe_key, batch_id
+    )
+    VALUES (
+        %(tenant_id)s, %(connection_id)s, %(country_code)s,
+        -- Effi's wallet cites the CARRIER's number, not the
+        -- guide's own, so both are candidates.
+        (SELECT id FROM core.shipment
+          WHERE connection_id = %(connection_id)s
+            AND (tracking_number = %(tracking_number_raw)s
+                 OR carrier_tracking_number = %(tracking_number_raw)s)
+          LIMIT 1),
+        %(tracking_number_raw)s, %(movement_type_code)s, %(movement_date)s,
+        %(amount)s, %(currency_code)s, %(external_ref)s, %(description)s,
+        %(dedupe_key)s, %(batch_id)s
+    )
+    ON CONFLICT (connection_id, dedupe_key) DO UPDATE SET
+        amount      = EXCLUDED.amount,
+        -- An orphan that finds its shipment gets linked; a linked
+        -- movement is never un-linked by a later file.
+        shipment_id = COALESCE(core.movement.shipment_id, EXCLUDED.shipment_id),
+        batch_id    = EXCLUDED.batch_id
+    WHERE core.movement.amount IS DISTINCT FROM EXCLUDED.amount
+       OR (core.movement.shipment_id IS NULL AND EXCLUDED.shipment_id IS NOT NULL)
+    RETURNING (xmax = 0) AS inserted
+"""
+
 # Money values that contradict a previously known value, captured before the
 # upsert overwrites them.
 DISCREPANCY_PROBE_SQL = """
@@ -663,102 +699,120 @@ class PostgresStore:
     # Movements
     # =====================================================================
 
+    @staticmethod
+    def _movement_params(ctx: BatchContext, movement: MovementInput) -> dict[str, Any]:
+        return {
+            "tenant_id": ctx.tenant_id,
+            "connection_id": ctx.connection_id,
+            "country_code": ctx.country_code,
+            "tracking_number_raw": movement.tracking_number_raw,
+            "movement_type_code": movement.movement_type_code,
+            "movement_date": movement.movement_date,
+            "amount": movement.amount,
+            "currency_code": movement.currency_code,
+            "external_ref": movement.external_ref,
+            "description": movement.description,
+            "dedupe_key": movement.dedupe_key,
+            "batch_id": ctx.batch_id,
+        }
+
+    def _probe_amounts_bulk(
+        self, ctx: BatchContext, dedupe_keys: list[str]
+    ) -> dict[str, Any]:
+        """El monto previo de TODOS los movimientos de la tanda, en un SELECT."""
+        if not dedupe_keys:
+            return {}
+        out: dict[str, Any] = {}
+        with self._conn.cursor(row_factory=dict_row) as cur:
+            cur.execute(
+                "SELECT dedupe_key, amount FROM core.movement "
+                "WHERE connection_id = %s AND dedupe_key = ANY(%s)",
+                (ctx.connection_id, dedupe_keys),
+            )
+            for r in cur.fetchall():
+                out[r["dedupe_key"]] = r["amount"]
+        return out
+
     def upsert_movement(self, ctx: BatchContext, movement: MovementInput) -> UpsertResult:
         entity_key = movement.external_ref or movement.dedupe_key[:12]
+        previous = self._probe_amounts_bulk(ctx, [movement.dedupe_key]).get(movement.dedupe_key)
 
         with self._conn.transaction():
             with self._conn.cursor(row_factory=dict_row) as cur:
-                cur.execute(
-                    """
-                    SELECT id, amount, shipment_id FROM core.movement
-                    WHERE connection_id = %s AND dedupe_key = %s
-                    """,
-                    (ctx.connection_id, movement.dedupe_key),
-                )
-                existing = cur.fetchone()
-
-                cur.execute(
-                    """
-                    INSERT INTO core.movement (
-                        tenant_id, connection_id, country_code, shipment_id,
-                        tracking_number_raw, movement_type_code, movement_date,
-                        amount, currency_code, external_ref, description,
-                        dedupe_key, batch_id
-                    )
-                    VALUES (
-                        %(tenant_id)s, %(connection_id)s, %(country_code)s,
-                        -- Effi's wallet cites the CARRIER's number, not the
-                        -- guide's own, so both are candidates.
-                        (SELECT id FROM core.shipment
-                          WHERE connection_id = %(connection_id)s
-                            AND (tracking_number = %(tracking_number_raw)s
-                                 OR carrier_tracking_number = %(tracking_number_raw)s)
-                          LIMIT 1),
-                        %(tracking_number_raw)s, %(movement_type_code)s, %(movement_date)s,
-                        %(amount)s, %(currency_code)s, %(external_ref)s, %(description)s,
-                        %(dedupe_key)s, %(batch_id)s
-                    )
-                    ON CONFLICT (connection_id, dedupe_key) DO UPDATE SET
-                        amount      = EXCLUDED.amount,
-                        -- An orphan that finds its shipment gets linked; a linked
-                        -- movement is never un-linked by a later file.
-                        shipment_id = COALESCE(core.movement.shipment_id, EXCLUDED.shipment_id),
-                        batch_id    = EXCLUDED.batch_id
-                    WHERE core.movement.amount IS DISTINCT FROM EXCLUDED.amount
-                       OR (core.movement.shipment_id IS NULL AND EXCLUDED.shipment_id IS NOT NULL)
-                    RETURNING (xmax = 0) AS inserted
-                    """,
-                    {
-                        "tenant_id": ctx.tenant_id,
-                        "connection_id": ctx.connection_id,
-                        "country_code": ctx.country_code,
-                        "tracking_number_raw": movement.tracking_number_raw,
-                        "movement_type_code": movement.movement_type_code,
-                        "movement_date": movement.movement_date,
-                        "amount": movement.amount,
-                        "currency_code": movement.currency_code,
-                        "external_ref": movement.external_ref,
-                        "description": movement.description,
-                        "dedupe_key": movement.dedupe_key,
-                        "batch_id": ctx.batch_id,
-                    },
-                )
+                cur.execute(MOVEMENT_UPSERT_SQL, self._movement_params(ctx, movement))
                 row = cur.fetchone()
 
             if row is None:
                 return UpsertResult(RowOutcome.SKIPPED, entity_key)
 
-            discrepancies: list[Discrepancy] = []
-            if existing is not None and Decimal(existing["amount"]) != Decimal(movement.amount):
-                discrepancies.append(
-                    Discrepancy(
-                        entity="movement",
-                        entity_key=entity_key,
-                        field_name="amount",
-                        old_value=_money_text(existing["amount"]),
-                        new_value=_money_text(movement.amount),
-                    )
-                )
-                with self._conn.cursor() as cur:
-                    cur.execute(
-                        """
-                        INSERT INTO raw.load_discrepancy
-                            (tenant_id, batch_id, entity, entity_key,
-                             field_name, old_value, new_value)
-                        VALUES (%s, %s, 'movement', %s, 'amount', %s, %s)
-                        """,
-                        (
-                            ctx.tenant_id,
-                            ctx.batch_id,
-                            entity_key,
-                            discrepancies[0].old_value,
-                            discrepancies[0].new_value,
-                        ),
-                    )
-
+            disc = self._movement_discrepancy(entity_key, previous, movement.amount)
+            self._insert_discrepancies(ctx, disc)
             outcome = RowOutcome.INSERTED if row["inserted"] else RowOutcome.UPDATED
 
-        return UpsertResult(outcome, entity_key, discrepancies=discrepancies)
+        return UpsertResult(outcome, entity_key, discrepancies=disc)
+
+    @staticmethod
+    def _movement_discrepancy(
+        entity_key: str, previous_amount: Any, new_amount: Any
+    ) -> list[Discrepancy]:
+        """Un movimiento solo puede diferir en el monto (su clave lo fija todo lo
+        demás). Sin DB: compara y devuelve 0 o 1 discrepancia."""
+        if previous_amount is None or Decimal(previous_amount) == Decimal(new_amount):
+            return []
+        return [
+            Discrepancy(
+                entity="movement",
+                entity_key=entity_key,
+                field_name="amount",
+                old_value=_money_text(previous_amount),
+                new_value=_money_text(new_amount),
+            )
+        ]
+
+    def upsert_movements(
+        self, ctx: BatchContext, movements: list[MovementInput]
+    ) -> list[UpsertResult]:
+        """Toda la tanda de movimientos de una vez, como las guías.
+
+        Un solo SELECT del monto previo de todos + un `executemany` pipelined del
+        mismo upsert (con la subconsulta que enlaza cada movimiento a su guía).
+        Misma detección de discrepancia de monto y mismo resultado por fila que
+        el camino fila-a-fila; ante un fallo de la tanda, cae a fila-a-fila.
+        """
+        if not movements:
+            return []
+
+        params_list = [self._movement_params(ctx, m) for m in movements]
+        previous = self._probe_amounts_bulk(ctx, [m.dedupe_key for m in movements])
+
+        rows: list[dict[str, Any] | None] = []
+        try:
+            with self._conn.transaction():
+                with self._conn.cursor(row_factory=dict_row) as cur:
+                    cur.executemany(MOVEMENT_UPSERT_SQL, params_list, returning=True)
+                    while True:
+                        rows.append(cur.fetchone())
+                        if not cur.nextset():
+                            break
+        except psycopg.Error:
+            return [self.upsert_movement(ctx, m) for m in movements]
+
+        results: list[UpsertResult] = []
+        pending: list[Discrepancy] = []
+        for movement, row in zip(movements, rows, strict=True):
+            entity_key = movement.external_ref or movement.dedupe_key[:12]
+            if row is None:
+                results.append(UpsertResult(RowOutcome.SKIPPED, entity_key))
+                continue
+            disc = self._movement_discrepancy(
+                entity_key, previous.get(movement.dedupe_key), movement.amount
+            )
+            pending.extend(disc)
+            outcome = RowOutcome.INSERTED if row["inserted"] else RowOutcome.UPDATED
+            results.append(UpsertResult(outcome, entity_key, discrepancies=disc))
+
+        self._insert_discrepancies(ctx, pending)
+        return results
 
     def relink_orphans(self, tenant_id: UUID | None = None) -> int:
         with self._conn.cursor(row_factory=tuple_row) as cur:

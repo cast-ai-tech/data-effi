@@ -150,6 +150,11 @@ class Store(Protocol):
     def upsert_movement(self, ctx: BatchContext, movement: MovementInput) -> UpsertResult:
         ...
 
+    def upsert_movements(
+        self, ctx: BatchContext, movements: list[MovementInput]
+    ) -> list[UpsertResult]:
+        ...
+
     def finish_batch(self, ctx: BatchContext, report: IngestReport) -> None:
         ...
 
@@ -568,6 +573,13 @@ class MemoryStore:
         outcome = RowOutcome.UPDATED if changed else RowOutcome.SKIPPED
         return UpsertResult(outcome, entity_key, discrepancies=discrepancies)
 
+    def upsert_movements(
+        self, ctx: BatchContext, movements: list[MovementInput]
+    ) -> list[UpsertResult]:
+        # En memoria el lote es solo el equivalente fila-a-fila; existe para
+        # cumplir el mismo contrato que PostgresStore.
+        return [self.upsert_movement(ctx, m) for m in movements]
+
     def relink_orphans(self, tenant_id: UUID | None = None) -> int:
         """Attach movements that arrived before their shipment did."""
         by_carrier_number = {
@@ -762,10 +774,11 @@ class IngestEngine:
         # answer a question about a column nobody mapped - without asking the
         # user to upload the file again.
         self._archive_rows = archive_rows
-        # Buffer de guías válidas de la carga en curso; se llena en el bucle de
-        # ingest() y se vacía en lote al final. Declarado aquí para que exista
-        # siempre, aunque se reinicia al empezar cada ingest().
+        # Buffers de la carga en curso; se llenan en el bucle de ingest() y se
+        # vacían en lote al final. Declarados aquí para que existan siempre,
+        # aunque se reinician al empezar cada ingest().
         self._pending_shipments: list[ShipmentInput] = []
+        self._pending_movements: list[MovementInput] = []
 
     def ingest(
         self,
@@ -913,10 +926,11 @@ class IngestEngine:
 
         pii_headers = profile.pii_columns_norm if profile else frozenset()
         archive: list[SourceRow] = []
-        # Las guías válidas se acumulan aquí y se graban en lote al final del
-        # bucle (una escritura pipelined en vez de ~3 viajes a la base por fila).
-        # Los movimientos siguen fila-a-fila, en su propio handler.
+        # Guías y movimientos válidos se acumulan aquí y se graban en lote al
+        # final del bucle (una escritura pipelined en vez de ~3 viajes a la base
+        # por fila).
         self._pending_shipments = []
+        self._pending_movements = []
 
         for row_number, mapped, raw in iter_records(headers, rows, header_map):
             report.rows_total += 1
@@ -942,11 +956,14 @@ class IngestEngine:
                     )
                 )
 
-        # Graba en lote las guías acumuladas y cuenta el resultado de cada una
+        # Graba en lote lo acumulado y cuenta el resultado de cada fila
         # (INSERTED/UPDATED/SKIPPED + discrepancias), igual que hacía el _tally
         # fila-a-fila - solo que ahora en una tanda.
         if self._pending_shipments:
             for result in self._store.upsert_shipments(ctx, self._pending_shipments):
+                _tally(report, result)
+        if self._pending_movements:
+            for result in self._store.upsert_movements(ctx, self._pending_movements):
                 _tally(report, result)
 
         if archive:
@@ -1183,8 +1200,9 @@ class IngestEngine:
             report.errors.append(RowError(row_number, blocking.message))
             return
 
-        result = self._store.upsert_movement(ctx, movement)
-        _tally(report, result)
+        # Como las guías: el movimiento validado se acumula y se graba en lote
+        # al terminar el bucle; su resultado se cuenta en ese flush.
+        self._pending_movements.append(movement)
 
 
 def _tally(report: IngestReport, result: UpsertResult) -> None:
