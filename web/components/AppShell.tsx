@@ -11,19 +11,36 @@ import { usePathname, useRouter } from "next/navigation";
 import { useCallback, useEffect, useMemo, useState } from "react";
 
 import { CopilotPanel } from "@/components/CopilotPanel";
-import { DateFieldPicker, ExcludedByFieldBand } from "@/components/DateFieldPicker";
 import { DateRangePicker } from "@/components/DateRangePicker";
 import { PlatformPicker } from "@/components/PlatformPicker";
 import { NotificationBell } from "@/components/NotificationBell";
 import { BrandMark } from "@/components/BrandMark";
-import { Button, Chip, Drawer, StatusDot, ThemeToggle, cx } from "@/components/ui";
+import {
+  Button,
+  Chip,
+  Drawer,
+  StatusDot,
+  ThemeToggle,
+  cx,
+} from "@/components/ui";
 import { api, signOut as endSession } from "@/lib/api";
-import { PLANS_PATH, shouldRedirectToPlans, subscriptionBanner } from "@/lib/billing";
+import {
+  PLANS_PATH,
+  shouldRedirectToPlans,
+  subscriptionBanner,
+} from "@/lib/billing";
 import { DEFAULT_FIELD, useDateRange } from "@/lib/date-range";
 import { countryFlag, formatRelative } from "@/lib/format";
 import { useApi, usePersistentState } from "@/lib/hooks";
 import { useNotifications } from "@/lib/notifications";
-import type { Capability, Connection, Country, Tokens, User, Workspace } from "@/lib/types";
+import type {
+  Capability,
+  Connection,
+  Country,
+  Tokens,
+  User,
+  Workspace,
+} from "@/lib/types";
 
 /**
  * The range selector lives HERE, not on the dashboard page, because it applies
@@ -65,8 +82,12 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   // Nothing company-scoped is asked for until the person stands in a company:
   // right after registering there is none, and every such call would be a 403.
   const hasCompany = Boolean(user?.tenant_id);
-  const { data: countries } = useApi<Country[]>(hasCompany ? "/config/countries" : null);
-  const { data: connections } = useApi<Connection[]>(hasCompany ? "/config/connections" : null);
+  const { data: countries } = useApi<Country[]>(
+    hasCompany ? "/config/countries" : null,
+  );
+  const { data: connections } = useApi<Connection[]>(
+    hasCompany ? "/config/connections" : null,
+  );
 
   const can = useCallback(
     (capability: Capability) => (user?.capabilities ?? []).includes(capability),
@@ -88,7 +109,10 @@ export function AppShell({ children }: { children: React.ReactNode }) {
     return active.filter((country) => scope.includes(country.code));
   }, [countries, user]);
 
-  const health = useMemo(() => summariseHealth(connections ?? []), [connections]);
+  const health = useMemo(
+    () => summariseHealth(connections ?? []),
+    [connections],
+  );
 
   const currentCountry = useMemo(() => {
     const match = /^\/([a-z]{2})(?:\/|$)/.exec(pathname);
@@ -148,7 +172,10 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   // data screen, so the only useful place to be is the plans screen. Sent
   // there once; the plans screen itself never redirects (migration 048).
   const subscription = user?.subscription ?? null;
-  const banner = useMemo(() => subscriptionBanner(subscription), [subscription]);
+  const banner = useMemo(
+    () => subscriptionBanner(subscription),
+    [subscription],
+  );
   useEffect(() => {
     if (subscription?.blocked && shouldRedirectToPlans(pathname)) {
       router.replace(PLANS_PATH);
@@ -157,7 +184,8 @@ export function AppShell({ children }: { children: React.ReactNode }) {
 
   // A person with no company yet (just registered) has nothing to look at but
   // the screen that creates one. Plans and the account stay reachable.
-  const noCompany = Boolean(user) && (user?.workspaces?.length ?? 0) === 0 && !user?.tenant_id;
+  const noCompany =
+    Boolean(user) && (user?.workspaces?.length ?? 0) === 0 && !user?.tenant_id;
   useEffect(() => {
     if (
       noCompany &&
@@ -224,7 +252,9 @@ export function AppShell({ children }: { children: React.ReactNode }) {
             <CountryNav
               key={country.code}
               country={country}
-              open={currentCountry === country.code || activeCountries.length === 1}
+              open={
+                currentCountry === country.code || activeCountries.length === 1
+              }
               collapsed={rail}
               pathname={pathname}
               rangeSuffix={rangeSuffix}
@@ -278,7 +308,9 @@ export function AppShell({ children }: { children: React.ReactNode }) {
               <p className="truncate text-sm font-semibold text-ink-2">
                 {user.full_name ?? user.email}
               </p>
-              <p className="truncate text-xs text-ink-dim">{user.tenant_name}</p>
+              <p className="truncate text-xs text-ink-dim">
+                {user.tenant_name}
+              </p>
             </div>
           )}
           <ThemeToggle showLabel={!rail} />
@@ -312,7 +344,9 @@ export function AppShell({ children }: { children: React.ReactNode }) {
               aria-expanded={drawerOpen}
               className="flex size-11 items-center justify-center rounded-control border border-line-strong bg-surface text-ink-muted md:hidden"
             >
-              <span aria-hidden className="text-lg leading-none">☰</span>
+              <span aria-hidden className="text-lg leading-none">
+                ☰
+              </span>
             </button>
           </div>
 
@@ -326,7 +360,6 @@ export function AppShell({ children }: { children: React.ReactNode }) {
                     cards obeyed is reported on each card, like the date. */}
                 <div className="hidden items-center gap-2.5 md:flex">
                   <PlatformPicker countryCode={currentCountry} />
-                  <DateFieldPicker />
                   <DateRangePicker country={formatCountry} />
                 </div>
                 <Button
@@ -361,25 +394,27 @@ export function AppShell({ children }: { children: React.ReactNode }) {
           </div>
         </header>
 
-        {/* Directly under the header and above everything else: if the chosen
-            date hid most of the operation, that has to be read before any
-            number on the screen is. */}
-        {rangeApplies && <ExcludedByFieldBand country={formatCountry} />}
-
         {banner && (
           <div
             role="status"
             className={cx(
               "flex flex-wrap items-center justify-between gap-2 border-b px-4 py-2 text-sm md:px-5",
-              banner.tone === "negative" && "border-negative/30 bg-negative/[0.08] text-negative-ink",
-              banner.tone === "warning" && "border-warning/30 bg-warning/[0.10] text-ink",
-              banner.tone === "accent" && "border-accent/30 bg-accent/[0.08] text-ink",
-              banner.tone === "neutral" && "border-line-subtle bg-sunken text-ink-2",
+              banner.tone === "negative" &&
+                "border-negative/30 bg-negative/[0.08] text-negative-ink",
+              banner.tone === "warning" &&
+                "border-warning/30 bg-warning/[0.10] text-ink",
+              banner.tone === "accent" &&
+                "border-accent/30 bg-accent/[0.08] text-ink",
+              banner.tone === "neutral" &&
+                "border-line-subtle bg-sunken text-ink-2",
             )}
           >
             <span>{banner.text}</span>
             {banner.cta && !pathname.startsWith(PLANS_PATH) && (
-              <Link href={PLANS_PATH} className="font-semibold underline underline-offset-2">
+              <Link
+                href={PLANS_PATH}
+                className="font-semibold underline underline-offset-2"
+              >
                 Ver planes
               </Link>
             )}
@@ -424,9 +459,6 @@ export function AppShell({ children }: { children: React.ReactNode }) {
             <FilterRow label="Plataforma">
               <PlatformPicker countryCode={currentCountry} />
             </FilterRow>
-            <FilterRow label="Fecha sobre la que se mide">
-              <DateFieldPicker />
-            </FilterRow>
             <FilterRow label="Rango">
               <DateRangePicker country={formatCountry} />
             </FilterRow>
@@ -449,7 +481,13 @@ export function AppShell({ children }: { children: React.ReactNode }) {
  * half the screen holding Colombia's data while the other half shows Guatemala
  * is the one state that must never be visible.
  */
-function WorkspacePicker({ user, collapsed }: { user: User; collapsed: boolean }) {
+function WorkspacePicker({
+  user,
+  collapsed,
+}: {
+  user: User;
+  collapsed: boolean;
+}) {
   const [open, setOpen] = useState(false);
   const [switching, setSwitching] = useState<string | null>(null);
 
@@ -486,7 +524,9 @@ function WorkspacePicker({ user, collapsed }: { user: User; collapsed: boolean }
     try {
       await api.post<Tokens>("/auth/switch", { tenant_id: tenantId });
       // Straight to that company's dashboard: a company lives in one country.
-      const country = companyCountry(user.workspaces.find((ws) => ws.tenant_id === tenantId));
+      const country = companyCountry(
+        user.workspaces.find((ws) => ws.tenant_id === tenantId),
+      );
       window.location.assign(country ? `/${country.toLowerCase()}` : "/global");
     } catch {
       setSwitching(null);
@@ -496,7 +536,10 @@ function WorkspacePicker({ user, collapsed }: { user: User; collapsed: boolean }
 
   if (collapsed) {
     return (
-      <div data-workspace-picker className="border-b border-line-subtle px-2.5 py-2.5">
+      <div
+        data-workspace-picker
+        className="border-b border-line-subtle px-2.5 py-2.5"
+      >
         <button
           type="button"
           onClick={() => setOpen(!open)}
@@ -512,7 +555,10 @@ function WorkspacePicker({ user, collapsed }: { user: User; collapsed: boolean }
   }
 
   return (
-    <div data-workspace-picker className="relative border-b border-line-subtle px-2.5 py-2.5">
+    <div
+      data-workspace-picker
+      className="relative border-b border-line-subtle px-2.5 py-2.5"
+    >
       <button
         type="button"
         onClick={() => setOpen(!open)}
@@ -576,7 +622,9 @@ function WorkspacePicker({ user, collapsed }: { user: User; collapsed: boolean }
               onClick={() => setOpen(false)}
               className="flex w-full items-center gap-2.5 border-t border-line-subtle px-3 py-2 text-base font-semibold text-accent no-underline hover:bg-hover-strong"
             >
-              <span aria-hidden className="text-lg leading-none">＋</span>
+              <span aria-hidden className="text-lg leading-none">
+                ＋
+              </span>
               Crear nueva empresa
             </Link>
           )}
@@ -639,25 +687,81 @@ function CountryNav({
   // `href` is what the reader navigates to; `match` is what decides whether the
   // item is lit. They differ on the dashboard, whose link carries the range.
   const sections = [
-    { match: base, href: `${base}${rangeSuffix}`, label: "Tablero", icon: <GridIcon />, exact: true },
-    { match: `${base}/orders`, href: `${base}/orders`, label: "Órdenes", icon: <ReceiptIcon />, exact: false },
-    { match: `${base}/customers`, href: `${base}/customers`, label: "Clientes", icon: <PersonIcon />, exact: false },
-    { match: `${base}/products`, href: `${base}/products`, label: "Productos", icon: <TagIcon />, exact: false },
+    {
+      match: base,
+      href: `${base}${rangeSuffix}`,
+      label: "Tablero",
+      icon: <GridIcon />,
+      exact: true,
+    },
+    {
+      match: `${base}/orders`,
+      href: `${base}/orders`,
+      label: "Órdenes",
+      icon: <ReceiptIcon />,
+      exact: false,
+    },
+    {
+      match: `${base}/customers`,
+      href: `${base}/customers`,
+      label: "Clientes",
+      icon: <PersonIcon />,
+      exact: false,
+    },
+    {
+      match: `${base}/products`,
+      href: `${base}/products`,
+      label: "Productos",
+      icon: <TagIcon />,
+      exact: false,
+    },
     // Each country loads its own files and names the platform they come from
     // (migration 042). There is no global upload entry any more.
     ...(canIngest
-      ? [{ match: `${base}/cargar`, href: `${base}/cargar`, label: "Cargar datos", icon: <UploadIcon />, exact: false }]
+      ? [
+          {
+            match: `${base}/cargar`,
+            href: `${base}/cargar`,
+            label: "Cargar datos",
+            icon: <UploadIcon />,
+            exact: false,
+          },
+        ]
       : []),
     // The company's own plumbing. These routes are company-scoped (not
     // country-prefixed): a company lives in one country, so they sit here.
     ...(canRead
-      ? [{ match: "/connections", href: "/connections", label: "Conexiones", icon: <PlugIcon />, exact: false }]
+      ? [
+          {
+            match: "/connections",
+            href: "/connections",
+            label: "Conexiones",
+            icon: <PlugIcon />,
+            exact: false,
+          },
+        ]
       : []),
     ...(canManage
-      ? [{ match: "/usuarios", href: "/usuarios", label: "Usuarios", icon: <PeopleIcon />, exact: false }]
+      ? [
+          {
+            match: "/usuarios",
+            href: "/usuarios",
+            label: "Usuarios",
+            icon: <PeopleIcon />,
+            exact: false,
+          },
+        ]
       : []),
     ...(canRead
-      ? [{ match: "/settings", href: "/settings", label: "Configuración", icon: <GearIcon />, exact: false }]
+      ? [
+          {
+            match: "/settings",
+            href: "/settings",
+            label: "Configuración",
+            icon: <GearIcon />,
+            exact: false,
+          },
+        ]
       : []),
   ];
 
@@ -667,7 +771,11 @@ function CountryNav({
         href={`${base}${rangeSuffix}`}
         active={open}
         collapsed={collapsed}
-        icon={<span className="text-lg leading-none">{countryFlag(country.code)}</span>}
+        icon={
+          <span className="text-lg leading-none">
+            {countryFlag(country.code)}
+          </span>
+        }
         label={country.name}
       />
 
@@ -724,7 +832,9 @@ function NavItem({
           : "text-ink-nav hover:bg-hover hover:text-ink-2",
       )}
     >
-      <span className="flex size-5 shrink-0 items-center justify-center [&>svg]:size-5">{icon}</span>
+      <span className="flex size-5 shrink-0 items-center justify-center [&>svg]:size-5">
+        {icon}
+      </span>
       {!collapsed && <span className="truncate">{label}</span>}
     </Link>
   );
@@ -737,17 +847,25 @@ function summariseHealth(connections: Connection[]): {
   detail: string;
 } {
   if (connections.length === 0) {
-    return { tone: "neutral", label: "Sin conexiones", detail: "Aún no has conectado ninguna fuente" };
+    return {
+      tone: "neutral",
+      label: "Sin conexiones",
+      detail: "Aún no has conectado ninguna fuente",
+    };
   }
 
   const broken = connections.filter((c) => c.health === "error");
-  const stale = connections.filter((c) => c.health === "stale" || c.health === "never_synced");
+  const stale = connections.filter(
+    (c) => c.health === "stale" || c.health === "never_synced",
+  );
 
   if (broken.length > 0) {
     return {
       tone: "negative",
       label: `${broken.length} con error`,
-      detail: broken.map((c) => `${c.connection_name}: ${c.last_error ?? "error"}`).join(" · "),
+      detail: broken
+        .map((c) => `${c.connection_name}: ${c.last_error ?? "error"}`)
+        .join(" · "),
     };
   }
   if (stale.length > 0) {
@@ -771,10 +889,18 @@ function summariseHealth(connections: Connection[]): {
   };
 }
 
-function FilterRow({ label, children }: { label: string; children: React.ReactNode }) {
+function FilterRow({
+  label,
+  children,
+}: {
+  label: string;
+  children: React.ReactNode;
+}) {
   return (
     <div className="flex flex-col gap-2">
-      <span className="text-xs font-bold uppercase tracking-[0.06em] text-ink-muted">{label}</span>
+      <span className="text-xs font-bold uppercase tracking-[0.06em] text-ink-muted">
+        {label}
+      </span>
       <div className="flex flex-wrap items-center gap-2">{children}</div>
     </div>
   );
@@ -868,7 +994,12 @@ function UploadIcon() {
         strokeLinecap="round"
         strokeLinejoin="round"
       />
-      <path d="M2.5 11v1.5A1.5 1.5 0 0 0 4 14h8a1.5 1.5 0 0 0 1.5-1.5V11" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" />
+      <path
+        d="M2.5 11v1.5A1.5 1.5 0 0 0 4 14h8a1.5 1.5 0 0 0 1.5-1.5V11"
+        stroke="currentColor"
+        strokeWidth="1.4"
+        strokeLinecap="round"
+      />
     </svg>
   );
 }

@@ -98,7 +98,11 @@ export function fromIso(value: string | null | undefined): Date | null {
   if (!value) return null;
   const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(value);
   if (!match) return null;
-  const date = new Date(Number(match[1]), Number(match[2]) - 1, Number(match[3]));
+  const date = new Date(
+    Number(match[1]),
+    Number(match[2]) - 1,
+    Number(match[3]),
+  );
   return Number.isNaN(date.getTime()) ? null : date;
 }
 
@@ -124,7 +128,10 @@ export function endOfMonth(date: Date): Date {
  * down. That is also what keeps "Hoy" from being a redundant tail of "Últimos
  * 7 días".
  */
-export function resolvePreset(preset: PresetKey, today: Date = new Date()): DateRange {
+export function resolvePreset(
+  preset: PresetKey,
+  today: Date = new Date(),
+): DateRange {
   switch (preset) {
     case "hoy":
       return { from: toIso(today), to: toIso(today) };
@@ -139,7 +146,10 @@ export function resolvePreset(preset: PresetKey, today: Date = new Date()): Date
     case "28d":
     case "30d": {
       const days = Number(preset.slice(0, -1));
-      return { from: toIso(addDays(today, -days)), to: toIso(addDays(today, -1)) };
+      return {
+        from: toIso(addDays(today, -days)),
+        to: toIso(addDays(today, -1)),
+      };
     }
 
     case "este_mes":
@@ -149,7 +159,10 @@ export function resolvePreset(preset: PresetKey, today: Date = new Date()): Date
       // Month -1 rolls the year back on its own: January's previous month is
       // December of the year before, no special case needed.
       const previous = new Date(today.getFullYear(), today.getMonth() - 1, 1);
-      return { from: toIso(startOfMonth(previous)), to: toIso(endOfMonth(previous)) };
+      return {
+        from: toIso(startOfMonth(previous)),
+        to: toIso(endOfMonth(previous)),
+      };
     }
 
     case "maximo":
@@ -370,7 +383,9 @@ function readExcluded(value: unknown): number | null {
     : null;
 }
 
-function readPlatformApplied(payload: Record<string, unknown>): string | null | undefined {
+function readPlatformApplied(
+  payload: Record<string, unknown>,
+): string | null | undefined {
   if (!("platform" in payload)) return undefined;
   const value = payload.platform;
   if (value === null) return null;
@@ -379,14 +394,26 @@ function readPlatformApplied(payload: Record<string, unknown>): string | null | 
 
 export function unwrapRangePayload<T>(payload: unknown): RangePayload<T> {
   if (payload === null || payload === undefined) {
-    return { data: null, dateBasis: undefined, excludedNoDate: null, platformApplied: undefined };
+    return {
+      data: null,
+      dateBasis: undefined,
+      excludedNoDate: null,
+      platformApplied: undefined,
+    };
   }
 
   if (Array.isArray(payload)) {
     const first: unknown = payload[0];
     const dateBasis =
-      isRecord(first) && "date_basis" in first ? readBasis(first.date_basis) : undefined;
-    return { data: payload as T, dateBasis, excludedNoDate: null, platformApplied: undefined };
+      isRecord(first) && "date_basis" in first
+        ? readBasis(first.date_basis)
+        : undefined;
+    return {
+      data: payload as T,
+      dateBasis,
+      excludedNoDate: null,
+      platformApplied: undefined,
+    };
   }
 
   if (isRecord(payload) && "date_basis" in payload) {
@@ -395,13 +422,23 @@ export function unwrapRangePayload<T>(payload: unknown): RangePayload<T> {
     const platformApplied = readPlatformApplied(payload);
     for (const key of ["rows", "data", "items"]) {
       if (key in payload) {
-        return { data: payload[key] as T, dateBasis, excludedNoDate, platformApplied };
+        return {
+          data: payload[key] as T,
+          dateBasis,
+          excludedNoDate,
+          platformApplied,
+        };
       }
     }
     return { data: payload as T, dateBasis, excludedNoDate, platformApplied };
   }
 
-  return { data: payload as T, dateBasis: undefined, excludedNoDate: null, platformApplied: undefined };
+  return {
+    data: payload as T,
+    dateBasis: undefined,
+    excludedNoDate: null,
+    platformApplied: undefined,
+  };
 }
 
 // ---------------------------------------------------------------------------
@@ -444,9 +481,13 @@ function readParam(value: string | null): string | null {
   return value && /^\d{4}-\d{2}-\d{2}$/.test(value) ? value : null;
 }
 
-/** A `field` we do not recognise is not forwarded: the API answers 422 for it. */
-function readField(value: string | null): DateField {
-  return DATE_FIELDS.includes(value as DateField) ? (value as DateField) : DEFAULT_FIELD;
+/**
+ * Se retiró el selector de fecha: TODO se mide siempre por fecha de creación
+ * (decisión de Alexander, 2026-08-26). Se ignora cualquier `?field=` en la URL -
+ * incluso uno viejo guardado - para que nunca se cuele otra base sin querer.
+ */
+function readField(): DateField {
+  return DEFAULT_FIELD;
 }
 
 /** Catalogue codes are lower-case slugs; anything else is not forwarded. */
@@ -468,7 +509,7 @@ export function DateRangeProvider({ children }: { children: ReactNode }) {
 
   const from = readParam(search.get("from"));
   const to = readParam(search.get("to"));
-  const field = readField(search.get("field"));
+  const field = readField();
   const platform = readPlatform(search.get("platform"));
 
   const range = useMemo<DateRange>(() => ({ from, to }), [from, to]);
@@ -478,7 +519,10 @@ export function DateRangeProvider({ children }: { children: ReactNode }) {
   // count is about a question nobody is asking any more.
   const scope = `${pathname}|${field}|${from ?? ""}|${to ?? ""}|${platform ?? ""}`;
 
-  const [excluded, setExcluded] = useState<{ scope: string; count: number } | null>(null);
+  const [excluded, setExcluded] = useState<{
+    scope: string;
+    count: number;
+  } | null>(null);
 
   const reportExcluded = useCallback(
     (count: number | null) => {
@@ -495,7 +539,8 @@ export function DateRangeProvider({ children }: { children: ReactNode }) {
   // Read through the scope rather than clearing on a change: a reset effect in
   // the provider runs AFTER the children's, so it would wipe the count the
   // first widget just reported.
-  const excludedNoDate = excluded && excluded.scope === scope ? excluded.count : null;
+  const excludedNoDate =
+    excluded && excluded.scope === scope ? excluded.count : null;
 
   /** Rewrites the query string, keeping every parameter it does not own. */
   const writeParams = useCallback(
@@ -505,7 +550,9 @@ export function DateRangeProvider({ children }: { children: ReactNode }) {
       const query = params.toString();
       // `replace`, not `push`: changing the filter is not a navigation, and
       // stacking ten ranges in the history makes Back useless.
-      router.replace(query ? `${pathname}?${query}` : pathname, { scroll: false });
+      router.replace(query ? `${pathname}?${query}` : pathname, {
+        scroll: false,
+      });
     },
     [pathname, router, search],
   );
@@ -574,7 +621,11 @@ export function DateRangeProvider({ children }: { children: ReactNode }) {
     ],
   );
 
-  return <DateRangeContext.Provider value={value}>{children}</DateRangeContext.Provider>;
+  return (
+    <DateRangeContext.Provider value={value}>
+      {children}
+    </DateRangeContext.Provider>
+  );
 }
 
 const INERT_RANGE: DateRangeContextValue = {
@@ -631,7 +682,9 @@ export function DateBasisScope({
 }) {
   return (
     <ReportBasisContext.Provider value={onBasis}>
-      <ReportPlatformContext.Provider value={onPlatform}>{children}</ReportPlatformContext.Provider>
+      <ReportPlatformContext.Provider value={onPlatform}>
+        {children}
+      </ReportPlatformContext.Provider>
     </ReportBasisContext.Provider>
   );
 }
@@ -654,13 +707,22 @@ export interface RangedState<T> extends AsyncState<T> {
  * response is unwrapped here. Refetching is automatic: all three are part of
  * the path, so moving any of them changes the key `useApi` already watches.
  */
-export function useRangedApi<T>(path: string | null, deps: unknown[] = []): RangedState<T> {
+export function useRangedApi<T>(
+  path: string | null,
+  deps: unknown[] = [],
+): RangedState<T> {
   const { range, field, platform, reportExcluded } = useDateRange();
   const report = useContext(ReportBasisContext);
   const reportPlatform = useContext(ReportPlatformContext);
 
-  const fullPath = path === null ? null : withRange(path, range, field, platform);
-  const { data: payload, error, loading, reload } = useApi<unknown>(fullPath, deps);
+  const fullPath =
+    path === null ? null : withRange(path, range, field, platform);
+  const {
+    data: payload,
+    error,
+    loading,
+    reload,
+  } = useApi<unknown>(fullPath, deps);
 
   const { data, dateBasis, excludedNoDate, platformApplied } = useMemo(
     () => unwrapRangePayload<T>(payload),
@@ -681,5 +743,13 @@ export function useRangedApi<T>(path: string | null, deps: unknown[] = []): Rang
     reportPlatform?.(loading ? undefined : platformApplied);
   }, [reportPlatform, platformApplied, loading]);
 
-  return { data, error, loading, reload, dateBasis, excludedNoDate, platformApplied };
+  return {
+    data,
+    error,
+    loading,
+    reload,
+    dateBasis,
+    excludedNoDate,
+    platformApplied,
+  };
 }
