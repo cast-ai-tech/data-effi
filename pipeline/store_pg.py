@@ -434,6 +434,65 @@ class PostgresStore:
 
         return UpsertResult(outcome, shipment.tracking_number, discrepancies=discrepancies)
 
+    def upsert_shipments(
+        self, ctx: BatchContext, shipments: list["ShipmentInput"]
+    ) -> list[UpsertResult]:
+        """Toda la tanda de guías de una vez, en vez de fila por fila.
+
+        Un solo SELECT del dinero previo de TODAS las guías + un `executemany`
+        pipelined del mismo upsert, en lugar de ~3 viajes a la base por fila. Esa
+        es la diferencia entre que un archivo de 1.600 guías tarde minutos (o
+        choque con el timeout) o segundos. Las reglas de merge, el resultado por
+        fila (INSERTED/UPDATED/SKIPPED) y la detección de discrepancias son
+        EXACTAMENTE las del camino fila-a-fila; se verifica en test_store_pg.
+
+        Si el `executemany` falla por una fila que la validación en Python no
+        atrapó, se revierte al savepoint y se cae a fila-a-fila para esa tanda:
+        lento, pero conserva la resiliencia por fila del camino anterior.
+        """
+        if not shipments:
+            return []
+
+        params_list = [self._shipment_params(ctx, s) for s in shipments]
+        trackings = [s.tracking_number for s in shipments]
+        previous = self._probe_money_bulk(ctx, trackings)
+
+        rows: list[dict[str, Any] | None] = []
+        try:
+            with self._conn.transaction():  # SAVEPOINT: aísla la tanda entera
+                with self._conn.cursor(row_factory=dict_row) as cur:
+                    cur.executemany(SHIPMENT_UPSERT_SQL, params_list, returning=True)
+                    while True:
+                        rows.append(cur.fetchone())
+                        if not cur.nextset():
+                            break
+        except psycopg.Error:
+            # Una fila mala aborta la tanda entera. Se rehace fila a fila, donde
+            # cada una lleva su propio savepoint y una sola cae sin arrastrar al
+            # resto - la misma garantía que daba el camino original.
+            return [self.upsert_shipment(ctx, s) for s in shipments]
+
+        results: list[UpsertResult] = []
+        pending: list[Discrepancy] = []
+        for shipment, params, row in zip(shipments, params_list, rows, strict=True):
+            if row is None:
+                results.append(UpsertResult(RowOutcome.SKIPPED, shipment.tracking_number))
+                continue
+            disc = self._diff_money(
+                "shipment",
+                shipment.tracking_number,
+                previous.get(shipment.tracking_number),
+                params,
+            )
+            pending.extend(disc)
+            outcome = RowOutcome.INSERTED if row["inserted"] else RowOutcome.UPDATED
+            results.append(
+                UpsertResult(outcome, shipment.tracking_number, discrepancies=disc)
+            )
+
+        self._insert_discrepancies(ctx, pending)
+        return results
+
     def _shipment_params(self, ctx: BatchContext, shipment: ShipmentInput) -> dict[str, Any]:
         carrier_id = self._resolve_carrier(ctx, shipment.carrier_name)
         geo_id = self._resolve_geo(ctx, shipment.geo_level1, shipment.city_name)
@@ -513,9 +572,25 @@ class PostgresStore:
         previous: dict[str, Any] | None,
         params: dict[str, Any],
     ) -> list[Discrepancy]:
+        found = self._diff_money("shipment", tracking_number, previous, params)
+        self._insert_discrepancies(ctx, found)
+        return found
+
+    @staticmethod
+    def _diff_money(
+        entity: str,
+        entity_key: str,
+        previous: dict[str, Any] | None,
+        params: dict[str, Any],
+    ) -> list[Discrepancy]:
+        """Qué columnas de dinero cambiaron entre lo guardado y lo nuevo.
+
+        Sin DB: se compara contra `previous` (ya leído) y se devuelve la lista.
+        Antes vivía dentro de `_collect_discrepancies`; se extrajo para que el
+        camino por lotes lo reúse sin hacer un SELECT por fila.
+        """
         if previous is None:
             return []
-
         found: list[Discrepancy] = []
         for column in MONEY_COLUMNS:
             old_value = previous.get(column)
@@ -526,36 +601,63 @@ class PostgresStore:
                 continue
             found.append(
                 Discrepancy(
-                    entity="shipment",
-                    entity_key=tracking_number,
+                    entity=entity,
+                    entity_key=entity_key,
                     field_name=column,
                     old_value=_money_text(old_value),
                     new_value=_money_text(new_value),
                 )
             )
-
-        if found:
-            with self._conn.cursor() as cur:
-                cur.executemany(
-                    """
-                    INSERT INTO raw.load_discrepancy
-                        (tenant_id, batch_id, entity, entity_key, field_name, old_value, new_value)
-                    VALUES (%s, %s, %s, %s, %s, %s, %s)
-                    """,
-                    [
-                        (
-                            ctx.tenant_id,
-                            ctx.batch_id,
-                            d.entity,
-                            d.entity_key,
-                            d.field_name,
-                            d.old_value,
-                            d.new_value,
-                        )
-                        for d in found
-                    ],
-                )
         return found
+
+    def _insert_discrepancies(
+        self, ctx: BatchContext, discrepancies: list[Discrepancy]
+    ) -> None:
+        """Graba las discrepancias de una tanda en una sola escritura."""
+        if not discrepancies:
+            return
+        with self._conn.cursor() as cur:
+            cur.executemany(
+                """
+                INSERT INTO raw.load_discrepancy
+                    (tenant_id, batch_id, entity, entity_key, field_name, old_value, new_value)
+                VALUES (%s, %s, %s, %s, %s, %s, %s)
+                """,
+                [
+                    (
+                        ctx.tenant_id,
+                        ctx.batch_id,
+                        d.entity,
+                        d.entity_key,
+                        d.field_name,
+                        d.old_value,
+                        d.new_value,
+                    )
+                    for d in discrepancies
+                ],
+            )
+
+    def _probe_money_bulk(
+        self, ctx: BatchContext, tracking_numbers: list[str]
+    ) -> dict[str, dict[str, Any]]:
+        """El dinero previo de TODAS las guías de la tanda, en un solo SELECT.
+
+        Reemplaza el `_probe_money` fila-a-fila: un `= ANY(...)` en vez de N
+        viajes. Devuelve tracking_number -> fila de columnas de dinero.
+        """
+        if not tracking_numbers:
+            return {}
+        columns = ", ".join(MONEY_COLUMNS)
+        out: dict[str, dict[str, Any]] = {}
+        with self._conn.cursor(row_factory=dict_row) as cur:
+            cur.execute(
+                f"SELECT tracking_number, {columns} FROM core.shipment "
+                "WHERE connection_id = %s AND tracking_number = ANY(%s)",
+                (ctx.connection_id, tracking_numbers),
+            )
+            for row in cur.fetchall():
+                out[row["tracking_number"]] = row
+        return out
 
     # =====================================================================
     # Movements
