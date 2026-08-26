@@ -109,6 +109,20 @@ class IngestQueue:
                 # died as "QueryCanceled" with nothing stored. LOCAL: it ends
                 # with this transaction and never leaks to a pooled session.
                 execute(conn, "SET LOCAL statement_timeout = '30min'")
+                # Una sola carga por conexión a la vez. Sin esto, dos subidas del
+                # mismo archivo abren dos transacciones largas que pelean por la
+                # misma fila de `raw.load_batch` (mismo content_hash) y se traban
+                # mutuamente durante minutos - la persona ve "Procesando" sin que
+                # nada avance. Este lock de transacción pone las cargas EN FILA:
+                # la segunda espera a que la primera confirme (su turno), y
+                # entonces `batch_exists` la reconoce como duplicada y la salta.
+                # Es por connection_id, así que cargas de conexiones distintas no
+                # se estorban. Se libera solo al cerrar la transacción.
+                execute(
+                    conn,
+                    "SELECT pg_advisory_xact_lock(hashtext(%s)::bigint)",
+                    (str(job["connection_id"]),),
+                )
                 country_code, currency_code = self._resolve_country(conn, job, payload)
                 store = PostgresStore(conn)
                 engine = IngestEngine(store, pii_salt=self._settings.pii_hash_salt)
@@ -304,12 +318,46 @@ def _announce(
 
 
 def _human_error(exc: Exception) -> str:
-    """Turn a parser exception into something a non-technical user can act on."""
+    """Turn a processing exception into something a non-technical user can act on.
+
+    El mensaje aterriza en la fila de la carga, así que tiene que decir QUÉ pasó
+    y qué hacer - no solo que "algo" falló. El texto anterior echaba la culpa al
+    formato para todo lo que no reconocía ("Revisa el formato"), y eso era falso
+    en la mitad de los casos: un timeout, un bloqueo o una regla de la conexión
+    no tienen nada que ver con el formato del archivo, y mandaban a la persona a
+    revisar lo que no era.
+    """
+    import psycopg
+
     from pipeline.readers import EmptyFileError, UnsupportedFileError
 
+    # Estos ya traen un mensaje claro y accionable sobre el archivo mismo.
     if isinstance(exc, UnsupportedFileError | EmptyFileError | CountryUndeterminedError):
         return str(exc)
-    return f"No se pudo procesar el archivo ({type(exc).__name__}). Revisa el formato."
+
+    # Errores de base con causa conocida: se nombra la causa, no el formato.
+    if isinstance(exc, psycopg.errors.CheckViolation):
+        # El trigger/constraint ya explica qué le falta a la conexión (p. ej.
+        # consentimiento). Se pasa tal cual en vez de esconderlo tras "formato".
+        detalle = getattr(getattr(exc, "diag", None), "message_primary", "") or ""
+        if detalle:
+            return f"La conexión no está lista para recibir este archivo: {detalle}"
+        return "La conexión no está lista para recibir este archivo (falta configurarla)."
+    if isinstance(exc, psycopg.errors.QueryCanceled):
+        return ("El archivo tiene demasiadas filas y el procesamiento superó el "
+                "tiempo límite. No se guardó nada; se está optimizando la carga.")
+    if isinstance(exc, psycopg.errors.DeadlockDetected | psycopg.errors.LockNotAvailable):
+        return ("Otra carga del mismo archivo está en curso. Espera a que termine "
+                "antes de volver a subirlo (no lo subas dos veces seguidas).")
+    if isinstance(exc, psycopg.OperationalError):
+        return ("Se perdió la conexión con la base durante la carga. No se guardó "
+                "nada; vuelve a intentarlo.")
+    if isinstance(exc, psycopg.errors.UniqueViolation | psycopg.errors.ForeignKeyViolation):
+        detalle = getattr(getattr(exc, "diag", None), "message_primary", "") or type(exc).__name__
+        return f"Un dato del archivo no encaja con la base: {detalle}"
+
+    # Desconocido de verdad: no se culpa al formato por defecto.
+    return f"No se pudo procesar el archivo. Detalle técnico: {type(exc).__name__}."
 
 
 _queue: IngestQueue | None = None
