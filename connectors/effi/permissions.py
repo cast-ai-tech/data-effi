@@ -59,15 +59,21 @@ class PermissionProbe:
 
 
 # Ordered required-first, which is also the order the screen renders. Paths mirror
-# connectors/effi/session_fetcher.py::REPORT_PATHS and carry the same caveat: they
-# are what the panel appeared to use and are overridable by environment.
+# connectors/effi/session_fetcher.py::REPORT_PATHS.
+#
+# Solo DOS están confirmadas contra un Effi real (captura del 2026-08-26): guías y
+# movimientos, y no viven en /reportes/*/export como se supuso, sino en
+# /app/<vista>/excel. Las otras cuatro siguen con la ruta supuesta y SON
+# SOSPECHOSAS: la captura probó que ese patrón /reportes/ no existe en el Effi
+# real, así que casi seguro también van bajo /app/. Se corregirán cuando una
+# captura las traiga; overridables por entorno mientras tanto.
 PERMISSION_PROBES: tuple[PermissionProbe, ...] = (
     PermissionProbe("guias_transporte", "Guías de transporte",
-                    "/reportes/guias/export", required=True),
+                    "/app/guia_transporte/excel", required=True),
     PermissionProbe("novedades_guias", "Novedades de guías de transporte",
                     "/reportes/novedades/export", required=True),
     PermissionProbe("trazabilidad_dinero", "Trazabilidad de dinero Effi",
-                    "/reportes/movimientos/export", required=True),
+                    "/app/movimiento_dinero_effi/excel", required=True),
     PermissionProbe("gestion_novedades", "Gestión de novedades de guías de transporte",
                     "/reportes/gestion-novedades/export", required=False),
     PermissionProbe("articulos", "Artículos", "/reportes/articulos/export", required=False),

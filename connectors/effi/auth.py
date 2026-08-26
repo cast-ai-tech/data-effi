@@ -64,7 +64,7 @@ from pipeline.vault import Credential, session_is_fresh
 
 logger = logging.getLogger(__name__)
 
-DEFAULT_BASE_URL = "https://app.effi.com.co"
+DEFAULT_BASE_URL = "https://effi.com.co"
 DEFAULT_TIMEOUT_SECONDS = 30.0
 MIN_SECONDS_BETWEEN_LOGINS = 5.0
 USER_AGENT = "MasterData-Analytics/1.0 (+operador autorizado por el comerciante)"

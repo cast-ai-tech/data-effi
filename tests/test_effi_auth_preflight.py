@@ -182,7 +182,7 @@ class _FakeFetcher:
         return self.default
 
 
-BASE = "https://app.effi.com.co"
+BASE = "https://effi.com.co"
 
 
 def test_everything_granted_is_usable_and_says_so_plainly():
@@ -221,7 +221,7 @@ def test_a_missing_optional_permission_does_not_break_the_connection():
 
 def test_probing_stops_after_a_required_permission_is_denied():
     """No reason to make nine more requests to a panel that already said no."""
-    fetcher = _FakeFetcher({"/reportes/guias/": "denied"})
+    fetcher = _FakeFetcher({"/app/guia_transporte/excel": "denied"})
     report = run_preflight(fetcher, base_url=BASE)
 
     assert len(fetcher.asked) == 1
@@ -235,7 +235,7 @@ def test_an_expired_session_is_not_reported_as_missing_permissions():
     If the session dies mid-preflight, every remaining probe would answer
     `denied` - and the merchant would go add permissions they already had.
     """
-    fetcher = _FakeFetcher({"/reportes/guias/": "__expired__"})
+    fetcher = _FakeFetcher({"/app/guia_transporte/excel": "__expired__"})
     report = run_preflight(fetcher, base_url=BASE)
 
     assert report.session_valid is False
@@ -251,7 +251,7 @@ def test_a_required_permission_we_could_not_check_is_not_reported_as_working():
     nothing, and the merchant would find out at the first failed sync instead of
     now, while they are looking at the screen.
     """
-    fetcher = _FakeFetcher({"/reportes/guias/": "unreachable"})
+    fetcher = _FakeFetcher({"/app/guia_transporte/excel": "unreachable"})
     report = run_preflight(fetcher, base_url=BASE)
 
     assert report.is_usable is False

@@ -39,16 +39,27 @@ from pipeline.models import BatchKind
 
 logger = logging.getLogger(__name__)
 
-DEFAULT_BASE_URL = "https://app.effi.com.co"
+DEFAULT_BASE_URL = "https://effi.com.co"
 DEFAULT_TIMEOUT_SECONDS = 60.0
 MIN_SECONDS_BETWEEN_REQUESTS = 2.0
 USER_AGENT = "MasterData-Analytics/1.0 (+operador autorizado por el comerciante)"
 
 # Report paths per data kind. Overridable by environment so a change on Effi's
 # side does not require a code deploy.
+# Rutas reales, capturadas de una cuenta de Effi el 2026-08-26. El Effi de
+# verdad no tiene un /reportes/*/export limpio: cada reporte es una vista del
+# panel que se vuelca a Excel desde /app/<vista>/excel. El cuerpo vuelve como
+# `application/vnd.ms-excel` (el .xls viejo, no xlsx).
+#
+# OJO - PENDIENTE: estas vistas no se filtran con `fecha_inicio/fecha_fin`. La
+# captura mostró que guías usa `desde` (+ `vigente`) y movimientos usa
+# `fecha_origen_desde`, y ambas llevan además una tanda de selectores de columna
+# `c1..cN` cuyos VALORES la captura no trae (solo los nombres). Hasta tener esos
+# valores, `fetch_report` arma el query con params que Effi ignora. Ver
+# tools/effi-capture/README.md.
 REPORT_PATHS: dict[BatchKind, str] = {
-    BatchKind.SHIPMENTS: "/reportes/guias/export",
-    BatchKind.MOVEMENTS: "/reportes/movimientos/export",
+    BatchKind.SHIPMENTS: "/app/guia_transporte/excel",
+    BatchKind.MOVEMENTS: "/app/movimiento_dinero_effi/excel",
 }
 
 
