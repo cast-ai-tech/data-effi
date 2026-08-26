@@ -91,13 +91,15 @@ EFFI_GUIDES_COLUMNS = _norm_keys(
         "Prefijo ID guía": "external_order_id",
         "Documento de venta": "sale_document",
         # --- dates ---
-        "Fecha de envío": "created_date",
+        # La fecha PRINCIPAL de la guía es la de creación en el ERP: es la que el
+        # comerciante usa para agrupar su operación (decisión de Alexander,
+        # 2026-08-26). "Fecha de envío" pasa a ser secundaria. Antes era al
+        # revés; el tablero se agrupa por created_date, así que este es el
+        # cambio que mueve todo a "cuándo se creó la guía".
+        "Fecha de creación": "created_date",
+        "Fecha de envío": "created_at_source",
         "Fecha de entrega esperada": "expected_delivery_date",
         "Fecha de estado final": "final_status_date",
-        # NOT dispatched_at. This is when the ERP created the guide; the goods
-        # leave on "Fecha relación de despacho", typically days later. See
-        # migration 019 - mapping it here understated preparation twelvefold.
-        "Fecha de creación": "created_at_source",
         "Fecha de anulación": "cancelled_at",
         "Fecha liquidación con recaudo": "settled_at",
         # --- status ---
@@ -589,16 +591,19 @@ def transform_effi_guide(mapped: dict[str, Any]) -> dict[str, Any]:
     out["carrier_tracking_number"] = carrier_number
 
     # --- status ---------------------------------------------------------
-    # `Estado global guía inicial` is the canonical one. When a return is under
-    # way, the return status wins: a guide "delivered to origin" is a return,
-    # not a delivery.
+    # El estado que se guarda y se cuenta es SIEMPRE "Estado global guía inicial"
+    # (decisión de Alexander, 2026-08-26). Antes, cuando había una devolución en
+    # curso, "Estado global guía devolución" ganaba - eso ya no: una guía en
+    # devolución conserva su estado inicial, y el % de devoluciones se calcula
+    # aparte como "todo lo que no sea Entregada" (regla + filtro del tablero).
+    # `return_status` se sigue usando abajo SOLO para fechar la devolución
+    # (returned_at) en los reportes de tiempos, no para el estado mostrado.
     return_status = normalize_text(mapped.get("return_status_raw"))
     global_status = normalize_text(mapped.get("status_raw"))
     detail_status = normalize_text(mapped.get("status_detail"))
 
     out["status_raw"] = (
-        clean_text(mapped.get("return_status_raw"))
-        or clean_text(mapped.get("status_raw"))
+        clean_text(mapped.get("status_raw"))
         or clean_text(mapped.get("status_detail"))
     )
     out["status_detail"] = clean_text(mapped.get("status_detail"))
