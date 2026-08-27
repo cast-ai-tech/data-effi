@@ -104,6 +104,15 @@ describe("PlatformPicker", () => {
     await waitFor(() => expect(container.querySelector("[role=group]")).toBeNull());
   });
 
+/**
+ * El picker es un desplegable: las opciones no existen en el DOM hasta abrirlo.
+ * Antes era un grupo de botones siempre visibles; se unificó con el selector de
+ * rango y el de estados para que los tres filtros del header se lean igual.
+ */
+async function openMenu() {
+  fireEvent.click(await screen.findByRole("button", { name: /Plataforma/ }));
+}
+
   it("writes the chosen platform to the URL and clears it with Todas", async () => {
     api.connections = [EFFI, DROPI];
     render(
@@ -112,9 +121,11 @@ describe("PlatformPicker", () => {
       </DateRangeProvider>,
     );
 
+    await openMenu();
     fireEvent.click(await screen.findByRole("button", { name: "Dropi" }));
     expect(nav.replace).toHaveBeenLastCalledWith("/ec?platform=dropi", { scroll: false });
 
+    await openMenu();
     fireEvent.click(screen.getByRole("button", { name: "Todas" }));
     expect(nav.replace).toHaveBeenLastCalledWith("/ec", { scroll: false });
   });
@@ -128,6 +139,7 @@ describe("PlatformPicker", () => {
       </DateRangeProvider>,
     );
 
+    await openMenu();
     fireEvent.click(await screen.findByRole("button", { name: "Effi" }));
     expect(nav.replace).toHaveBeenLastCalledWith(
       "/ec?from=2026-08-01&to=2026-08-14&platform=effi",
@@ -144,6 +156,7 @@ describe("PlatformPicker", () => {
       </DateRangeProvider>,
     );
 
+    await openMenu();
     const stray = await screen.findByRole("button", { name: /dropi ×/ });
     expect(stray).toHaveAttribute("aria-pressed", "true");
     fireEvent.click(stray);
