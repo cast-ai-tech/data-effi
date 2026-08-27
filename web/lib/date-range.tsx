@@ -225,10 +225,15 @@ export function withRange(
   range: DateRange,
   field: DateField = DEFAULT_FIELD,
   platform: string | null = null,
+  statuses: readonly string[] | null = null,
 ): string {
   const params = new URLSearchParams();
   if (range.from) params.set("date_from", range.from);
   if (range.to) params.set("date_to", range.to);
+  // Filtro global de estados. Ausente = los cinco grupos, que es el default del
+  // servidor; solo viaja cuando la persona apagó alguno.
+  if (statuses && statuses.length > 0)
+    params.set("statuses", statuses.join(","));
   // The default is the server's default too, so saying it adds nothing to the
   // URL a reader has to scan.
   if (field !== DEFAULT_FIELD) params.set("date_field", field);
@@ -472,6 +477,12 @@ export interface DateRangeContextValue {
    */
   platform: string | null;
   setPlatform: (platform: string | null) => void;
+  /**
+   * Grupos de estado activos, o `null` = todos. Apagar uno lo saca del universo
+   * de TODAS las métricas que ya honran el filtro, no solo de una tarjeta.
+   */
+  statuses: StatusGroup[] | null;
+  setStatuses: (statuses: readonly StatusGroup[] | null) => void;
 }
 
 const DateRangeContext = createContext<DateRangeContextValue | null>(null);
@@ -491,6 +502,42 @@ function readField(): DateField {
 }
 
 /** Catalogue codes are lower-case slugs; anything else is not forwarded. */
+/**
+ * Los cinco grupos de estado del informe, en el orden del recorrido de una guía.
+ * Es el vocabulario del filtro global: apagar uno lo saca de TODOS los números.
+ */
+export const STATUS_GROUPS = [
+  "en_transito",
+  "novedad",
+  "entregada",
+  "devolucion",
+  "indemnizacion",
+] as const;
+export type StatusGroup = (typeof STATUS_GROUPS)[number];
+
+export const STATUS_GROUP_LABELS: Record<StatusGroup, string> = {
+  en_transito: "En tránsito",
+  novedad: "Novedad",
+  entregada: "Entregada",
+  devolucion: "Devolución",
+  indemnizacion: "Indemnización",
+};
+
+/** Los grupos activos según la URL. `null` = todos (el default del servidor). */
+export function readStatuses(value: string | null): StatusGroup[] | null {
+  if (!value) return null;
+  const wanted = value
+    .split(",")
+    .map((part) => part.trim())
+    .filter((part): part is StatusGroup =>
+      (STATUS_GROUPS as readonly string[]).includes(part),
+    );
+  // Pedir los cinco es no filtrar: se normaliza a null para no ensuciar la URL.
+  if (wanted.length === 0 || wanted.length === STATUS_GROUPS.length)
+    return null;
+  return STATUS_GROUPS.filter((group) => wanted.includes(group));
+}
+
 export function readPlatform(value: string | null): string | null {
   return value && /^[a-z0-9_]{1,40}$/.test(value) ? value : null;
 }
@@ -511,13 +558,15 @@ export function DateRangeProvider({ children }: { children: ReactNode }) {
   const to = readParam(search.get("to"));
   const field = readField();
   const platform = readPlatform(search.get("platform"));
+  const statusesParam = search.get("statuses");
+  const statuses = useMemo(() => readStatuses(statusesParam), [statusesParam]);
 
   const range = useMemo<DateRange>(() => ({ from, to }), [from, to]);
   const mode = useMemo(() => inferMode(range, today), [range, today]);
 
   // Everything the excluded count depends on. When any of it changes the old
   // count is about a question nobody is asking any more.
-  const scope = `${pathname}|${field}|${from ?? ""}|${to ?? ""}|${platform ?? ""}`;
+  const scope = `${pathname}|${field}|${from ?? ""}|${to ?? ""}|${platform ?? ""}|${statuses?.join(",") ?? ""}`;
 
   const [excluded, setExcluded] = useState<{
     scope: string;
@@ -592,6 +641,16 @@ export function DateRangeProvider({ children }: { children: ReactNode }) {
     [writeParams],
   );
 
+  const setStatuses = useCallback(
+    (next: readonly StatusGroup[] | null) =>
+      writeParams((params) => {
+        const clean = readStatuses(next ? next.join(",") : null);
+        if (clean) params.set("statuses", clean.join(","));
+        else params.delete("statuses");
+      }),
+    [writeParams],
+  );
+
   const value = useMemo<DateRangeContextValue>(
     () => ({
       range,
@@ -605,6 +664,8 @@ export function DateRangeProvider({ children }: { children: ReactNode }) {
       reportExcluded,
       platform,
       setPlatform,
+      statuses,
+      setStatuses,
     }),
     [
       range,
@@ -618,6 +679,8 @@ export function DateRangeProvider({ children }: { children: ReactNode }) {
       reportExcluded,
       platform,
       setPlatform,
+      statuses,
+      setStatuses,
     ],
   );
 
@@ -633,6 +696,8 @@ const INERT_RANGE: DateRangeContextValue = {
   mode: "maximo",
   field: DEFAULT_FIELD,
   today: null,
+  statuses: null,
+  setStatuses: () => {},
   setRange: () => {},
   setPreset: () => {},
   setField: () => {},
@@ -711,12 +776,12 @@ export function useRangedApi<T>(
   path: string | null,
   deps: unknown[] = [],
 ): RangedState<T> {
-  const { range, field, platform, reportExcluded } = useDateRange();
+  const { range, field, platform, statuses, reportExcluded } = useDateRange();
   const report = useContext(ReportBasisContext);
   const reportPlatform = useContext(ReportPlatformContext);
 
   const fullPath =
-    path === null ? null : withRange(path, range, field, platform);
+    path === null ? null : withRange(path, range, field, platform, statuses);
   const {
     data: payload,
     error,

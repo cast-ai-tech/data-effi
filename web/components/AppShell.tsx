@@ -12,6 +12,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 
 import { CopilotPanel } from "@/components/CopilotPanel";
 import { DateRangePicker } from "@/components/DateRangePicker";
+import { StatusFilter } from "@/components/StatusFilter";
 import { PlatformPicker } from "@/components/PlatformPicker";
 import { NotificationBell } from "@/components/NotificationBell";
 import { BrandMark } from "@/components/BrandMark";
@@ -360,6 +361,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
                     cards obeyed is reported on each card, like the date. */}
                 <div className="hidden items-center gap-2.5 md:flex">
                   <PlatformPicker countryCode={currentCountry} />
+                  <StatusFilter />
                   <DateRangePicker country={formatCountry} />
                 </div>
                 <Button
@@ -458,6 +460,9 @@ export function AppShell({ children }: { children: React.ReactNode }) {
           <div className="flex flex-col gap-5">
             <FilterRow label="Plataforma">
               <PlatformPicker countryCode={currentCountry} />
+            </FilterRow>
+            <FilterRow label="Estados que se cuentan">
+              <StatusFilter />
             </FilterRow>
             <FilterRow label="Rango">
               <DateRangePicker country={formatCountry} />

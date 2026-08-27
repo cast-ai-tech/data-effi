@@ -112,6 +112,45 @@ PlatformQuery = Annotated[
 ]
 
 
+StatusGroupsQuery = Annotated[
+    str | None,
+    Query(
+        max_length=120,
+        pattern=r"^[a-z_,]+$",
+        description=(
+            "Grupos de estado activos, separados por coma: entregada, devolucion, "
+            "en_transito, novedad, indemnizacion. Vacío = todos."
+        ),
+    ),
+]
+
+# Los cinco grupos que el informe muestra como columnas. El filtro se hace sobre
+# ellos - no sobre los trece estados canónicos - porque es lo que la persona ve.
+STATUS_GROUPS: frozenset[str] = frozenset(
+    {"entregada", "devolucion", "en_transito", "novedad", "indemnizacion"}
+)
+
+
+def _check_status_groups(statuses: str | None) -> list[str] | None:
+    """La lista de grupos activos, o None para 'todos'.
+
+    Pedir los cinco es lo mismo que no filtrar, y se normaliza a None para que la
+    consulta no lleve un ANY() que no descarta nada.
+    """
+    if not statuses:
+        return None
+    wanted = [s for s in (part.strip() for part in statuses.split(",")) if s]
+    unknown = sorted(set(wanted) - STATUS_GROUPS)
+    if unknown:
+        raise InvalidPlatform(
+            f"Estados desconocidos: {', '.join(unknown)}. "
+            f"Usa: {', '.join(sorted(STATUS_GROUPS))}."
+        )
+    if not wanted or set(wanted) == STATUS_GROUPS:
+        return None
+    return sorted(set(wanted))
+
+
 def _check_platform(conn: DbDep, platform: str | None) -> str | None:
     """Reject a platform the catalogue does not know, by name."""
     if platform is None:
@@ -231,6 +270,8 @@ def _ranged(
     order_by: str,
     extra: dict[str, Any] | None = None,
     platform: str | None = None,
+    status_groups: list[str] | None = None,
+    supports_status_filter: bool = False,
 ) -> KpiResponse[RowT]:
     """Read one of the range-aware functions from migrations 018, 020 and 041.
 
@@ -248,11 +289,20 @@ def _ranged(
     params["date_field"] = basis
     params["platform"] = applied_platform
 
+    # El quinto argumento (grupos de estado activos) solo se manda a las
+    # funciones que ya lo aceptan; el resto sigue con su firma de cuatro. Así el
+    # filtro se extiende función por función sin romper las que faltan.
+    if supports_status_filter:
+        params["status_groups"] = status_groups
+        call = (
+            "(%(date_from)s, %(date_to)s, %(date_field)s, %(platform)s, %(status_groups)s)"
+        )
+    else:
+        call = "(%(date_from)s, %(date_to)s, %(date_field)s, %(platform)s)"
+
     rows = fetch_all(
         conn,
-        f"SELECT * FROM mart.{function}"
-        "(%(date_from)s, %(date_to)s, %(date_field)s, %(platform)s) "
-        f"{where} ORDER BY {order_by}",
+        f"SELECT * FROM mart.{function}{call} {where} ORDER BY {order_by}",
         params,
     )
     return KpiResponse[row_model](  # type: ignore[valid-type]
@@ -827,6 +877,7 @@ def daily_status(
     date_to: OptionalDate = None,
     date_field: DateFieldQuery = BY_CREATION,
     platform: PlatformQuery = None,
+    statuses: StatusGroupsQuery = None,
 ) -> KpiResponse[DailyStatusRow]:
     """The table in the operator's hand-made report: day x platform x status.
 
@@ -843,6 +894,8 @@ def daily_status(
         date_to=date_to,
         date_field=date_field,
         platform=platform,
+        status_groups=_check_status_groups(statuses),
+        supports_status_filter=True,
         order_by="day, platform_code",
     )
 
@@ -859,6 +912,7 @@ def platforms(
     date_to: OptionalDate = None,
     date_field: DateFieldQuery = BY_CREATION,
     platform: PlatformQuery = None,
+    statuses: StatusGroupsQuery = None,
 ) -> KpiResponse[PlatformSummaryRow]:
     """No platform filter: this endpoint IS the comparison between platforms.
 
@@ -876,6 +930,8 @@ def platforms(
         date_to=date_to,
         date_field=date_field,
         platform=None,
+        status_groups=_check_status_groups(statuses),
+        supports_status_filter=True,
         order_by="shipments DESC, platform_code",
     )
 
