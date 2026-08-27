@@ -1341,6 +1341,10 @@ class ProblemRateRow(BaseModel):
 class LayoutWidget(BaseModel):
     widget_code: str
     tab: str
+    # Personalización de esta persona (core.dashboard_widget_pref). Sin nada
+    # guardado: el orden del catálogo, ancho 1 y visible - el tablero de siempre.
+    width: int = 1
+    hidden: bool = False
     title: str
     description: str
     sort_order: int

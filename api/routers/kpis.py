@@ -44,8 +44,8 @@ from typing import Annotated, Any, TypeVar
 from fastapi import APIRouter, Query
 from pydantic import BaseModel
 
-from api.db import fetch_all, fetch_one
-from api.deps import CurrentUserDep, DbDep
+from api.db import execute, fetch_all, fetch_one
+from api.deps import CurrentUserDep, DbDep, tenant_of
 from api.errors import InvalidDateField, InvalidDateRange, InvalidPlatform
 from api.schemas import (
     DATE_FIELDS,
@@ -888,7 +888,9 @@ def platforms(
     response_model=LayoutResponse,
     summary="Qué widgets están disponibles, degradados o bloqueados",
 )
-def layout(conn: DbDep, country: CountryQuery) -> LayoutResponse:
+def layout(
+    conn: DbDep, user: CurrentUserDep, country: CountryQuery
+) -> LayoutResponse:
     """The frontend renders exactly this. It never decides availability itself.
 
     No date range, and `date_basis` is null to say so. Which widgets exist for a
@@ -896,15 +898,104 @@ def layout(conn: DbDep, country: CountryQuery) -> LayoutResponse:
     being looked at - narrowing it by date would blank the dashboard for any
     range with no data in it, which is precisely when the operator needs to see
     the widget and its "sin datos" message.
+
+    QUÉ APORTA EL LEFT JOIN. El catálogo dice qué tarjetas EXISTEN y en qué
+    estado están; las preferencias dicen cómo las quiere ESTA persona: en qué
+    orden y de qué ancho. Se combinan aquí, no en el frontend, para que la
+    pantalla siga renderizando una sola lista ya resuelta. Sin preferencias
+    guardadas, `COALESCE` devuelve el orden del catálogo y ancho 1 - es decir,
+    exactamente el tablero de siempre.
     """
     rows = fetch_all(
         conn,
-        "SELECT * FROM mart.v_country_dashboard_layout WHERE country_code = %(country)s "
-        "ORDER BY tab, sort_order",
-        {"country": country.upper()},
+        """
+        SELECT l.tenant_id, l.country_code, l.widget_code, l.tab, l.title,
+               l.description, l.required_domains, l.optional_domains,
+               l.missing_required, l.missing_optional, l.awaiting_data,
+               l.state, l.state_message,
+               COALESCE(p.sort_order, l.sort_order) AS sort_order,
+               COALESCE(p.width, 1)                 AS width,
+               COALESCE(p.hidden, false)            AS hidden
+          FROM mart.v_country_dashboard_layout l
+          LEFT JOIN core.dashboard_widget_pref p
+                 ON p.user_id = %(user_id)s
+                AND p.country_code = l.country_code
+                AND p.widget_code = l.widget_code
+         WHERE l.country_code = %(country)s
+         ORDER BY l.tab, COALESCE(p.sort_order, l.sort_order), l.widget_code
+        """,
+        {"country": country.upper(), "user_id": user.id},
     )
     return LayoutResponse(
         country_code=country.upper(),
         widgets=[LayoutWidget(**row) for row in rows],
         date_basis=None,
     )
+
+
+class WidgetPlacement(BaseModel):
+    """Dónde queda una tarjeta y qué ancho ocupa."""
+
+    widget_code: str
+    sort_order: int
+    width: int = 1
+    hidden: bool = False
+
+
+class LayoutPreferences(BaseModel):
+    placements: list[WidgetPlacement]
+
+
+@router.put(
+    "/layout",
+    response_model=LayoutResponse,
+    summary="Guardar el orden y el ancho de las tarjetas de esta persona",
+)
+def save_layout(
+    conn: DbDep,
+    user: CurrentUserDep,
+    country: CountryQuery,
+    preferences: LayoutPreferences,
+) -> LayoutResponse:
+    """Guarda la personalización del tablero y devuelve el layout ya resuelto.
+
+    POR USUARIO, NO POR EMPRESA. Dos personas de la misma empresa miran cosas
+    distintas - quien despacha vive en Logística y quien cobra en Dinero -, así
+    que el tablero de una no puede reordenar el de la otra.
+
+    Se acepta cualquier `widget_code`: el catálogo decide qué se RENDERIZA, así
+    que una preferencia sobre una tarjeta que hoy no existe simplemente no se
+    une a nada, y vuelve a aplicarse sola el día que esa tarjeta aparezca.
+    """
+    invalid = [p.widget_code for p in preferences.placements if p.width not in (1, 2)]
+    if invalid:
+        raise InvalidPlatform(
+            "El ancho de una tarjeta solo puede ser 1 o 2 columnas. "
+            f"Revisa: {', '.join(sorted(set(invalid)))}."
+        )
+
+    for placement in preferences.placements:
+        execute(
+            conn,
+            """
+            INSERT INTO core.dashboard_widget_pref
+                (tenant_id, user_id, country_code, widget_code, sort_order, width, hidden)
+            VALUES (%(tenant)s, %(user)s, %(country)s, %(code)s, %(order)s, %(width)s, %(hidden)s)
+            ON CONFLICT (user_id, country_code, widget_code) DO UPDATE SET
+                sort_order = EXCLUDED.sort_order,
+                width      = EXCLUDED.width,
+                hidden     = EXCLUDED.hidden,
+                updated_at = now()
+            """,
+            {
+                "tenant": tenant_of(user),
+                "user": user.id,
+                "country": country.upper(),
+                "code": placement.widget_code,
+                "order": placement.sort_order,
+                "width": placement.width,
+                "hidden": placement.hidden,
+            },
+        )
+
+    return layout(conn, user, country)
