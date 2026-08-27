@@ -46,6 +46,10 @@ class Settings(BaseSettings):
     )
     db_pool_min: int = 1
     db_pool_max: int = 10
+    # Cuánto se espera a que la base conteste AL ARRANCAR. Corto a propósito: si
+    # no responde, la respuesta útil es decirlo ya, no quedarse colgado sin
+    # abrir puerto mientras la plataforma marca el despliegue como fallido.
+    db_connect_timeout: float = 15.0
 
     # --- security ---
     jwt_secret: str = Field(..., description="openssl rand -hex 32")

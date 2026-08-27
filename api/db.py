@@ -27,6 +27,21 @@ _readonly_pool: ConnectionPool | None = None
 _ingest_pool: ConnectionPool | None = None
 
 
+def _host_of(dsn: str) -> str:
+    """El host de una cadena de conexión, sin usuario ni contraseña.
+
+    Para poder nombrar en un error QUÉ no respondió sin filtrar credenciales a
+    los logs.
+    """
+    try:
+        from urllib.parse import urlsplit
+
+        parts = urlsplit(dsn)
+        return f"{parts.hostname}:{parts.port}" if parts.port else str(parts.hostname)
+    except Exception:      # pragma: no cover - un DSN ilegible no debe tapar el error real
+        return "(host ilegible)"
+
+
 def init_pools(settings: Settings) -> None:
     """Open the pools, replacing any that are already open.
 
@@ -77,6 +92,27 @@ def init_pools(settings: Settings) -> None:
         max_lifetime=300,
         open=True,
     )
+    # `open=True` NO espera a que la conexión se establezca: el pool se declara
+    # listo aunque la base sea inalcanzable, y el fallo aparece minutos después,
+    # en la primera consulta, sin decir que era la base. Eso costó un despliegue
+    # entero: el log decía "database pool ready" y el arranque se quedaba colgado
+    # sin abrir puerto, sin un solo error.
+    #
+    # Esperar aquí convierte ese misterio en una frase. `wait` intenta de verdad
+    # y, si no puede, se dice qué host no respondió - que es el dato que hacía
+    # falta (contra Supabase, la causa habitual es apuntar a la conexión DIRECTA
+    # `db.<ref>.supabase.co`, que solo tiene IPv6, en vez de al pooler).
+    try:
+        _pool.wait(timeout=settings.db_connect_timeout)
+    except Exception as exc:
+        host = _host_of(settings.database_url)
+        close_pools()
+        raise RuntimeError(
+            f"No se pudo conectar a la base de datos en {host}: {type(exc).__name__}. "
+            "Revisa DATABASE_URL. Con Supabase tiene que apuntar al POOLER "
+            "(aws-0-<region>.pooler.supabase.com), no a la conexión directa "
+            "db.<ref>.supabase.co, que solo responde por IPv6."
+        ) from exc
     logger.info("database pool ready (min=%s max=%s)", settings.db_pool_min, settings.db_pool_max)
 
     if settings.database_url_readonly:
