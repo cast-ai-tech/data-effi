@@ -16,7 +16,15 @@
 
 import { useMemo } from "react";
 
-import { Card, Chip, EmptyState, ErrorState, MicroBar, SkeletonRows, cx } from "@/components/ui";
+import {
+  Card,
+  Chip,
+  EmptyState,
+  ErrorState,
+  MicroBar,
+  SkeletonRows,
+  cx,
+} from "@/components/ui";
 import type { WidgetProps } from "@/components/widgets/types";
 import { useRangedApi } from "@/lib/date-range";
 import { formatNumber, formatPercent, type FormatCountry } from "@/lib/format";
@@ -33,6 +41,7 @@ export interface Combined {
   shipments: number;
   entregada: number;
   devolucion: number;
+  indemnizacion: number;
   cerradas: number;
   pctDevolucionTotal: number | null;
   pctDevolucionCerradas: number | null;
@@ -43,12 +52,14 @@ export function combine(rows: readonly PlatformSummaryRow[]): Combined {
   let shipments = 0;
   let entregada = 0;
   let devolucion = 0;
+  let indemnizacion = 0;
   let cerradas = 0;
   let leader: PlatformSummaryRow | null = null;
   for (const row of rows) {
     shipments += row.shipments;
     entregada += row.entregada;
     devolucion += row.devolucion;
+    indemnizacion += row.indemnizacion;
     cerradas += row.cerradas;
     if (!leader || row.shipments > leader.shipments) leader = row;
   }
@@ -56,14 +67,22 @@ export function combine(rows: readonly PlatformSummaryRow[]): Combined {
     shipments,
     entregada,
     devolucion,
+    indemnizacion,
     cerradas,
-    pctDevolucionTotal: shipments > 0 ? (devolucion / shipments) * 100 : null,
+    // Devolución = todo lo no-entregado salvo indemnización, sobre el total -
+    // la misma regla que f_platform_summary y el total del resumen diario.
+    pctDevolucionTotal:
+      shipments > 0
+        ? ((shipments - entregada - indemnizacion) / shipments) * 100
+        : null,
     pctDevolucionCerradas: cerradas > 0 ? (devolucion / cerradas) * 100 : null,
     leader,
   };
 }
 
-function deliveryTone(pct: number | null): "positive" | "warning" | "negative" | "neutral" {
+function deliveryTone(
+  pct: number | null,
+): "positive" | "warning" | "negative" | "neutral" {
   if (pct === null || !Number.isFinite(pct)) return "neutral";
   if (pct >= 75) return "positive";
   if (pct >= 60) return "warning";
@@ -84,7 +103,9 @@ export function ShareBar({ rows }: { rows: readonly PlatformSummaryRow[] }) {
         <div
           key={row.platform_code}
           className={cx("h-full", platformSwatch(row.platform_code))}
-          style={{ width: `${Math.max(0, Math.min(100, row.share_pct ?? 0))}%` }}
+          style={{
+            width: `${Math.max(0, Math.min(100, row.share_pct ?? 0))}%`,
+          }}
           title={`${row.platform_name} · ${formatPercent(row.share_pct)}`}
         />
       ))}
@@ -105,7 +126,10 @@ export function ConsolidatedStrip({
 
   return (
     <dl className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-      <Figure label="Guías totales combinadas" value={formatNumber(total.shipments, country, 0)} />
+      <Figure
+        label="Guías totales combinadas"
+        value={formatNumber(total.shipments, country, 0)}
+      />
       <Figure
         label="Devoluciones combinadas"
         value={formatNumber(total.devolucion, country, 0)}
@@ -145,7 +169,9 @@ function Figure({
       <dt className="text-xs font-bold uppercase tracking-[0.06em] text-ink-faint">
         {label}
       </dt>
-      <dd className={cx("mt-0.5 text-xl font-bold leading-tight", tone)}>{value}</dd>
+      <dd className={cx("mt-0.5 text-xl font-bold leading-tight", tone)}>
+        {value}
+      </dd>
       {hint && <dd className="mt-0.5 text-xs text-ink-dim">{hint}</dd>}
     </div>
   );
@@ -194,17 +220,25 @@ export default function PlatformSplit({ countryCode, country }: WidgetProps) {
 
       <ul className="mt-3 divide-y divide-line-row">
         {rows.map((row, index) => (
-          <li key={row.platform_code} className="flex items-center gap-3 py-2.5">
+          <li
+            key={row.platform_code}
+            className="flex items-center gap-3 py-2.5"
+          >
             <span
               aria-hidden
-              className={cx("size-2.5 shrink-0 rounded-full", platformSwatch(row.platform_code))}
+              className={cx(
+                "size-2.5 shrink-0 rounded-full",
+                platformSwatch(row.platform_code),
+              )}
             />
             <span className="min-w-0 flex-1">
               <span className="flex items-center gap-2">
                 <span className="truncate text-base font-semibold text-ink">
                   {row.platform_name}
                 </span>
-                {index === 0 && rows.length > 1 && <Chip tone="accent">más guías</Chip>}
+                {index === 0 && rows.length > 1 && (
+                  <Chip tone="accent">más guías</Chip>
+                )}
                 {row.sample_quality === "muestra_corta" && (
                   <abbr
                     title={SHORT_SAMPLE_HINT}

@@ -78,34 +78,22 @@ describe("useDateBasisNote", () => {
     expect(screen.queryByRole("status")).not.toBeInTheDocument();
   });
 
-  it("shouts when the card used a different date than the one chosen", () => {
-    // `/kpis/daily-contribution` always answers `creacion`, whatever was asked.
-    // The reader made an explicit choice and this card did not obey it, so a
-    // footnote is not enough.
-    nav.search = new URLSearchParams("from=2026-08-01&to=2026-08-31&field=entrega");
-    renderProbe("creacion");
-
-    expect(screen.getByText("Otra fecha")).toBeInTheDocument();
-    expect(screen.getByText(/no sobre la fecha de entrega que elegiste/)).toBeInTheDocument();
-    expect(screen.getByRole("status")).toBeInTheDocument();
-  });
-
-  it("stays a footnote when the card used exactly the date chosen", () => {
-    nav.search = new URLSearchParams("from=2026-08-01&to=2026-08-31&field=entrega");
-    renderProbe("entrega");
-
-    expect(screen.getByText(/sobre la fecha de entrega/)).toBeInTheDocument();
-    expect(screen.queryByText("Otra fecha")).not.toBeInTheDocument();
-  });
+  // Los tests de "grita cuando el usuario eligió otra fecha" se retiraron con el
+  // selector de fecha (064): ya no se puede elegir otra base, todo se mide por
+  // creación, así que ese desacuerdo entre la elección y la tarjeta no ocurre.
 
   it("does not call a fixed-basis widget disobedient", () => {
     // CS has no other date to offer: `interaccion` is not a choice the reader
     // could have made, so it is a footnote, not a broken promise.
-    nav.search = new URLSearchParams("from=2026-08-01&to=2026-08-31&field=entrega");
+    nav.search = new URLSearchParams(
+      "from=2026-08-01&to=2026-08-31&field=entrega",
+    );
     renderProbe("interaccion");
 
     expect(screen.queryByText("Otra fecha")).not.toBeInTheDocument();
-    expect(screen.getByText(/gestión de servicio al cliente/)).toBeInTheDocument();
+    expect(
+      screen.getByText(/gestión de servicio al cliente/),
+    ).toBeInTheDocument();
   });
 
   it("says nothing at all while the range is Máximo", () => {
