@@ -15,7 +15,7 @@ import psycopg
 from fastapi import Depends, Request
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 
-from api.db import check_rate_limit, connection
+from api.db import check_rate_limit, connection, execute
 from api.errors import Forbidden, PaymentRequired, RateLimited, Unauthorized
 from api.security import TokenError, constant_time_equals, decode_access_token
 from api.settings import Settings, get_settings
@@ -258,8 +258,37 @@ def db_for_user(user: CurrentUserDep, request: Request) -> Iterator[psycopg.Conn
         )
     _guard_country(user, request)
     with connection(user.tenant_id) as conn:
+        _apply_status_filter(conn, request)
         _guard_subscription(conn, user)
         yield conn
+
+
+# Los cinco grupos que el informe muestra como columnas. El filtro se hace sobre
+# ellos - no sobre los trece estados canónicos - porque es lo que la persona ve.
+STATUS_GROUPS: frozenset[str] = frozenset(
+    {"entregada", "devolucion", "en_transito", "novedad", "indemnizacion"}
+)
+
+
+def _apply_status_filter(conn: psycopg.Connection, request: Request) -> None:
+    """El filtro global de estados, fijado una vez para toda la petición.
+
+    AQUÍ Y NO EN CADA ENDPOINT. Son trece funciones de métrica y varias vistas;
+    pasarles el filtro una por una es garantizar que alguna se quede fuera y
+    muestre una tarjeta contando un universo distinto al del resto del tablero -
+    justo el error que el filtro existe para evitar. `stg.v_shipment_economics`
+    es la única puerta por la que pasan todas, y lee esta variable.
+
+    `SET LOCAL` (el `true` de set_config): muere con la transacción, así que una
+    conexión del pool nunca se lleva el filtro de una persona a la petición de
+    otra.
+    """
+    raw = request.query_params.get("statuses", "")
+    wanted = sorted({s.strip() for s in raw.split(",") if s.strip()} & STATUS_GROUPS)
+    # Pedir los cinco es no filtrar: se deja vacío para que la vista ni evalúe
+    # el ANY y el plan siga siendo el de siempre.
+    value = "" if not wanted or len(wanted) == len(STATUS_GROUPS) else ",".join(wanted)
+    execute(conn, "SELECT set_config('norte.status_groups', %s, true)", (value,))
 
 
 def _guard_subscription(conn: psycopg.Connection, user: CurrentUser) -> None:
