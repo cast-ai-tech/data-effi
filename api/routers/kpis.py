@@ -926,10 +926,17 @@ def layout(
         """,
         {"country": country.upper(), "user_id": user.id},
     )
+    saved = fetch_one(
+        conn,
+        "SELECT count(*) AS n FROM core.dashboard_widget_pref "
+        "WHERE user_id = %(user_id)s AND country_code = %(country)s",
+        {"user_id": user.id, "country": country.upper()},
+    )
     return LayoutResponse(
         country_code=country.upper(),
         widgets=[LayoutWidget(**row) for row in rows],
         date_basis=None,
+        customised=bool(saved and saved["n"]),
     )
 
 

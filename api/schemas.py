@@ -1360,6 +1360,12 @@ class LayoutWidget(BaseModel):
 class LayoutResponse(BaseModel):
     country_code: str
     widgets: list[LayoutWidget]
+    # ¿Esta persona acomodó el tablero, o está viendo el de fábrica? No se puede
+    # deducir de los widgets: el layout siempre trae un `width`, porque el
+    # servidor rellena el de fábrica cuando no hay preferencia. Ofrecer
+    # "Restablecer" en un tablero que nadie tocó es ruido, así que la respuesta
+    # lo dice explícitamente.
+    customised: bool = False
     # Always null: the layout says which widgets exist for a country, which is
     # not a question a date range can narrow. Stated rather than omitted, so the
     # UI can grey the picker out for this call instead of guessing.

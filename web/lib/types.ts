@@ -849,6 +849,9 @@ export interface LayoutWidget {
   title: string;
   description: string;
   sort_order: number;
+  /** Cuántas columnas ocupa: 1 o 2. Lo guarda cada persona (migración 057). */
+  width?: number;
+  hidden?: boolean;
   state: WidgetState;
   state_message: string | null;
   required_domains: string[];
@@ -861,6 +864,8 @@ export interface LayoutWidget {
 export interface LayoutResponse {
   country_code: string;
   widgets: LayoutWidget[];
+  /** Si esta persona ya acomodó su tablero (migración 057). */
+  customised?: boolean;
 }
 
 export interface Brief {

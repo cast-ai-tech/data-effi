@@ -15,7 +15,7 @@ import { useEffect, useMemo, useState } from "react";
 
 import { AppShell } from "@/components/AppShell";
 import { DecisionStrip } from "@/components/DecisionStrip";
-import { WidgetRenderer } from "@/components/WidgetRenderer";
+import { DashboardGrid } from "@/components/DashboardGrid";
 import { TABS, type TabKey } from "@/components/widgets/registry";
 import { HelpTip } from "@/components/HelpTip";
 import { Card, EmptyState, SkeletonRows, Tabs, cx } from "@/components/ui";
@@ -80,7 +80,12 @@ export default function CountryDashboard() {
     [countries, countryCode],
   );
 
-  const { data: layout, loading: loadingLayout, error } = useApi<LayoutResponse>(
+  const {
+    data: layout,
+    loading: loadingLayout,
+    error,
+    reload: refreshLayout,
+  } = useApi<LayoutResponse>(
     countryCode ? `/kpis/layout?country=${countryCode}` : null,
     [countryCode],
   );
@@ -183,16 +188,13 @@ export default function CountryDashboard() {
       )}
 
       {country && (
-        <div className="grid grid-cols-1 gap-4 lg:grid-cols-2 lg:gap-5">
-          {widgets.map((widget) => (
-            <div
-              key={widget.widget_code}
-              className={cx("min-w-0", FULL_WIDTH.has(widget.widget_code) && "lg:col-span-2")}
-            >
-              <WidgetRenderer widget={widget} country={country} />
-            </div>
-          ))}
-        </div>
+        <DashboardGrid
+          widgets={widgets}
+          country={country}
+          defaultFullWidth={FULL_WIDTH}
+          customised={Boolean(layout?.customised)}
+          onSaved={refreshLayout}
+        />
       )}
     </AppShell>
   );
