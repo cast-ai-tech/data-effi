@@ -140,7 +140,9 @@ services:
         sync: false
       - key: AI_MODEL
         sync: false
+      # Encendido: sync_tier3 solo toca conexiones con consentimiento registrado
+      # (core.enforce_tier3_consent). Ver docs/tier3-politica.md.
       - key: TIER3_FETCH_ENABLED
-        value: "false"
+        value: "true"
       - key: FX_PROVIDER_URL
         value: https://cdn.jsdelivr.net/npm/@fawazahmed0/currency-api@latest/v1/currencies
