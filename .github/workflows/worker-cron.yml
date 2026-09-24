@@ -69,7 +69,10 @@ jobs:
 
       - name: Llamar al worker
         env:
-          API: https://master-data-api.onrender.com
+          # La URL real del servicio en Render lleva sufijo: el subdominio sin
+          # sufijo es de otra cuenta. Se cambia con la variable del repo
+          # WORKER_API_URL, sin tocar este archivo.
+          API: ${{ vars.WORKER_API_URL || 'https://master-data-api-zmfq.onrender.com' }}
           SECRET: ${{ secrets.WORKER_TRIGGER_SECRET }}
           JOBS: ${{ steps.pick.outputs.jobs }}
         run: |
