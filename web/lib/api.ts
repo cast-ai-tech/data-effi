@@ -26,13 +26,49 @@ const PROXY_BASE = "/api/backend";
  */
 const API_URL = (process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000").replace(/\/$/, "");
 
+/** `status` of an ApiError raised because the request never reached the API. */
+export const NETWORK_ERROR_STATUS = 0;
+
+/**
+ * What to tell the reader when the API answered without a message of its own.
+ *
+ * "Error 502" or "Failed to fetch" means nothing to someone who runs a store:
+ * the screen has to say what happened and what to do next. A sleeping server
+ * (the free Render plan wakes up in ~30 s) is the most common case and the
+ * one that most needs "espera y reintenta" rather than "algo salió mal".
+ */
+export function friendlyErrorMessage(status: number): string {
+  if (status === NETWORK_ERROR_STATUS) {
+    return "No hay conexión con Master Data. Revisa tu internet y pulsa Reintentar.";
+  }
+  if (status === 403) {
+    return "Tu usuario no tiene permiso para ver esto. Pídeselo al dueño de la empresa.";
+  }
+  if (status === 404) {
+    return "No encontramos lo que buscabas. Puede que se haya borrado o que el enlace esté incompleto.";
+  }
+  if (status === 408 || status === 504) {
+    return "El servidor tardó demasiado en responder. Espera unos segundos y pulsa Reintentar.";
+  }
+  if (status === 413) {
+    return "El archivo es demasiado grande. Divídelo en partes más pequeñas y súbelas por separado.";
+  }
+  if (status === 429) {
+    return "Demasiados intentos seguidos. Espera un minuto y vuelve a intentarlo.";
+  }
+  if (status >= 500) {
+    return "El servidor está despertando o tuvo un problema. Espera unos segundos y pulsa Reintentar.";
+  }
+  return "Algo no salió bien. Pulsa Reintentar; si se repite, avísanos.";
+}
+
 export class ApiError extends Error {
   readonly status: number;
   readonly code: string;
   readonly detail: Record<string, unknown>;
 
-  constructor(status: number, body: ApiErrorBody | null, fallback: string) {
-    super(body?.error?.message ?? fallback);
+  constructor(status: number, body: ApiErrorBody | null, fallback?: string) {
+    super(body?.error?.message ?? fallback ?? friendlyErrorMessage(status));
     this.name = "ApiError";
     this.status = status;
     this.code = body?.error?.code ?? "unknown";
@@ -87,12 +123,14 @@ export async function request<T>(path: string, options: RequestOptions = {}): Pr
   }
 
   const send = () =>
-    fetch(`${PROXY_BASE}${path}`, {
-      ...rest,
-      headers: finalHeaders,
-      body: payload,
-      credentials: "same-origin",
-    });
+    offlineAsApiError(
+      fetch(`${PROXY_BASE}${path}`, {
+        ...rest,
+        headers: finalHeaders,
+        body: payload,
+        credentials: "same-origin",
+      }),
+    );
 
   let response = await send();
   if (response.status === 401 && response.headers.get(SESSION_EXPIRED_HEADER) === "1") {
@@ -100,6 +138,21 @@ export async function request<T>(path: string, options: RequestOptions = {}): Pr
   }
 
   return settle<T>(response, auth);
+}
+
+/**
+ * A fetch that never left the browser (offline, DNS, the API down) rejects
+ * with a bare `TypeError: Failed to fetch`, which every screen used to print
+ * as-is. Turned into an ApiError so it reads like every other failure.
+ * An abort is left alone: the caller cancelled it on purpose.
+ */
+async function offlineAsApiError(pending: Promise<Response>): Promise<Response> {
+  try {
+    return await pending;
+  } catch (err) {
+    if (err instanceof DOMException && err.name === "AbortError") throw err;
+    throw new ApiError(NETWORK_ERROR_STATUS, null);
+  }
 }
 
 let refreshing: Promise<boolean> | null = null;
@@ -156,7 +209,7 @@ async function settle<T>(response: Response, auth: boolean): Promise<T> {
     ) {
       window.location.assign(PLANS_PATH);
     }
-    throw new ApiError(response.status, errorBody, `Error ${response.status}`);
+    throw new ApiError(response.status, errorBody);
   }
 
   return (await response.json()) as T;
@@ -198,12 +251,14 @@ async function uploadCredential(): Promise<string> {
 }
 
 function postDirect(path: string, form: FormData, token: string): Promise<Response> {
-  return fetch(`${API_URL}${path}`, {
-    method: "POST",
-    headers: { Authorization: `Bearer ${token}` },
-    body: form,          // the browser sets the multipart boundary
-    credentials: "omit", // the API wants the bearer, and has no use for cookies
-  });
+  return offlineAsApiError(
+    fetch(`${API_URL}${path}`, {
+      method: "POST",
+      headers: { Authorization: `Bearer ${token}` },
+      body: form,          // the browser sets the multipart boundary
+      credentials: "omit", // the API wants the bearer, and has no use for cookies
+    }),
+  );
 }
 
 export const api = {
