@@ -19,7 +19,8 @@
  */
 
 import Link from "next/link";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { AppShell } from "@/components/AppShell";
 import {
@@ -49,6 +50,10 @@ import {
   contactNotice,
   daysOpenTone,
   daysToDeliver,
+  hasOrderFilters,
+  readOrderFilters,
+  writeOrderFilters,
+  type OrderFilters,
 } from "@/lib/orders";
 import { STATUS_GROUPS, statusGroupMeta, type StatusGroup } from "@/lib/status";
 import type {
@@ -84,27 +89,60 @@ export default function OrdersPage() {
 function OrdersScreen() {
   const { code: countryCode, country, countries, missing } = useRouteCountry();
 
-  const [search, setSearch] = useState("");
-  const debouncedSearch = useDebounced(search, SEARCH_DEBOUNCE_MS);
-  const [group, setGroup] = useState<StatusGroup | "">("");
-  const [fromDate, setFromDate] = useState("");
-  const [toDate, setToDate] = useState("");
-  const [onlyOpen, setOnlyOpen] = useState(false);
-  const [page, setPage] = useState(1);
-  const [openOrderId, setOpenOrderId] = useState<string | null>(null);
+  // Every filter, the page and the open guide live in the URL (see
+  // `readOrderFilters`): Back, a reload or a trip to the dashboard and back
+  // all return to exactly this list.
+  const router = useRouter();
+  const pathname = usePathname();
+  const params = useSearchParams();
+  const filters = useMemo(() => readOrderFilters(params), [params]);
+  const { group, from: fromDate, to: toDate, onlyOpen, page, order: openOrderId } = filters;
 
-  // Any change to what is being asked for invalidates where you were in it:
-  // page 7 of the old filter is not page 7 of the new one.
+  const update = useCallback(
+    (patch: Partial<OrderFilters>, how: "replace" | "push" = "replace") => {
+      const query = writeOrderFilters(params, patch).toString();
+      const href = query ? `${pathname}?${query}` : pathname;
+      if (how === "push") router.push(href, { scroll: false });
+      else router.replace(href, { scroll: false });
+    },
+    [params, pathname, router],
+  );
+
+  // The box keeps its own text while typing; the URL gets it once the typing
+  // stops, and a Back/reload that changes the URL puts its value in the box.
+  const [search, setSearch] = useState(filters.search);
+  const debouncedSearch = useDebounced(search, SEARCH_DEBOUNCE_MS);
   useEffect(() => {
-    setPage(1);
-  }, [countryCode, debouncedSearch, group, fromDate, toDate, onlyOpen]);
+    setSearch(filters.search);
+  }, [filters.search]);
+  useEffect(() => {
+    if (debouncedSearch.trim() !== filters.search.trim()) update({ search: debouncedSearch });
+    // Only the settled text decides; `filters.search` changing is the effect above.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [debouncedSearch]);
+
+  const setGroup = (value: StatusGroup | "") => update({ group: value });
+  const setFromDate = (value: string) => update({ from: value });
+  const setToDate = (value: string) => update({ to: value });
+  const setOnlyOpen = (value: boolean) => update({ onlyOpen: value });
+  // Opening a guide is a step the reader can undo with Back; paging is not.
+  const setOpenOrderId = (id: string | null) =>
+    update({ order: id }, id ? "push" : "replace");
+
+  const tableTop = useRef<HTMLDivElement>(null);
+  const setPage = (next: number) => {
+    update({ page: next });
+    // The pager sits under fifty rows: without this the next page opens
+    // scrolled to its bottom.
+    tableTop.current?.scrollIntoView({ block: "start", behavior: "smooth" });
+  };
 
   const path = country
     ? `/orders${qs({
         country: countryCode,
         page,
         page_size: PAGE_SIZE,
-        search: debouncedSearch.trim(),
+        search: filters.search.trim(),
         group,
         from_date: fromDate,
         to_date: toDate,
@@ -117,19 +155,14 @@ function OrdersScreen() {
   const rows = data?.rows ?? [];
   const piiVisible = data?.pii_visible ?? true;
   const notice = contactNotice(rows, piiVisible);
-  const hasFilters =
-    debouncedSearch.trim() !== "" ||
-    group !== "" ||
-    fromDate !== "" ||
-    toDate !== "" ||
-    onlyOpen;
+  const hasFilters = hasOrderFilters(filters);
+  // The first load shows the skeleton; a later one (next page, a new filter)
+  // keeps the old rows, dimmed, so the table does not collapse and jump.
+  const firstLoad = loading && !data;
 
   function clearFilters() {
     setSearch("");
-    setGroup("");
-    setFromDate("");
-    setToDate("");
-    setOnlyOpen(false);
+    update({ search: "", group: "", from: "", to: "", onlyOpen: false });
   }
 
   if (missing) {
@@ -220,8 +253,9 @@ function OrdersScreen() {
         )}
       </div>
 
+      <div ref={tableTop} className="scroll-mt-4" />
       <Card bodyClassName="p-0">
-        {loading && (
+        {(firstLoad || (loading && rows.length === 0)) && (
           <div className="p-4">
             <SkeletonRows rows={10} />
           </div>
@@ -251,14 +285,24 @@ function OrdersScreen() {
                   <Button size="sm" variant="ghost" onClick={clearFilters}>
                     Quitar filtros
                   </Button>
-                ) : undefined
+                ) : (
+                  <Link
+                    href={`/${countryCode.toLowerCase()}/cargar?tipo=shipments`}
+                    className="rounded-control bg-accent px-3.5 py-2 text-sm font-semibold text-on-accent no-underline"
+                  >
+                    Cargar guías
+                  </Link>
+                )
               }
             />
           </div>
         )}
 
-        {!loading && !error && rows.length > 0 && country && (
-          <div className="data-table">
+        {!error && rows.length > 0 && country && (
+          <div
+            className={cx("data-table transition-opacity", loading && "opacity-60")}
+            aria-busy={loading}
+          >
             <table className="w-full min-w-[980px] border-collapse text-sm">
               <thead>
                 <tr>
@@ -300,7 +344,7 @@ function OrdersScreen() {
           </div>
         )}
 
-        {!loading && !error && rows.length > 0 && (
+        {!error && rows.length > 0 && (
           <PaginationFooter
             page={data?.page ?? page}
             pageSize={data?.page_size ?? PAGE_SIZE}

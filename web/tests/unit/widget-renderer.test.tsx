@@ -97,17 +97,28 @@ describe("WidgetRenderer - blocked", () => {
     expect(card).toHaveAttribute("data-widget-state", "blocked");
   });
 
-  it("offers a way out: a link to /settings", () => {
+  it("offers a way out: the upload screen, on the missing report type", () => {
     render(<WidgetRenderer widget={blocked} country={COUNTRY} />);
 
-    const card = screen.getByLabelText("Contribución (bloqueado)");
-    // Queried by href rather than by role: the overlay currently sits inside an
-    // aria-hidden wrapper, so role queries would not see it. What matters for
-    // this test is that the escape hatch is rendered and points at /settings.
-    const link = card.querySelector<HTMLAnchorElement>('a[href="/settings"]');
-    expect(link).not.toBeNull();
+    // /settings no longer adds data or connections; the fix for missing guides
+    // is loading them. Found by role: the link is no longer hidden from
+    // assistive technology along with the blurred placeholder.
+    const link = screen.getByRole("link", { name: "Cargar guías" });
+    expect(link).toHaveAttribute("href", "/co/cargar?tipo=shipments");
     expect(link).toBeVisible();
-    expect(link).toHaveTextContent("Conectar");
+  });
+
+  it("sends a gap no report can fill to Conexiones", () => {
+    render(
+      <WidgetRenderer
+        widget={{ ...blocked, missing_required: ["catalog"] }}
+        country={COUNTRY}
+      />,
+    );
+    expect(screen.getByRole("link", { name: "Ir a Conexiones" })).toHaveAttribute(
+      "href",
+      "/connections",
+    );
   });
 
   it("falls back to naming the missing domains when the API sent no message", () => {
@@ -153,6 +164,25 @@ describe("WidgetRenderer - degraded", () => {
     const band = message.closest('[role="status"]');
     expect(band).not.toBeNull();
     expect(band).toBeVisible();
+  });
+
+  it("rewrites the generic SQL message, which names raw domain codes", () => {
+    render(
+      <WidgetRenderer
+        widget={{
+          ...degraded,
+          state_message:
+            "Vista parcial: falta movements. Los números que ves son correctos, pero incompletos.",
+          missing_optional: ["movements"],
+        }}
+        country={COUNTRY}
+      />,
+    );
+    expect(screen.queryByText(/falta movements/)).not.toBeInTheDocument();
+    expect(screen.getByText(/Vista parcial: falta movimientos de dinero/)).toBeVisible();
+    expect(
+      screen.getByRole("link", { name: "Cargar movimientos de dinero" }),
+    ).toHaveAttribute("href", "/co/cargar?tipo=movements");
   });
 
   it("still mounts the component - degraded is not blocked", () => {

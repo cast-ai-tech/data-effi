@@ -16,7 +16,7 @@ import GlobalSummary from "@/components/widgets/global_summary";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { StatTile } from "@/components/ui/StatTile";
 import { Card, Chip, EmptyState, ErrorState, SkeletonRows, StatusDot } from "@/components/ui";
-import { TIER_LABELS } from "@/lib/glossary";
+import { BRIEF_DEGRADED_LABEL, TIER_LABELS, briefSummary } from "@/lib/glossary";
 import { useRangedApi } from "@/lib/date-range";
 import { FALLBACK_COUNTRY, countryFlag, formatNumber, formatPercent, formatRelative } from "@/lib/format";
 import { useApi } from "@/lib/hooks";
@@ -210,11 +210,11 @@ function BriefCard({ countryCode }: { countryCode: string | null }) {
       {!loading && data && (
         <>
           <p className="whitespace-pre-line text-base leading-[1.65] text-ink-body">
-            {data.summary}
+            {briefSummary(data)}
           </p>
           {data.degraded && (
             <Chip tone="warning" className="mt-3">
-              Modo degradado
+              {BRIEF_DEGRADED_LABEL}
             </Chip>
           )}
         </>

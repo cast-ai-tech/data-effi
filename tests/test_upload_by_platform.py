@@ -180,6 +180,19 @@ def test_a_second_upload_reuses_the_same_connection(
     assert len(_connections(client, owner_token, "dropi")) == 1
 
 
+def test_the_job_list_can_be_asked_for_one_country(client, owner_token, workspace):
+    """Cargar datos de un país vuelve a mostrar SUS cargas al regresar a la pantalla."""
+    mine = client.get(
+        "/ingest/jobs", params={"country": COUNTRY.lower()}, headers=auth(owner_token)
+    )
+    assert mine.status_code == 200, mine.text
+    assert {row["filename"] for row in mine.json()} >= {"pedidos_dropi.csv", "pedidos_dropi_2.csv"}
+
+    other = client.get("/ingest/jobs", params={"country": "GT"}, headers=auth(owner_token))
+    assert other.status_code == 200, other.text
+    assert other.json() == []
+
+
 def test_effi_by_file_needs_no_session_consent(
     client, owner_token, workspace, effi_real_export
 ):

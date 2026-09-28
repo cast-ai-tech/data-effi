@@ -18,6 +18,7 @@ import { WIDGET_REGISTRY } from "@/components/widgets/registry";
 import { Card, cx } from "@/components/ui";
 import { DateBasisScope } from "@/lib/date-range";
 import type { Country, LayoutWidget } from "@/lib/types";
+import { isUploadKind } from "@/lib/upload-memory";
 
 const DOMAIN_LABELS: Record<string, string> = {
   shipments: "guías",
@@ -29,6 +30,46 @@ const DOMAIN_LABELS: Record<string, string> = {
 
 export function describeDomains(domains: string[]): string {
   return domains.map((domain) => DOMAIN_LABELS[domain] ?? domain).join(", ");
+}
+
+/**
+ * Where to go to fill the gap a card names.
+ *
+ * Every domain but the catalogue arrives as a report on Cargar datos, which
+ * opens on the right report type. `/settings` - where this used to point - is
+ * not where either a report or a connection is added any more.
+ */
+export function fixFor(
+  domains: readonly string[],
+  countryCode: string,
+): { href: string; label: string } {
+  const first = domains.find((domain) => isUploadKind(domain));
+  if (first) {
+    return {
+      href: `/${countryCode.toLowerCase()}/cargar?tipo=${first}`,
+      label: `Cargar ${DOMAIN_LABELS[first] ?? first}`,
+    };
+  }
+  return { href: "/connections", label: "Ir a Conexiones" };
+}
+
+/**
+ * The degraded band's text.
+ *
+ * The generic message comes from SQL (migration 003) with the raw domain codes
+ * in it - "Vista parcial: falta movements" - which reads as a bug to someone
+ * who does not speak the schema. That one is rewritten with the screen's
+ * words; a widget's own custom message is shown as it came.
+ */
+export function degradedMessage(widget: LayoutWidget): string | null {
+  const message = widget.state_message;
+  if (message?.startsWith("Vista parcial: falta ") && widget.missing_optional.length > 0) {
+    const plural = widget.missing_optional.length > 1;
+    return `Vista parcial: ${plural ? "faltan" : "falta"} ${describeDomains(
+      widget.missing_optional,
+    )}. Lo que ves es correcto, pero incompleto.`;
+  }
+  return message;
 }
 
 /**
@@ -48,7 +89,7 @@ export function WidgetRenderer({
   const { note, platformNote, onBasis, onPlatform } = useBasisReport();
 
   if (widget.state === "blocked") {
-    return <BlockedWidget widget={widget} />;
+    return <BlockedWidget widget={widget} countryCode={country.code} />;
   }
 
   if (!Component) {
@@ -67,6 +108,12 @@ export function WidgetRenderer({
   // A degraded widget can also be one that ignores the range, so two bands can
   // stack; only the topmost one rounds off the corner.
   const degraded = Boolean(widget.state === "degraded" && widget.state_message);
+  const degradedText = degraded ? degradedMessage(widget) : null;
+  // Missing data that a report would fill gets the way to load it right there.
+  const degradedFix =
+    degraded && widget.missing_optional.some((domain) => isUploadKind(domain))
+      ? fixFor(widget.missing_optional, country.code)
+      : null;
 
   return (
     <div className="relative">
@@ -76,7 +123,20 @@ export function WidgetRenderer({
           role="status"
         >
           <LockIcon className="mt-[1px] size-3.5 shrink-0 text-warning-ink" variant="warning" />
-          <p className="text-sm leading-snug text-warning-ink">{widget.state_message}</p>
+          <p className="text-sm leading-snug text-warning-ink">
+            {degradedText}
+            {degradedFix && (
+              <>
+                {" "}
+                <Link
+                  href={degradedFix.href}
+                  className="font-semibold text-warning-ink underline underline-offset-2"
+                >
+                  {degradedFix.label}
+                </Link>
+              </>
+            )}
+          </p>
         </div>
       )}
       <div className={cx(degraded && "[&>section]:rounded-t-none")}>
@@ -99,8 +159,9 @@ export function WidgetRenderer({
  * The blocked state: greyed, blurred sample content, a lock, the reason, and a
  * way out. Never a hidden element.
  */
-function BlockedWidget({ widget }: { widget: LayoutWidget }) {
+function BlockedWidget({ widget, countryCode }: { widget: LayoutWidget; countryCode: string }) {
   const missing = describeDomains(widget.missing_required);
+  const fix = fixFor(widget.missing_required, countryCode);
 
   return (
     <section
@@ -116,9 +177,11 @@ function BlockedWidget({ widget }: { widget: LayoutWidget }) {
         </h3>
       </header>
 
-      {/* Blurred placeholder so the shape of what you are missing is visible. */}
-      <div className="relative min-h-[168px] p-4" aria-hidden>
-        <div className="pointer-events-none select-none space-y-3 opacity-40 blur-[3px]">
+      {/* Blurred placeholder so the shape of what you are missing is visible.
+          Only the placeholder is hidden from assistive technology: the reason
+          and the link over it are the part that must be read. */}
+      <div className="relative min-h-[168px] p-4">
+        <div className="pointer-events-none select-none space-y-3 opacity-40 blur-[3px]" aria-hidden>
           <div className="flex items-end gap-2">
             {[46, 72, 38, 84, 60, 52, 76].map((height, index) => (
               <div
@@ -139,10 +202,10 @@ function BlockedWidget({ widget }: { widget: LayoutWidget }) {
               `Falta conectar ${missing} para ver este widget.`}
           </p>
           <Link
-            href="/settings"
+            href={fix.href}
             className="rounded-control bg-accent px-3.5 py-1.5 text-sm font-semibold text-on-accent no-underline hover:bg-accent-hover"
           >
-            Conectar
+            {fix.label}
           </Link>
         </div>
       </div>
