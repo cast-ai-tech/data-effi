@@ -102,6 +102,32 @@ export const TIER_LABELS: Record<number, string> = {
   3: "Con tu usuario y contraseña (riesgo alto)",
 };
 
+/** The chip on a daily summary the AI could not write. */
+export const BRIEF_DEGRADED_LABEL = "Sin resumen automático";
+
+/**
+ * The daily summary's text, as the merchant should read it.
+ *
+ * When the AI cannot write it, the API sends its internal reason as the
+ * summary - "Falta GEMINI_API_KEY o AI_ENABLED" - which is a message for
+ * whoever runs the server, not for the person running the store. They get
+ * what it means for them: the dashboards are fine, the summary is not there.
+ */
+export function briefSummary(brief: {
+  summary: string;
+  degraded: boolean;
+  degraded_reason: string | null;
+}): string {
+  if (!brief.degraded) return brief.summary;
+  if (brief.degraded_reason === "not_configured" || brief.degraded_reason === "missing_dep") {
+    return "El resumen automático todavía no está activado en tu cuenta. Tus tableros y cifras funcionan igual.";
+  }
+  if (brief.degraded_reason === "budget_exhausted") {
+    return "Hoy ya se usaron todos los resúmenes automáticos. Mañana vuelve a aparecer; tus tableros funcionan igual.";
+  }
+  return "El resumen automático no está disponible en este momento. Tus tableros funcionan igual; vuelve a mirar más tarde.";
+}
+
 /** What each dashboard tab is about, for the "?" next to it. */
 export const TAB_HELP: Record<string, string> = {
   finanzas: "Cuánto entra, cuánto sale y cuánto te queda. Recaudo, fletes, pauta y plata en la calle.",

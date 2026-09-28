@@ -14,6 +14,7 @@ import { useEffect, useRef, useState } from "react";
 import { AlertCard } from "@/components/AlertCard";
 import { Button, Chip, Drawer, Skeleton } from "@/components/ui";
 import { ApiError, api } from "@/lib/api";
+import { BRIEF_DEGRADED_LABEL, briefSummary } from "@/lib/glossary";
 import { useApi } from "@/lib/hooks";
 import type { Alert, AskResult, Brief } from "@/lib/types";
 
@@ -92,11 +93,11 @@ function BriefBlock({ countryCode }: { countryCode: string | null }) {
       {data && (
         <div className="rounded-control border border-line bg-surface p-3.5">
           <p className="whitespace-pre-line text-base leading-[1.65] text-ink-body">
-            {data.summary}
+            {briefSummary(data)}
           </p>
           {data.degraded && (
             <Chip tone="warning" className="mt-2.5">
-              Modo degradado
+              {BRIEF_DEGRADED_LABEL}
             </Chip>
           )}
           {data.cached && !data.degraded && (
