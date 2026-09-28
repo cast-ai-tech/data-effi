@@ -103,7 +103,10 @@ export function fromIso(value: string | null | undefined): Date | null {
     Number(match[2]) - 1,
     Number(match[3]),
   );
-  return Number.isNaN(date.getTime()) ? null : date;
+  if (Number.isNaN(date.getTime())) return null;
+  // `Date` rolls an impossible day over ("2026-02-31" -> March 3rd). A date
+  // that does not come back as itself is not a date.
+  return toIso(date) === value ? date : null;
 }
 
 export function addDays(date: Date, days: number): Date {
@@ -489,7 +492,9 @@ const DateRangeContext = createContext<DateRangeContextValue | null>(null);
 
 /** Ignore anything that is not a plain ISO date rather than forwarding it. */
 function readParam(value: string | null): string | null {
-  return value && /^\d{4}-\d{2}-\d{2}$/.test(value) ? value : null;
+  // Through `fromIso`, so "2026-02-31" in a hand-edited link is dropped here
+  // instead of being forwarded to every card as a filter.
+  return fromIso(value) ? value : null;
 }
 
 /**

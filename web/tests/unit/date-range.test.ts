@@ -45,6 +45,10 @@ describe("toIso / fromIso", () => {
     expect(fromIso("ayer")).toBeNull();
     expect(fromIso("2026-7-1")).toBeNull();
     expect(fromIso("")).toBeNull();
+    // Impossible days used to roll over into the next month.
+    expect(fromIso("2026-02-31")).toBeNull();
+    expect(fromIso("2026-13-01")).toBeNull();
+    expect(fromIso("2028-02-29")).not.toBeNull();
     expect(fromIso(null)).toBeNull();
   });
 });
