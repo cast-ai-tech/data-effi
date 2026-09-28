@@ -224,7 +224,12 @@ def call_llm(
     return LlmResponse(
         text=text,
         input_tokens=getattr(usage, "prompt_token_count", None) or 0,
-        output_tokens=getattr(usage, "candidates_token_count", None) or 0,
+        # Thinking tokens are billed as output but NOT included in
+        # candidates_token_count. Leaving them out undercounted every call by
+        # the 400-500 tokens measured above, so AI_DAILY_TOKEN_BUDGET let
+        # through roughly twice what it claimed to.
+        output_tokens=(getattr(usage, "candidates_token_count", None) or 0)
+        + (getattr(usage, "thoughts_token_count", None) or 0),
         model=settings.ai_model,
     )
 
