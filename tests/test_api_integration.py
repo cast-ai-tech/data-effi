@@ -101,18 +101,21 @@ def test_register_creates_the_first_owner(owner_token):
     assert owner_token
 
 
-def test_register_refuses_a_second_time(client, owner_token):
+def test_register_refuses_the_same_email_twice(client, owner_token):
+    # Registration is open since migration 048 (every registration is its own
+    # organisation, see test_billing.py); what it still refuses is an e-mail
+    # that already has an account.
     response = client.post(
         "/auth/register",
         json={
-            "email": "otro@masterdata.app",
+            "email": OWNER_EMAIL,
             "password": "otra-clave-larga-1234",
             "full_name": "Otro",
             "tenant_name": "Otra empresa",
         },
     )
-    assert response.status_code == 403
-    assert "invitación" in response.json()["error"]["message"]
+    assert response.status_code == 409
+    assert "ya tiene cuenta" in response.json()["error"]["message"]
 
 
 def test_login_returns_tokens(client, owner_token):

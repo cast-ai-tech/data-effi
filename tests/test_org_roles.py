@@ -64,7 +64,7 @@ def auth(token: str) -> dict[str, str]:
 
 
 @pytest.fixture(scope="module")
-def owner(client) -> dict:
+def owner(client, api_dsn) -> dict:
     response = client.post(
         "/auth/register",
         json={
@@ -75,7 +75,17 @@ def owner(client) -> dict:
         },
     )
     assert response.status_code == 201, response.text
-    return response.json()
+    body = response.json()
+
+    # The free month allows one company; the holding needs two, so the org
+    # goes on a paid plan the way an advisor would put it there.
+    from api.billing import activate_plan
+
+    me = client.get("/auth/me", headers=auth(body["access_token"])).json()
+    with psycopg.connect(api_dsn) as conn:
+        activate_plan(conn, me["org_id"], "master_elite", months=None)
+        conn.commit()
+    return body
 
 
 @pytest.fixture(scope="module")

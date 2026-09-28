@@ -72,8 +72,12 @@ def auth(token: str) -> dict[str, str]:
 
 
 @pytest.fixture(scope="module")
-def owner(client) -> dict:
-    """The operator: registers the deployment, so they run the holding."""
+def owner(client, api_dsn) -> dict:
+    """The operator: registers the deployment, so they run the holding.
+
+    The free month allows a single company; the holding needs several, so the
+    org goes on a paid plan the way an advisor would put it there.
+    """
     response = client.post(
         "/auth/register",
         json={
@@ -87,7 +91,17 @@ def owner(client) -> dict:
     body = response.json()
     assert body["is_org_admin"] is True
     assert body["role"] == "owner"
+    activate_holding_plan(client, api_dsn, body["access_token"])
     return body
+
+
+def activate_holding_plan(client, api_dsn: str, token: str) -> None:
+    from api.billing import activate_plan
+
+    me = client.get("/auth/me", headers=auth(token)).json()
+    with psycopg.connect(api_dsn) as conn:
+        activate_plan(conn, me["org_id"], "master_elite", months=None)
+        conn.commit()
 
 
 @pytest.fixture(scope="module")
