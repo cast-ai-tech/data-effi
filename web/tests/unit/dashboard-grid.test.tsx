@@ -129,13 +129,32 @@ describe("DashboardGrid - restablecer", () => {
       />,
     );
 
+    fireEvent.click(screen.getByRole("button", { name: "Restablecer el orden" }));
     await act(async () => {
-      fireEvent.click(screen.getByRole("button", { name: "Restablecer el orden" }));
+      fireEvent.click(screen.getByRole("button", { name: "Sí, restablecer" }));
     });
 
     expect(net.delete).toHaveBeenCalledWith("/kpis/layout?country=CO");
     expect(net.put).not.toHaveBeenCalled();
     expect(onSaved).toHaveBeenCalledTimes(1);
+  });
+
+  it("pide confirmación y, si se cancela, no borra nada", () => {
+    net.delete.mockResolvedValue(undefined);
+    render(
+      <DashboardGrid
+        widgets={[widget("a")]}
+        country={country}
+        defaultFullWidth={new Set()}
+        customised
+      />,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "Restablecer el orden" }));
+    expect(screen.getByRole("alertdialog")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Cancelar" }));
+    expect(net.delete).not.toHaveBeenCalled();
+    expect(screen.queryByRole("alertdialog")).not.toBeInTheDocument();
   });
 
   it("si el DELETE falla, lo dice", async () => {
@@ -149,8 +168,9 @@ describe("DashboardGrid - restablecer", () => {
       />,
     );
 
+    fireEvent.click(screen.getByRole("button", { name: "Restablecer el orden" }));
     await act(async () => {
-      fireEvent.click(screen.getByRole("button", { name: "Restablecer el orden" }));
+      fireEvent.click(screen.getByRole("button", { name: "Sí, restablecer" }));
     });
 
     expect(screen.getByText("No se pudo restablecer el tablero.")).toBeInTheDocument();

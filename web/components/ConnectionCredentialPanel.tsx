@@ -31,6 +31,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 
+import { ConfirmDialog } from "@/components/ConfirmDialog";
 import { EffiExtensionPairingPanel } from "@/components/EffiExtensionPairingPanel";
 import { Button, Chip, Field, Input, StatusDot, cx } from "@/components/ui";
 import { ApiError, api } from "@/lib/api";
@@ -110,6 +111,7 @@ export function ConnectionCredentialPanel({
   const [saving, setSaving] = useState(false);
   const [testing, setTesting] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
+  const [confirmingDisconnect, setConfirmingDisconnect] = useState(false);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -208,6 +210,7 @@ export function ConnectionCredentialPanel({
       );
     } finally {
       setSaving(false);
+      setConfirmingDisconnect(false);
     }
   }
 
@@ -379,13 +382,31 @@ export function ConnectionCredentialPanel({
             {connected && (
               <Button
                 variant="danger"
-                onClick={() => void disconnect()}
+                onClick={() => setConfirmingDisconnect(true)}
                 disabled={saving}
               >
                 Desconectar
               </Button>
             )}
           </div>
+
+          {confirmingDisconnect && (
+            <ConfirmDialog
+              title={`Desconectar la cuenta de ${connection.platform_name}`}
+              consequence="El acceso guardado (contraseña o sesión enviada por la extensión) se borra y no se puede recuperar: para volver a conectar tendrás que hacerlo de nuevo."
+              details={[
+                { label: "Conexión", value: connection.connection_name },
+                { label: "País", value: connection.country_code },
+              ]}
+              confirmLabel="Sí, desconectar"
+              pending={saving}
+              onConfirm={() => void disconnect()}
+              onCancel={() => setConfirmingDisconnect(false)}
+            >
+              Master Data deja de descargar tus reportes de {connection.platform_name}.
+              Lo que ya está cargado se conserva.
+            </ConfirmDialog>
+          )}
 
           {connected && (
             <p className="text-xs leading-relaxed text-ink-faint">

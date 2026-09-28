@@ -23,6 +23,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 
+import { ConfirmDialog } from "@/components/ConfirmDialog";
 import { WidgetRenderer } from "@/components/WidgetRenderer";
 import { cx } from "@/components/ui";
 import { api } from "@/lib/api";
@@ -59,6 +60,7 @@ export function DashboardGrid({
   const [over, setOver] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
+  const [confirmingReset, setConfirmingReset] = useState(false);
 
   // El servidor manda: si llega otro layout (cambió el país o la pestaña), se
   // descarta el local en vez de intentar conciliarlos.
@@ -181,13 +183,29 @@ export function DashboardGrid({
           {customised && !saving && !error && (
             <button
               type="button"
-              onClick={reset}
+              onClick={() => setConfirmingReset(true)}
               className="text-ink-muted underline decoration-dotted hover:text-ink"
             >
               Restablecer el orden
             </button>
           )}
         </div>
+      )}
+
+      {confirmingReset && (
+        <ConfirmDialog
+          title="Restablecer el orden del tablero"
+          tone="warning"
+          consequence="Se pierde el orden, el ancho y las tarjetas ocultas que acomodaste en este país."
+          confirmLabel="Sí, restablecer"
+          onConfirm={() => {
+            setConfirmingReset(false);
+            reset();
+          }}
+          onCancel={() => setConfirmingReset(false)}
+        >
+          Las tarjetas vuelven al orden de fábrica.
+        </ConfirmDialog>
       )}
 
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-2 lg:gap-5">

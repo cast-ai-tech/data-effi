@@ -12,6 +12,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 
+import { ConfirmDialog } from "@/components/ConfirmDialog";
 import { Button, Field, Input, StatusDot } from "@/components/ui";
 import { ApiError, api } from "@/lib/api";
 import { formatRelative } from "@/lib/format";
@@ -45,6 +46,8 @@ export function DropiTokenPanel({
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
+  const [running, setRunning] = useState<"save" | "test" | "disconnect" | null>(null);
+  const [confirmingDisconnect, setConfirmingDisconnect] = useState(false);
 
   const load = useCallback(async () => {
     setError(null);
@@ -59,8 +62,9 @@ export function DropiTokenPanel({
     void load();
   }, [load]);
 
-  async function run(action: () => Promise<string | null>) {
+  async function run(action: () => Promise<string | null>, which: typeof running = null) {
     setBusy(true);
+    setRunning(which);
     setError(null);
     setNotice(null);
     try {
@@ -71,6 +75,7 @@ export function DropiTokenPanel({
       setError(err instanceof ApiError ? err.message : "No se pudo completar la acción");
     } finally {
       setBusy(false);
+      setRunning(null);
     }
   }
 
@@ -80,16 +85,18 @@ export function DropiTokenPanel({
       // Drop the token from React state as soon as it is stored.
       setToken("");
       return saved.message ?? "Token guardado.";
-    });
+    }, "save");
 
   const test = () =>
-    run(async () => (await api.post<DropiTestResult>(`${base}/test`)).message);
+    run(async () => (await api.post<DropiTestResult>(`${base}/test`)).message, "test");
 
+  // Asked first: the token cannot be read back, so undoing this means going
+  // to Dropi for a new one and pasting it again.
   const disconnect = () =>
     run(async () => {
       await api.delete(`${base}/token`);
       return "API desconectada. Las guías ya cargadas se conservan y puedes seguir subiendo el reporte.";
-    });
+    }, "disconnect").finally(() => setConfirmingDisconnect(false));
 
   const hasToken = status?.has_token ?? false;
 
@@ -149,17 +156,39 @@ export function DropiTokenPanel({
 
           <div className="flex flex-wrap gap-2">
             <Button onClick={() => void save()} disabled={busy || token.trim().length < 8}>
-              {busy ? "Guardando…" : hasToken ? "Actualizar token" : "Conectar API"}
+              {running === "save" ? "Guardando…" : hasToken ? "Actualizar token" : "Conectar API"}
             </Button>
             <Button variant="ghost" onClick={() => void test()} disabled={busy || !hasToken}>
-              Probar conexión
+              {running === "test" ? "Probando…" : "Probar conexión"}
             </Button>
             {hasToken && (
-              <Button variant="danger" onClick={() => void disconnect()} disabled={busy}>
+              <Button
+                variant="danger"
+                onClick={() => setConfirmingDisconnect(true)}
+                disabled={busy}
+              >
                 Desconectar API
               </Button>
             )}
           </div>
+
+          {confirmingDisconnect && (
+            <ConfirmDialog
+              title="Desconectar la API de Dropi"
+              consequence="El token no se puede volver a ver: para reconectar tendrás que sacar uno nuevo en Dropi → Integraciones y pegarlo aquí."
+              details={[
+                { label: "Conexión", value: connection.connection_name },
+                { label: "País", value: connection.country_code },
+              ]}
+              confirmLabel="Sí, desconectar"
+              pending={running === "disconnect"}
+              onConfirm={() => void disconnect()}
+              onCancel={() => setConfirmingDisconnect(false)}
+            >
+              Master Data deja de leer tus órdenes de Dropi. Las guías ya cargadas se
+              conservan y puedes seguir subiendo el reporte a mano.
+            </ConfirmDialog>
+          )}
 
           {hasToken && (
             <p className="text-xs leading-relaxed text-ink-faint">
