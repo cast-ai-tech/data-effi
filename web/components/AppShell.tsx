@@ -30,7 +30,8 @@ import {
   shouldRedirectToPlans,
   subscriptionBanner,
 } from "@/lib/billing";
-import { DEFAULT_FIELD, useDateRange } from "@/lib/date-range";
+import { PRESET_LABELS, formatRangeLabel, useDateRange } from "@/lib/date-range";
+import { filterQuery, useFilterMemory } from "@/lib/filter-memory";
 import { countryFlag, formatRelative } from "@/lib/format";
 import { useApi, usePersistentState } from "@/lib/hooks";
 import { useNotifications } from "@/lib/notifications";
@@ -69,7 +70,10 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   // What the menu looks like: the narrow icon rail only exists on a wide
   // screen. An open drawer on a phone always shows its labels.
   const rail = collapsed && !drawerOpen;
-  const { range, field } = useDateRange();
+  const { range, mode, platform, statuses } = useDateRange();
+  // Platform and status filters that are on, besides the range.
+  const activeFilterCount = (platform ? 1 : 0) + (statuses ? 1 : 0);
+  const rememberedFilters = useFilterMemory();
 
   // The long-poll runs only while a signed-in screen is on: the login page
   // never mounts this shell, so it never asks `/events` without a session.
@@ -151,17 +155,13 @@ export function AppShell({ children }: { children: React.ReactNode }) {
    * comparing Colombia and México in July would be shown México's whole
    * history and never be told the window changed under them.
    */
-  const rangeSuffix = useMemo(() => {
-    const params = new URLSearchParams();
-    if (range.from) params.set("from", range.from);
-    if (range.to) params.set("to", range.to);
-    // The chosen date travels with the range. Landing on México measured by
-    // creation after reading Colombia by delivery would compare two different
-    // questions and look like a difference in performance.
-    if (field !== DEFAULT_FIELD) params.set("field", field);
-    const query = params.toString();
-    return query ? `?${query}` : "";
-  }, [range, field]);
+  // Built from the REMEMBERED filters, not from this screen's URL: on Órdenes
+  // the URL has no range, and "Tablero" used to take the reader back to the
+  // whole history. The tab travels too, so they land on the tab they left.
+  const rangeSuffix = useMemo(
+    () => filterQuery(rememberedFilters, new Date(), true),
+    [rememberedFilters],
+  );
 
   async function signOut() {
     // The proxy revokes the refresh token server-side and clears the cookies.
@@ -374,6 +374,13 @@ export function AppShell({ children }: { children: React.ReactNode }) {
                 >
                   <FilterIcon />
                   Filtros
+                  {/* On a phone the pickers hide behind this button, so the
+                      button itself says what is applied: numbers read under
+                      a filter nobody can see are numbers misread. */}
+                  <span className="max-w-[9rem] truncate text-sm font-normal text-ink-dim">
+                    · {mode === "personalizado" ? formatRangeLabel(range, formatCountry) : PRESET_LABELS[mode]}
+                    {activeFilterCount > 0 && ` +${activeFilterCount}`}
+                  </span>
                 </Button>
               </>
             )}
