@@ -61,6 +61,7 @@ beforeEach(() => {
   calls.post = [];
   calls.get = [];
   calls.statusQueue = [];
+  window.sessionStorage.clear();
 });
 
 afterEach(() => cleanup());
@@ -115,6 +116,34 @@ describe("EffiExtensionPairingPanel", () => {
     await new Promise((r) => setTimeout(r, 60));
     expect(calls.get.length).toBe(polls);
     expect(screen.queryByText("ABCD-EFGH-JKMN")).not.toBeInTheDocument();
+  });
+
+  it("keeps the pending code on screen after leaving and coming back", async () => {
+    const first = render(<EffiExtensionPairingPanel connection={connection} pollMs={10_000} />);
+    fireEvent.click(screen.getByRole("checkbox"));
+    fireEvent.click(screen.getByRole("button", { name: "Generar código" }));
+    await screen.findByText("ABCD-EFGH-JKMN", {}, { timeout: 5000 });
+    first.unmount();
+
+    render(<EffiExtensionPairingPanel connection={connection} pollMs={10_000} />);
+    // Same code, no second POST: a new one would revoke the one already typed
+    // into the extension.
+    expect(await screen.findByText("ABCD-EFGH-JKMN", {}, { timeout: 5000 })).toBeInTheDocument();
+    expect(calls.post).toHaveLength(1);
+    expect(screen.getByTestId("pairing-countdown").textContent).toMatch(/^(10:00|9:5\d)$/);
+  });
+
+  it("does not bring back a code that already expired", () => {
+    window.sessionStorage.setItem(
+      "masterdata.effi.pairing.c-1",
+      JSON.stringify({
+        pairing: { pairing_id: "p-0", connection_id: "c-1", code: "VIEJ-OCOD-IGOO", ttl_seconds: 600 },
+        deadline: Date.now() - 1000,
+      }),
+    );
+    render(<EffiExtensionPairingPanel connection={connection} pollMs={10_000} />);
+    expect(screen.queryByText("VIEJ-OCOD-IGOO")).not.toBeInTheDocument();
+    expect(window.sessionStorage.getItem("masterdata.effi.pairing.c-1")).toBeNull();
   });
 
   it("says plainly when Effi rejected the session", async () => {

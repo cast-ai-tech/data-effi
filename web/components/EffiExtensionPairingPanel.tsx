@@ -50,6 +50,57 @@ const STATE_TEXT: Record<Exclude<EffiPairingState, "pending">, string> = {
   revoked: "Ese código se reemplazó por uno más nuevo.",
 };
 
+/**
+ * The code on screen survives leaving the page.
+ *
+ * Pairing means going to Effi, logging in, opening the extension: plenty of
+ * reasons to click away or reload here in the meantime. The code used to
+ * vanish with the component, and generating another one revokes the first -
+ * so a code already typed into the extension then failed with "revocado".
+ * Kept per tab (sessionStorage) and only until it expires.
+ */
+export function pairingStorageKey(connectionId: string): string {
+  return `masterdata.effi.pairing.${connectionId}`;
+}
+
+interface StoredPairing {
+  pairing: EffiPairing;
+  deadline: number;
+}
+
+export function readStoredPairing(connectionId: string, now: number): StoredPairing | null {
+  try {
+    const raw = window.sessionStorage.getItem(pairingStorageKey(connectionId));
+    if (!raw) return null;
+    const value = JSON.parse(raw) as StoredPairing | null;
+    if (
+      !value ||
+      typeof value.deadline !== "number" ||
+      typeof value.pairing?.code !== "string" ||
+      value.pairing.connection_id !== connectionId ||
+      value.deadline <= now
+    ) {
+      window.sessionStorage.removeItem(pairingStorageKey(connectionId));
+      return null;
+    }
+    return value;
+  } catch {
+    return null;
+  }
+}
+
+function storePairing(connectionId: string, value: StoredPairing | null): void {
+  try {
+    if (value) {
+      window.sessionStorage.setItem(pairingStorageKey(connectionId), JSON.stringify(value));
+    } else {
+      window.sessionStorage.removeItem(pairingStorageKey(connectionId));
+    }
+  } catch {
+    // Without storage the code simply does not survive a reload.
+  }
+}
+
 export function formatCountdown(ms: number): string {
   const total = Math.max(0, Math.ceil(ms / 1000));
   const minutes = Math.floor(total / 60);
@@ -73,6 +124,17 @@ export function EffiExtensionPairingPanel({
   const [deadline, setDeadline] = useState<number | null>(null);
   const [now, setNow] = useState(() => Date.now());
   const [error, setError] = useState<string | null>(null);
+  const [copied, setCopied] = useState(false);
+
+  // A code generated before a reload or a trip to another screen is still
+  // the one to use: put it back, countdown and all.
+  useEffect(() => {
+    const stored = readStoredPairing(connection.connection_id, Date.now());
+    if (!stored) return;
+    setPairing(stored.pairing);
+    setDeadline(stored.deadline);
+    setNow(Date.now());
+  }, [connection.connection_id]);
 
   // Kept in a ref so the poller calls the latest callback without restarting.
   const onConnectedRef = useRef(onConnected);
@@ -94,12 +156,16 @@ export function EffiExtensionPairingPanel({
         { consent_granted: consent },
       );
       setPairing(created);
+      setCopied(false);
       // The server's TTL, not its clock: a laptop five minutes off would
       // otherwise show a code as expired the moment it appears.
-      setDeadline(Date.now() + created.ttl_seconds * 1000);
+      const until = Date.now() + created.ttl_seconds * 1000;
+      setDeadline(until);
       setNow(Date.now());
+      storePairing(connection.connection_id, { pairing: created, deadline: until });
     } catch (err) {
       setPairing(null);
+      storePairing(connection.connection_id, null);
       setError(
         err instanceof ApiError ? err.message : "No se pudo generar el código",
       );
@@ -131,6 +197,7 @@ export function EffiExtensionPairingPanel({
         if (cancelled) return;
         if (next.state !== "pending") {
           cancelled = true;
+          storePairing(pairing.connection_id, null);
           setStatus(next);
           if (next.state === "connected") onConnectedRef.current?.();
           return;
@@ -178,12 +245,26 @@ export function EffiExtensionPairingPanel({
           <p className="text-xs font-semibold uppercase tracking-wide text-ink-dim">
             Tu código
           </p>
-          <p
-            className="font-mono text-2xl font-semibold tracking-widest text-ink"
-            aria-label={`Código ${pairing.code}`}
-          >
-            {pairing.code}
-          </p>
+          <div className="flex flex-wrap items-center gap-3">
+            <p
+              className="font-mono text-2xl font-semibold tracking-widest text-ink"
+              aria-label={`Código ${pairing.code}`}
+            >
+              {pairing.code}
+            </p>
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => {
+                void navigator.clipboard
+                  ?.writeText(pairing.code)
+                  .then(() => setCopied(true))
+                  .catch(() => setCopied(false));
+              }}
+            >
+              {copied ? "Copiado" : "Copiar código"}
+            </Button>
+          </div>
           <p className="text-sm text-ink-2" aria-live="polite">
             Caduca en{" "}
             <span data-testid="pairing-countdown">
