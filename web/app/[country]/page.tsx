@@ -23,7 +23,7 @@ import { PageHeader } from "@/components/ui/PageHeader";
 import { countryFlag } from "@/lib/format";
 import { TAB_HELP } from "@/lib/glossary";
 import { useApi } from "@/lib/hooks";
-import type { Country, DecisionScope, LayoutResponse } from "@/lib/types";
+import type { Country, DecisionScope, LayoutResponse, User } from "@/lib/types";
 
 /**
  * Which decisions sit above which tab. Each tab gets the verdicts about the
@@ -85,13 +85,19 @@ export default function CountryDashboard() {
     [countries, countryCode],
   );
 
+  // A partner limited to other countries of this company: say so instead of
+  // asking the API for a board it will refuse (that used to read "Revisa que
+  // la API esté corriendo", which sent people chasing a server that was fine).
+  const { data: user } = useApi<User>("/auth/me");
+  const outOfScope = Boolean(user?.countries && !user.countries.includes(countryCode));
+
   const {
     data: layout,
     loading: loadingLayout,
     error,
     reload: refreshLayout,
   } = useApi<LayoutResponse>(
-    countryCode ? `/kpis/layout?country=${countryCode}` : null,
+    countryCode && user && !outOfScope ? `/kpis/layout?country=${countryCode}` : null,
     [countryCode],
   );
 
@@ -108,6 +114,17 @@ export default function CountryDashboard() {
         <Card>
           <ErrorState message={countriesError.message} onRetry={reloadCountries} />
         </Card>
+      </AppShell>
+    );
+  }
+
+  if (outOfScope) {
+    return (
+      <AppShell>
+        <EmptyState
+          title={`No tienes acceso a ${country?.name ?? countryCode}`}
+          instruction="Tu acceso en esta empresa no incluye este país. Si lo necesitas, pídeselo a quien administra la empresa."
+        />
       </AppShell>
     );
   }
@@ -182,22 +199,19 @@ export default function CountryDashboard() {
       {/* The verdicts for this tab, before the numbers that justify them. Only
           once the country is known: a strip for a country you may not open
           would be a 403 dressed as a recommendation. */}
-      {country && <DecisionStrip countryCode={countryCode} scope={DECISION_SCOPE[tab]} />}
+      {country && user && <DecisionStrip countryCode={countryCode} scope={DECISION_SCOPE[tab]} />}
 
       {loadingLayout && <SkeletonRows rows={4} />}
 
       {error && (
         <Card>
-          <EmptyState
-            title="No se pudo cargar el tablero"
-            instruction="Revisa que la API esté corriendo y vuelve a intentarlo."
-          />
+          <ErrorState message={error.message} onRetry={refreshLayout} />
         </Card>
       )}
 
       {/* Not after a failed read: "todavía no tiene datos" under "no se pudo
           cargar" contradicts it and suggests uploading data that is there. */}
-      {country && widgets.length === 0 && !loadingLayout && !error && (
+      {country && layout && widgets.length === 0 && !loadingLayout && !error && (
         <Card>
           <EmptyState
             title="Esta pestaña todavía no tiene datos"
