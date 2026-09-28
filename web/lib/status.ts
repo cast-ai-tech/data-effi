@@ -59,6 +59,19 @@ export const STATUS_GROUP_LABELS: Record<StatusGroup, string> = {
 };
 
 /**
+ * "sin Devolución, Novedad" when the "Estados" filter leaves groups out, null
+ * when it counts everything. For places the header filter does not reach,
+ * such as the printed Informe: a PDF made with "Devolución" switched off would
+ * otherwise show a return rate computed without returns and not say so.
+ */
+export function excludedStatusesLabel(statuses: readonly StatusGroup[] | null): string | null {
+  if (!statuses) return null;
+  const excluded = STATUS_GROUPS.filter((group) => !statuses.includes(group));
+  if (excluded.length === 0) return null;
+  return `sin ${excluded.map((group) => STATUS_GROUP_LABELS[group]).join(", ")}`;
+}
+
+/**
  * What each column counts, for the header tooltip. Written for someone who
  * has never seen the thirteen canonical names.
  */

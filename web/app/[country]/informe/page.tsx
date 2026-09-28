@@ -25,7 +25,7 @@
  */
 
 import Link from "next/link";
-import { useParams } from "next/navigation";
+import { useParams, useSearchParams } from "next/navigation";
 import { useMemo } from "react";
 
 import { AppShell } from "@/components/AppShell";
@@ -57,6 +57,7 @@ import {
   type FormatCountry,
 } from "@/lib/format";
 import { useApi } from "@/lib/hooks";
+import { excludedStatusesLabel } from "@/lib/status";
 import type { Country, DailyStatusRow, PlatformSummaryRow } from "@/lib/types";
 
 const PRINT_STYLES = `
@@ -108,7 +109,15 @@ function platformPalette(code: string): PlatformPalette {
 export default function DailyReportPage() {
   const params = useParams<{ country: string }>();
   const countryCode = (params.country ?? "").toUpperCase();
-  const { range, field, platform } = useDateRange();
+  const { range, field, platform, statuses } = useDateRange();
+  // Back to the same question: the range, platform and statuses live in the
+  // URL, and a bare `?tab=logistica` dropped them on the way back.
+  const search = useSearchParams();
+  const backToBoard = useMemo(() => {
+    const next = new URLSearchParams(search.toString());
+    next.set("tab", "logistica");
+    return `/${countryCode.toLowerCase()}?${next.toString()}`;
+  }, [search, countryCode]);
 
   const {
     data: countries,
@@ -167,7 +176,7 @@ export default function DailyReportPage() {
 
       <div className="no-print mb-3 flex flex-wrap items-center justify-end gap-2">
         <Link
-          href={`/${countryCode.toLowerCase()}?tab=logistica`}
+          href={backToBoard}
           className="rounded-[8px] border border-line-strong bg-surface px-3 py-1.5 text-[12px] font-medium text-ink-2 no-underline hover:text-ink"
         >
           Volver al tablero
@@ -188,6 +197,7 @@ export default function DailyReportPage() {
         detail={[
           field !== "creacion" ? `por fecha de ${field}` : null,
           platform ? `solo ${platform}` : null,
+          excludedStatusesLabel(statuses),
         ]
           .filter(Boolean)
           .join(" · ")}
