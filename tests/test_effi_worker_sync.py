@@ -238,7 +238,7 @@ def test_login_not_possible_yet_is_transient_not_a_broken_connection(monkeypatch
 
     monkeypatch.setattr(
         credentials, "load_session",
-        lambda conn, **k: SimpleNamespace(token=None, expires_at=None),
+        lambda conn, **k: credentials.StoredSession(token=None, expires_at=None),
     )
 
     class _Cred:

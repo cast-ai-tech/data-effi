@@ -100,29 +100,50 @@ def run_preflight_for_connection(
     # still good: log in once and look again, instead of telling the merchant
     # to retype a password that was never the problem. A session from a login
     # we just did is never retried - that would be a login loop.
-    authenticator = EffiAuthenticator()
-    force_login = False
-    while True:
-        outcome = _acquire_session(
-            conn, connection_id, tenant_id, authenticator, force_login=force_login
-        )
-        if isinstance(outcome, ConnectionPreflightResponse):
-            return outcome
-        session, did_login = outcome
-
+    #
+    # A session sent from the browser extension (migration 070) has no password
+    # behind it: one pass, no login, and a rejection means "send it again".
+    stored = credentials.load_session(
+        conn, connection_id=connection_id, tenant_id=tenant_id
+    )
+    browser_session = stored.is_browser_session
+    if browser_session:
+        if not stored.token:
+            return _browser_session_dead(
+                conn, connection_id, tenant_id, BROWSER_SESSION_MISSING
+            )
         fetcher = EffiSessionFetcher.from_session(
-            session, consent_granted_at=consent_granted_at
+            stored, consent_granted_at=consent_granted_at
         )
         report = run_preflight(fetcher, base_url=fetcher.base_url)
-        if report.session_valid or did_login or force_login:
-            break
-        credentials.clear_credential(conn, connection_id=connection_id, tenant_id=tenant_id)
-        force_login = True
+    else:
+        authenticator = EffiAuthenticator()
+        force_login = False
+        while True:
+            outcome = _acquire_session(
+                conn, connection_id, tenant_id, authenticator, force_login=force_login
+            )
+            if isinstance(outcome, ConnectionPreflightResponse):
+                return outcome
+            session, did_login = outcome
+
+            fetcher = EffiSessionFetcher.from_session(
+                session, consent_granted_at=consent_granted_at
+            )
+            report = run_preflight(fetcher, base_url=fetcher.base_url)
+            if report.session_valid or did_login or force_login:
+                break
+            credentials.clear_credential(conn, connection_id=connection_id, tenant_id=tenant_id)
+            force_login = True
 
     # -- 3. write down what was found, so the next screen shows it ----------
     _record_probes(conn, connection_id, tenant_id, report)
 
     credential_status = report.credential_status()
+    if browser_session and credential_status == "expired":
+        return _browser_session_dead(
+            conn, connection_id, tenant_id, BROWSER_SESSION_REJECTED
+        )
     execute(
         conn,
         "UPDATE core.connection SET credential_status = %s WHERE id = %s AND tenant_id = %s",
@@ -168,6 +189,31 @@ def run_preflight_for_connection(
 
 
 _TERMINAL_CREDENTIAL_STATUSES = ("invalid", "locked")
+
+BROWSER_SESSION_MISSING = (
+    "No hay una sesión de Effi guardada para esta conexión. Entra a Effi en tu "
+    "navegador y envíala desde la extensión «Conectar Effi con Data Effi»."
+)
+BROWSER_SESSION_REJECTED = (
+    "Effi no aceptó la sesión enviada desde la extensión: venció o se cerró. "
+    "Entra de nuevo a Effi en tu navegador y vuelve a enviarla desde la extensión."
+)
+
+
+def _browser_session_dead(
+    conn, connection_id: UUID, tenant_id: UUID, message: str
+) -> ConnectionPreflightResponse:
+    """The extension's session is gone. No login to try: say how to send another."""
+    credentials.mark_session_expired(
+        conn, connection_id=connection_id, tenant_id=tenant_id, message=message
+    )
+    return ConnectionPreflightResponse(
+        connection_id=connection_id,
+        credential_status="session_expired",
+        is_usable=False,
+        summary=message,
+        permissions=_permissions_from_view(conn, connection_id, tenant_id),
+    )
 
 
 def _terminal_summary(credential_status: str, last_error: str | None) -> str:

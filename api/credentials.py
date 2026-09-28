@@ -45,15 +45,24 @@ from pipeline.vault import (
 
 logger = logging.getLogger(__name__)
 
+BROWSER_SESSION = "browser_session"
+
+# What the settings screen shows as "which account is connected" when the
+# merchant connected through the extension. We never learn their Effi username
+# that way, and inventing one would be worse than saying so.
+BROWSER_SESSION_LABEL = "Sesión enviada desde la extensión"
+
 __all__ = [
     "CredentialSummary",
     "StoredSession",
     "clear_credential",
     "delete_credential",
     "load_session",
+    "mark_session_expired",
     "read_summary",
     "record_login_failure",
     "save_session",
+    "store_browser_session",
     "store_credential",
     "use_credential",
     "vault_available",
@@ -70,6 +79,8 @@ class CredentialSummary:
     last_login_error: str | None
     session_expires_at: datetime | None
     rotated_at: datetime
+    # Migration 070: 'password' or 'browser_session' (sent by the extension).
+    auth_mode: str = "password"
 
 
 @dataclass(slots=True)
@@ -78,6 +89,15 @@ class StoredSession:
 
     token: str | None
     expires_at: datetime | None
+    # Migration 070. `browser_session` means there is NO password behind this
+    # session: when it dies, nobody here can log in again - the merchant has to
+    # send a new one from the extension.
+    auth_mode: str = "password"
+    user_agent: str | None = None
+
+    @property
+    def is_browser_session(self) -> bool:
+        return self.auth_mode == BROWSER_SESSION
 
 
 # -- writing ----------------------------------------------------------------
@@ -120,6 +140,8 @@ def store_credential(
             -- A new password invalidates the old session, on purpose.
             session_enc        = NULL,
             session_expires_at = NULL,
+            session_user_agent = NULL,
+            auth_mode          = 'password',
             last_login_error   = NULL,
             rotated_at         = now(),
             updated_at         = now()
@@ -150,6 +172,105 @@ def store_credential(
     if summary is None:  # pragma: no cover - we just wrote it
         raise RuntimeError("La credencial se guardó pero no se pudo leer de vuelta")
     return summary
+
+
+def store_browser_session(
+    conn,
+    *,
+    connection_id: UUID,
+    tenant_id: UUID,
+    token: str,
+    expires_at: datetime | None,
+    user_agent: str | None,
+) -> None:
+    """Store a session the merchant made in their own browser (migration 070).
+
+    The extension sends it after the merchant logged in to Effi and solved the
+    captcha themselves. There is no password on this path, and any password
+    stored before is DROPPED: a merchant who switched to the extension did so
+    because the password path cannot work, and keeping a secret we can never
+    use is keeping a liability for nothing.
+
+    The status goes back to 'none' - stored, not proven. It becomes 'ok' only
+    when the preflight run right after this actually reads Effi with it.
+    """
+    if not vault_available():
+        raise VaultKeyMissing(
+            "Este servidor no tiene bóveda de credenciales configurada "
+            "(CONNECTION_VAULT_KEY)."
+        )
+    session_enc = encrypt_secret(token)
+    agent = (user_agent or "").strip()[:512] or None
+
+    execute(
+        conn,
+        """
+        INSERT INTO core.connection_credential
+            (connection_id, tenant_id, username, secret_enc, auth_mode,
+             session_enc, session_expires_at, session_user_agent,
+             last_login_at, rotated_at, updated_at)
+        VALUES (%s, %s, %s, NULL, 'browser_session', %s, %s, %s, now(), now(), now())
+        ON CONFLICT (connection_id) DO UPDATE SET
+            username           = EXCLUDED.username,
+            secret_enc         = NULL,
+            auth_mode          = 'browser_session',
+            session_enc        = EXCLUDED.session_enc,
+            session_expires_at = EXCLUDED.session_expires_at,
+            session_user_agent = EXCLUDED.session_user_agent,
+            last_login_at      = now(),
+            last_login_error   = NULL,
+            rotated_at         = now(),
+            updated_at         = now()
+        """,
+        (connection_id, tenant_id, BROWSER_SESSION_LABEL, session_enc, expires_at, agent),
+    )
+    execute(
+        conn,
+        """
+        UPDATE core.connection
+           SET credential_status = 'none', last_error = NULL
+         WHERE id = %s AND tenant_id = %s
+        """,
+        (connection_id, tenant_id),
+    )
+    # The fact, never the value. Not even its length.
+    logger.info(
+        "browser session stored tenant=%s connection=%s", tenant_id, connection_id
+    )
+
+
+def mark_session_expired(
+    conn, *, connection_id: UUID, tenant_id: UUID, message: str
+) -> None:
+    """A session sent from the extension died. Forget it and say what to do.
+
+    Terminal for the worker, like 'invalid': there is no password to log in
+    again with, and replaying a dead cookie on every run only teaches Effi to
+    distrust this traffic. Only a new session from the extension reopens it.
+    """
+    execute(
+        conn,
+        """
+        UPDATE core.connection_credential
+           SET session_enc        = NULL,
+               session_expires_at = NULL,
+               last_login_error   = %s,
+               updated_at         = now()
+         WHERE connection_id = %s AND tenant_id = %s
+        """,
+        (message[:500], connection_id, tenant_id),
+    )
+    execute(
+        conn,
+        """
+        UPDATE core.connection SET credential_status = 'session_expired'
+         WHERE id = %s AND tenant_id = %s
+        """,
+        (connection_id, tenant_id),
+    )
+    logger.info(
+        "browser session expired tenant=%s connection=%s", tenant_id, connection_id
+    )
 
 
 def save_session(
@@ -268,7 +389,8 @@ def read_summary(conn, *, connection_id: UUID, tenant_id: UUID) -> CredentialSum
         conn,
         """
         SELECT cc.username, cc.last_login_at, cc.last_login_error,
-               cc.session_expires_at, cc.rotated_at, c.credential_status
+               cc.session_expires_at, cc.rotated_at, cc.auth_mode,
+               c.credential_status
           FROM core.connection_credential cc
           JOIN core.connection c ON c.id = cc.connection_id
          WHERE cc.connection_id = %s AND cc.tenant_id = %s
@@ -284,6 +406,7 @@ def read_summary(conn, *, connection_id: UUID, tenant_id: UUID) -> CredentialSum
         last_login_error=row["last_login_error"],
         session_expires_at=row["session_expires_at"],
         rotated_at=row["rotated_at"],
+        auth_mode=row.get("auth_mode") or "password",
     )
 
 
@@ -299,14 +422,19 @@ def load_session(conn, *, connection_id: UUID, tenant_id: UUID) -> StoredSession
     row = fetch_one(
         conn,
         """
-        SELECT session_enc, session_expires_at
+        SELECT session_enc, session_expires_at, auth_mode, session_user_agent
           FROM core.connection_credential
          WHERE connection_id = %s AND tenant_id = %s
         """,
         (connection_id, tenant_id),
     )
-    if row is None or row["session_enc"] is None:
+    if row is None:
         return StoredSession(token=None, expires_at=None)
+
+    auth_mode = row.get("auth_mode") or "password"
+    user_agent = row.get("session_user_agent")
+    if row["session_enc"] is None:
+        return StoredSession(None, None, auth_mode, user_agent)
 
     try:
         token = decrypt_secret(row["session_enc"])
@@ -315,9 +443,9 @@ def load_session(conn, *, connection_id: UUID, tenant_id: UUID) -> StoredSession
             "stored session unreadable (rotated key); will log in again "
             "tenant=%s connection=%s", tenant_id, connection_id,
         )
-        return StoredSession(token=None, expires_at=None)
+        return StoredSession(None, None, auth_mode, user_agent)
 
-    return StoredSession(token=token, expires_at=row["session_expires_at"])
+    return StoredSession(token, row["session_expires_at"], auth_mode, user_agent)
 
 
 @contextmanager
@@ -340,7 +468,7 @@ def use_credential(conn, *, connection_id: UUID, tenant_id: UUID) -> Iterator[Cr
     row = fetch_one(
         conn,
         """
-        SELECT username, secret_enc
+        SELECT username, secret_enc, auth_mode
           FROM core.connection_credential
          WHERE connection_id = %s AND tenant_id = %s
         """,
@@ -350,6 +478,13 @@ def use_credential(conn, *, connection_id: UUID, tenant_id: UUID) -> Iterator[Cr
         raise LookupError(
             "Esta conexión no tiene una cuenta conectada. Ingresa tu usuario y "
             "contraseña de la plataforma en Configuración → Conexiones."
+        )
+    if row.get("auth_mode") == BROWSER_SESSION:
+        # Callers branch on the stored session before asking for a password;
+        # reaching here means one forgot to. Say what is true, not "vacía".
+        raise LookupError(
+            "Esta conexión se conectó con la extensión y no guarda contraseña. "
+            "Vuelve a enviar la sesión desde la extensión."
         )
 
     password = decrypt_secret(row["secret_enc"])

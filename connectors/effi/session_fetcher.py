@@ -118,6 +118,7 @@ class EffiSessionFetcher:
         base_url: str = DEFAULT_BASE_URL,
         timeout_seconds: float = DEFAULT_TIMEOUT_SECONDS,
         min_interval_seconds: float = MIN_SECONDS_BETWEEN_REQUESTS,
+        browser_user_agent: str | None = None,
     ) -> None:
         if consent_granted_at is None:
             raise ConsentError(
@@ -137,6 +138,10 @@ class EffiSessionFetcher:
         self._timeout = timeout_seconds
         self._min_interval = min_interval_seconds
         self._last_request_at: float = 0.0
+        # Migration 070: the User-Agent of the browser that made a session sent
+        # by the extension. Only REPLAYED when the operator opts in - see
+        # `_user_agent()` for why that is not the default.
+        self._browser_user_agent = (browser_user_agent or "").strip() or None
 
     @property
     def base_url(self) -> str:
@@ -196,6 +201,7 @@ class EffiSessionFetcher:
         stored password and a session pasted into an env var are the same object
         under the same rules.
         """
+        kwargs.setdefault("browser_user_agent", getattr(session, "user_agent", None))
         return cls(
             session_token=session.token,
             consent_granted_at=consent_granted_at,
@@ -376,7 +382,7 @@ class EffiSessionFetcher:
 
     def _headers(self) -> dict[str, str]:
         headers = {
-            "User-Agent": USER_AGENT,
+            "User-Agent": self._user_agent(),
             "Accept": (
                 "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,"
                 "application/vnd.ms-excel,text/csv"
@@ -387,6 +393,23 @@ class EffiSessionFetcher:
         else:
             headers["Cookie"] = self._token
         return headers
+
+    def _user_agent(self) -> str:
+        """Our honest User-Agent, unless the operator opted into replaying the browser's.
+
+        Rule 3 above (NO EVASION) is why the default is our own name. The one
+        exception is a session the merchant made in their own browser and sent
+        with the extension: some CodeIgniter setups bind `ci_session` to the
+        User-Agent that created it, and then the session only works if the same
+        string comes back. That is the merchant's own browser session used for
+        the merchant's own reports, not a disguise - but it is still a choice an
+        operator makes on purpose (EFFI_REPLAY_BROWSER_USER_AGENT=true), after
+        seeing Effi reject the session with our name on it.
+        """
+        replay = os.environ.get("EFFI_REPLAY_BROWSER_USER_AGENT", "").strip().lower()
+        if self._browser_user_agent and replay in ("1", "true", "yes", "si", "sí"):
+            return self._browser_user_agent
+        return USER_AGENT
 
     def _respect_rate_limit(self) -> None:
         elapsed = time.monotonic() - self._last_request_at
