@@ -22,6 +22,7 @@ import { useEffect, useMemo, useState } from "react";
 import { AppShell } from "@/components/AppShell";
 import { ConfirmDialog } from "@/components/ConfirmDialog";
 import { ConnectionCredentialPanel } from "@/components/ConnectionCredentialPanel";
+import { DropiTokenPanel } from "@/components/DropiTokenPanel";
 import type { ConfirmDetail } from "@/components/ConfirmDialog";
 import { Button, Chip, Drawer, EmptyState, ErrorState, SectionTitle, SkeletonRows, StatusDot, cx } from "@/components/ui";
 import { TIER_LABELS } from "@/lib/glossary";
@@ -382,11 +383,15 @@ export default function ConnectionsPage() {
           subtitle={`${managing.platform_name} · ${managing.connection_name}`}
           onClose={() => setManaging(null)}
         >
-          <ConnectionCredentialPanel
-            connection={managing}
-            isOwner={isOwner}
-            onChanged={reload}
-          />
+          {managing.platform_code === "dropi" ? (
+            <DropiTokenPanel connection={managing} isOwner={isOwner} onChanged={reload} />
+          ) : (
+            <ConnectionCredentialPanel
+              connection={managing}
+              isOwner={isOwner}
+              onChanged={reload}
+            />
+          )}
         </SidePanel>
       )}
 
@@ -561,7 +566,9 @@ function PlatformCard({
               key={connection.connection_id}
               connection={connection}
               webhookCapable={platform.auth_type === "webhook"}
-              sessionCapable={platform.auth_type === "session"}
+              sessionCapable={
+                platform.auth_type === "session" || platform.platform_code === "dropi"
+              }
               isOwner={isOwner}
               onDelete={onDelete}
               onCreateWebhook={onCreateWebhook}
