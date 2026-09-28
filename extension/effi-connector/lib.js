@@ -61,18 +61,18 @@ export function describeResponse(status, body) {
     if (body.credential_status === "session_expired") {
       return { tono: "error", texto: body.summary || "Effi no aceptó la sesión. Entra de nuevo a Effi y genera otro código." };
     }
-    return { tono: "aviso", texto: body.summary || "La sesión quedó guardada, pero falta algo. Revisa Data Effi." };
+    return { tono: "aviso", texto: body.summary || "La sesión quedó guardada, pero falta algo. Revisa Master Data." };
   }
   const message = body?.error?.message;
   if (status === 429) {
     return { tono: "error", texto: message || "Demasiados intentos. Espera un minuto." };
   }
   if (status === 404) {
-    return { tono: "error", texto: message || "Ese código no sirve. Genera uno nuevo en Data Effi." };
+    return { tono: "error", texto: message || "Ese código no sirve. Genera uno nuevo en Master Data." };
   }
   return {
     tono: "error",
-    texto: message || `Data Effi respondió con un error (${status}). Inténtalo de nuevo en un momento.`,
+    texto: message || `Master Data respondió con un error (${status}). Inténtalo de nuevo en un momento.`,
   };
 }
 

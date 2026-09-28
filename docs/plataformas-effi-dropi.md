@@ -273,7 +273,7 @@ La extensión no está en ninguna tienda: se carga desde la carpeta.
 Por defecto envía a `https://master-data-api.onrender.com`. Para otro servidor hay dos
 caminos: cambiar `apiBase` en `config.js` **y** el mismo origen en `host_permissions` de
 `manifest.json` (si solo cambias uno, el navegador bloquea el envío), o usar
-«Servidor de Data Effi» dentro de la ventanita, que pide permiso solo para ese origen.
+«Servidor de Master Data» dentro de la ventanita, que pide permiso solo para ese origen.
 
 Permisos que pide: `cookies`, `storage`, y acceso únicamente a `effi.com.co` y al
 servidor de Master Data. Sin código remoto, sin analítica. No lee páginas ni
@@ -288,7 +288,7 @@ formularios.
    vez** y deja muerto cualquier código anterior de esa conexión. La base guarda solo
    su SHA-256 (`core.connection_pairing`).
 2. **Comerciante, en su navegador**: entra a Effi normalmente (resuelve el captcha),
-   abre la extensión, pega el código y pulsa **Enviar sesión a Data Effi**.
+   abre la extensión, pega el código y pulsa **Enviar sesión a Master Data**.
 3. **Extensión → API**: `POST /config/effi/pairing/redeem` con `{code, cookies,
    user_agent}`. Sin JWT: el código es la credencial. Solo viajan las cookies de la
    lista de sesión (`ci_session`); analítica y demás se quedan en el navegador.

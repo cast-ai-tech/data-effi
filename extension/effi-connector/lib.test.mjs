@@ -1,5 +1,6 @@
 // node --test extension/effi-connector/lib.test.mjs   (sin dependencias)
 import assert from "node:assert/strict";
+import { readdirSync, readFileSync } from "node:fs";
 import { test } from "node:test";
 
 import {
@@ -59,4 +60,13 @@ test("el servidor configurable solo acepta https (o localhost)", () => {
   assert.equal(normalizeOrigin("http://localhost:8000"), "http://localhost:8000");
   assert.equal(normalizeOrigin("http://api.x.com"), null);
   assert.equal(normalizeOrigin("javascript:alert(1)"), null);
+});
+
+test("la extensión habla de Master Data, no del nombre viejo", () => {
+  const dir = new URL(".", import.meta.url);
+  for (const name of readdirSync(dir)) {
+    if (!/\.(js|json|html)$/.test(name)) continue;
+    const text = readFileSync(new URL(name, dir), "utf8");
+    assert.doesNotMatch(text, /Data Effi|dataeffi(?!_)/i, name);
+  }
 });

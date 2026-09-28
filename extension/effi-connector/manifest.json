@@ -1,8 +1,8 @@
 {
   "manifest_version": 3,
-  "name": "Conectar Effi con Data Effi",
+  "name": "Conectar Effi con Master Data",
   "version": "1.0.0",
-  "description": "Envía a Data Effi la sesión con la que ya entraste a Effi, para que descargue tus reportes. Nunca lee ni guarda tu contraseña.",
+  "description": "Envía a Master Data la sesión con la que ya entraste a Effi, para que descargue tus reportes. Nunca lee ni guarda tu contraseña.",
   "minimum_chrome_version": "102",
   "permissions": ["cookies", "storage"],
   "host_permissions": [
@@ -13,7 +13,7 @@
   "optional_host_permissions": ["https://*/*", "http://localhost/*"],
   "action": {
     "default_popup": "popup.html",
-    "default_title": "Conectar Effi con Data Effi"
+    "default_title": "Conectar Effi con Master Data"
   },
   "content_security_policy": {
     "extension_pages": "script-src 'self'; object-src 'none'; base-uri 'none'"

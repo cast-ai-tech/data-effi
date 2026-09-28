@@ -3,7 +3,7 @@
 // `apiBase` es a dónde se envía la sesión. Si cambias el valor por defecto,
 // cambia también `host_permissions` en manifest.json con el mismo origen; si
 // no, el navegador bloquea el envío. Para probar contra otro servidor sin tocar
-// archivos, usa «Servidor de Data Effi» en la propia ventanita: pide permiso
+// archivos, usa «Servidor de Master Data» en la propia ventanita: pide permiso
 // solo para ese origen.
 export const CONFIG = Object.freeze({
   apiBase: "https://master-data-api.onrender.com",

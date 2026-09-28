@@ -2,7 +2,7 @@
 <html lang="es">
   <head>
     <meta charset="utf-8" />
-    <title>Conectar Effi con Data Effi</title>
+    <title>Conectar Effi con Master Data</title>
     <style>
       /* Sin librerías ni fuentes externas: nada se descarga de ningún lado. */
       :root {
@@ -144,7 +144,7 @@
     </style>
   </head>
   <body>
-    <h1>Conectar Effi con Data Effi</h1>
+    <h1>Conectar Effi con Master Data</h1>
     <p class="sub">
       Envía la sesión con la que ya entraste a Effi. Nunca se lee ni se guarda
       tu contraseña.
@@ -153,7 +153,7 @@
     <p id="estado-effi" class="estado" role="status">Revisando Effi…</p>
 
     <form id="formulario" novalidate>
-      <label for="codigo">Código de Data Effi</label>
+      <label for="codigo">Código de Master Data</label>
       <input
         id="codigo"
         name="codigo"
@@ -164,16 +164,16 @@
         aria-describedby="ayuda-codigo"
       />
       <p id="ayuda-codigo" class="ayuda">
-        Lo generas en Data Effi → Configuración → Conexiones → Effi → «Conectar
+        Lo generas en Master Data → Configuración → Conexiones → Effi → «Conectar
         con la extensión». Sirve una vez y caduca en 10 minutos.
       </p>
-      <button id="enviar" type="submit" disabled>Enviar sesión a Data Effi</button>
+      <button id="enviar" type="submit" disabled>Enviar sesión a Master Data</button>
     </form>
 
     <div id="resultado" class="estado" role="alert" hidden></div>
 
     <details>
-      <summary>Servidor de Data Effi</summary>
+      <summary>Servidor de Master Data</summary>
       <p class="ayuda">
         Solo si soporte te lo pide. El navegador te pedirá permiso para ese
         servidor y ninguno más.

@@ -3,7 +3,7 @@
 //   - no lee formularios ni contraseñas (no tiene permiso sobre páginas);
 //   - no guarda la cookie: vive en variables locales el tiempo del envío;
 //   - no guarda el código;
-//   - no manda nada a ningún sitio que no sea Data Effi.
+//   - no manda nada a ningún sitio que no sea Master Data.
 import { CONFIG } from "./config.js";
 import {
   buildPayload,
@@ -58,7 +58,7 @@ async function revisarEffi() {
 
   if (haySesion) {
     // CodeIgniter crea `ci_session` también a quien solo abrió la página de
-    // entrar. Por eso no se afirma "estás dentro": eso lo comprueba Data Effi.
+    // entrar. Por eso no se afirma "estás dentro": eso lo comprueba Master Data.
     pintar(
       estadoEffi,
       "ok",
@@ -106,7 +106,7 @@ async function enviarSesion(event) {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(payload),
       // Ninguna cookie nuestra ni de nadie viaja con esta petición: la sesión
-      // de Effi va en el cuerpo, una vez, y solo a Data Effi.
+      // de Effi va en el cuerpo, una vez, y solo a Master Data.
       credentials: "omit",
       cache: "no-store",
     });
@@ -123,13 +123,13 @@ async function enviarSesion(event) {
     pintar(
       resultado,
       "error",
-      "No se pudo contactar a Data Effi. Revisa tu internet e inténtalo de nuevo; el código sigue sirviendo si no llegó.",
+      "No se pudo contactar a Master Data. Revisa tu internet e inténtalo de nuevo; el código sigue sirviendo si no llegó.",
     );
   } finally {
     // La cookie no se queda en memoria de la ventanita más de lo necesario.
     payload = null;
     enviando = false;
-    enviar.textContent = "Enviar sesión a Data Effi";
+    enviar.textContent = "Enviar sesión a Master Data";
     actualizarBoton();
   }
 }
