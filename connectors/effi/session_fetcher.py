@@ -206,7 +206,7 @@ class EffiSessionFetcher:
         if date_from > date_to:
             raise FetchError("El rango de fechas está invertido")
 
-        path = os.environ.get(f"EFFI_PATH_{kind.name}", REPORT_PATHS[kind])
+        path = os.environ.get(f"EFFI_PATH_{kind.name}", "").strip() or REPORT_PATHS[kind]
         url = f"{self._base_url}{path}"
         params = {
             "fecha_inicio": date_from.isoformat(),

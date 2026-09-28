@@ -78,6 +78,8 @@ services:
         sync: false
       - key: EFFI_LOGIN_PATH
         sync: false
+      - key: EFFI_LOGIN_PAGE_PATH
+        sync: false
       - key: EFFI_LOGIN_USER_FIELD
         sync: false
       - key: EFFI_LOGIN_PASS_FIELD

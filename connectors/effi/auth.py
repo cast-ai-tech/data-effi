@@ -93,6 +93,16 @@ class AccountLocked(RuntimeError):
     """Effi says the account is blocked. Terminal until a human intervenes."""
 
 
+class CaptchaRequired(LoginContractUnverified):
+    """Effi's login form asks for a captcha a server cannot solve.
+
+    A subclass of LoginContractUnverified on purpose: to every caller it means
+    the same thing - automatic login is not possible, the merchant did nothing
+    wrong, and their connection must not be stamped as broken over it. No login
+    POST is ever sent once this is detected, so it costs the account nothing.
+    """
+
+
 class LoginUnavailable(RuntimeError):
     """Effi could not be reached, or answered something we cannot interpret.
 
@@ -132,6 +142,10 @@ class EffiLoginContract:
     # below are correct rather than convenient: there is no secret in this class,
     # which is precisely why it can be a frozen module-level default.
     path: str = "/login"
+    # The page that RENDERS the form, where a CSRF token is read. Often not the
+    # same as `path`: Effi renders at /ingreso and receives the POST at
+    # /ingreso/validar_usuario. Empty means "same as path".
+    page_path: str = ""
     username_field: str = "usuario"
     password_field: str = "clave"  # noqa: S105 - the input's name attribute
     # Where the session comes back. 'cookie' means a Set-Cookie header we replay;
@@ -145,17 +159,27 @@ class EffiLoginContract:
 
     @classmethod
     def from_env(cls) -> EffiLoginContract:
+        # Defaults come from an INSTANCE, not from `cls.path`: with
+        # `slots=True` the class attribute is a slot descriptor, and reading it
+        # used to hand back "<member 'path' of ...>" as the login path whenever
+        # the variable was unset.
+        defaults = cls()
+
         def pick(name: str, default: str) -> str:
-            return os.environ.get(name, default)
+            # `or`, not a get() default: .env.example and render.yaml declare
+            # these variables EMPTY on purpose, and an empty string must mean
+            # "use the default", not "the login path is ''".
+            return os.environ.get(name, "").strip() or default
 
         return cls(
-            path=pick("EFFI_LOGIN_PATH", cls.path),
-            username_field=pick("EFFI_LOGIN_USER_FIELD", cls.username_field),
-            password_field=pick("EFFI_LOGIN_PASS_FIELD", cls.password_field),
-            session_carrier=pick("EFFI_SESSION_CARRIER", cls.session_carrier),
-            session_cookie_name=pick("EFFI_SESSION_COOKIE", cls.session_cookie_name),
-            token_json_key=pick("EFFI_TOKEN_JSON_KEY", cls.token_json_key),
-            csrf_field=pick("EFFI_LOGIN_CSRF_FIELD", cls.csrf_field),
+            path=pick("EFFI_LOGIN_PATH", defaults.path),
+            page_path=pick("EFFI_LOGIN_PAGE_PATH", defaults.page_path),
+            username_field=pick("EFFI_LOGIN_USER_FIELD", defaults.username_field),
+            password_field=pick("EFFI_LOGIN_PASS_FIELD", defaults.password_field),
+            session_carrier=pick("EFFI_SESSION_CARRIER", defaults.session_carrier),
+            session_cookie_name=pick("EFFI_SESSION_COOKIE", defaults.session_cookie_name),
+            token_json_key=pick("EFFI_TOKEN_JSON_KEY", defaults.token_json_key),
+            csrf_field=pick("EFFI_LOGIN_CSRF_FIELD", defaults.csrf_field),
         )
 
 
@@ -198,8 +222,8 @@ class EffiAuthenticator:
             )
 
         self._respect_rate_limit()
-        response = self._post_login(credential)
-        return self._session_from(response)
+        response, jar_cookie = self._post_login(credential)
+        return self._session_from(response, jar_cookie=jar_cookie)
 
     def ensure_session(
         self,
@@ -227,7 +251,7 @@ class EffiAuthenticator:
         return self.login(credential), True
 
     # -- internals ------------------------------------------------------
-    def _post_login(self, credential: Credential) -> Any:
+    def _post_login(self, credential: Credential) -> tuple[Any, str | None]:
         try:
             import httpx
         except ImportError as exc:  # pragma: no cover - declared dependency
@@ -243,11 +267,19 @@ class EffiAuthenticator:
             "Accept": "application/json, text/html",
         }
 
+        jar_cookie: str | None = None
         try:
             with httpx.Client(timeout=self._timeout, follow_redirects=False) as client:
                 if self._contract.csrf_field:
                     form[self._contract.csrf_field] = self._fetch_csrf(client, headers)
                 response = client.post(url, data=form, headers=headers)
+                # The session cookie may have been set on the GET of the login
+                # page (CodeIgniter mints `ci_session` there) and only refreshed
+                # server-side on the POST, with no new Set-Cookie. The client's
+                # jar is where it lives in that case.
+                jar_cookie = _jar_value(client, self._contract.session_cookie_name)
+        except (LoginContractUnverified, LoginUnavailable):
+            raise
         except Exception as exc:
             # `form` holds the password. Never let the exception carry it: log
             # the type, discard the original with `from None`.
@@ -260,14 +292,23 @@ class EffiAuthenticator:
             form[self._contract.password_field] = ""
 
         self._raise_for_login_status(response)
-        return response
+        return response, jar_cookie
 
     def _fetch_csrf(self, client: Any, headers: dict[str, str]) -> str:
         """Read the CSRF token off the login page, when Effi requires one."""
-        page = client.get(f"{self._base_url}{self._contract.path}", headers=headers)
+        page_path = self._contract.page_path or self._contract.path
+        page = client.get(f"{self._base_url}{page_path}", headers=headers)
         if page.status_code >= 400:
             raise LoginUnavailable(
                 f"Effi no entregó el formulario de login (HTTP {page.status_code})"
+            )
+        if any(marker in page.text.lower() for marker in _CAPTCHA_MARKERS):
+            # Stop BEFORE posting the password: a POST without the captcha
+            # answer is a failed login attempt on the merchant's real account.
+            raise CaptchaRequired(
+                "El login de Effi pide un captcha que un servidor no puede "
+                "resolver, así que la conexión automática no es posible. "
+                "Mientras tanto, sube el reporte a mano: produce el mismo tablero."
             )
         token = _extract_input_value(page.text, self._contract.csrf_field)
         if not token:
@@ -298,6 +339,17 @@ class EffiAuthenticator:
             )
         if status >= 400:
             raise LoginUnavailable(f"Effi respondió HTTP {status} al iniciar sesión")
+        if status in (301, 302, 303, 307, 308) and self._redirects_to_login(response):
+            # The classic server-rendered failure: POST the form, get bounced
+            # back to the form with a flash message. Treating the redirect as
+            # success would store an anonymous session as if it were a login,
+            # and every sync after it would log in again with the same wrong
+            # password - exactly the loop that locks an account.
+            raise InvalidCredentials(
+                "Effi devolvió la pantalla de entrada: el usuario o la "
+                "contraseña no son correctos, o Effi pidió una verificación "
+                "extra. No se intentará de nuevo para no bloquear la cuenta."
+            )
 
         # A 200 that renders the login form again is a failed login wearing a
         # success code - a very common pattern in server-rendered panels.
@@ -314,7 +366,26 @@ class EffiAuthenticator:
                 "no son correctos."
             )
 
-    def _session_from(self, response: Any) -> EffiSession:
+    def _redirects_to_login(self, response: Any) -> bool:
+        """True when a redirect points back at the login form."""
+        from urllib.parse import urlsplit
+
+        headers = getattr(response, "headers", None) or {}
+        location = headers.get("location") or headers.get("Location") or ""
+        target = urlsplit(location).path.rstrip("/").lower()
+        if not target:
+            return False
+        login_post = self._contract.path.rstrip("/").lower()
+        # The page that renders the form is usually the parent of the path the
+        # form posts to: /ingreso renders, /ingreso/validar_usuario receives.
+        login_page = (
+            self._contract.page_path.rstrip("/").lower()
+            or login_post.rsplit("/", 1)[0]
+            or login_post
+        )
+        return target in {login_post, login_page} or target.endswith(("/login", "/ingreso"))
+
+    def _session_from(self, response: Any, *, jar_cookie: str | None = None) -> EffiSession:
         now = datetime.now(UTC)
         expires_at = now + ASSUMED_SESSION_LIFETIME
 
@@ -335,6 +406,7 @@ class EffiAuthenticator:
         # Cookie carrier: rebuild the Cookie header the fetcher will replay.
         cookies = getattr(response, "cookies", None)
         value = cookies.get(self._contract.session_cookie_name) if cookies else None
+        value = value or jar_cookie
         if not value:
             raise LoginUnavailable(
                 "Effi aceptó el login pero no entregó la cookie de sesión "
@@ -367,12 +439,28 @@ _REJECTION_MARKERS = (
     "datos de acceso incorrect",
 )
 
+# A captcha on the login form. reCAPTCHA v2 invisible is what Effi's /ingreso
+# carried on 2026-08-26 (tools/effi-capture/README.md).
+_CAPTCHA_MARKERS = (
+    "g-recaptcha",
+    "h-captcha",
+    "cf-turnstile",
+)
+
 _LOCKOUT_MARKERS = (
     "cuenta bloquead",
     "usuario bloquead",
     "cuenta suspendid",
     "demasiados intentos",
 )
+
+
+def _jar_value(client: Any, name: str) -> str | None:
+    """One cookie out of the client's jar, or None - never an exception."""
+    try:
+        return client.cookies.get(name)
+    except Exception:  # CookieConflict when two domains set the same name
+        return None
 
 
 def _extract_input_value(html: str, field_name: str) -> str:
