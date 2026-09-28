@@ -19,7 +19,7 @@ import { ApiError, api } from "@/lib/api";
 import { type CompanyType, companyTypeLabel } from "@/lib/company";
 import { countryFlag } from "@/lib/format";
 import { useApi } from "@/lib/hooks";
-import type { Country, TenantRow, User } from "@/lib/types";
+import type { Country, Member, TenantRow, User } from "@/lib/types";
 
 export default function SettingsPage() {
   const [error, setError] = useState<string | null>(null);
@@ -179,7 +179,7 @@ function ConnectionsLink() {
 }
 
 function UsersSection() {
-  const { data, loading } = useApi<User[]>("/config/users");
+  const { data, loading } = useApi<Member[]>("/config/users");
 
   const roleLabel: Record<string, string> = {
     owner: "Dueño",
@@ -192,7 +192,7 @@ function UsersSection() {
       {loading && <SkeletonRows rows={2} />}
       {(data ?? []).map((user) => (
         <div
-          key={user.id}
+          key={`${user.user_id}:${user.tenant_id ?? ""}`}
           className="flex items-center justify-between gap-3 border-t border-line-row py-2.5 first:border-t-0"
         >
           <div className="min-w-0">
