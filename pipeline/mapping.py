@@ -195,10 +195,19 @@ def resolve_status(raw_value: object) -> tuple[str, bool]:
     if code:
         return code, True
     # Tolerate decorated values like "ENTREGADO - OK" or "novedad (cliente)".
-    for alias, mapped in STATUS_ALIASES.items():
+    # The LONGEST alias wins: in insertion order "entregado" came before
+    # "entregado en agencia", so "Entregado en agencia (Pasto)" was counted as
+    # delivered instead of in_office, and "Devolución entregada - x" as
+    # returning instead of returned.
+    for alias in _ALIASES_LONGEST_FIRST:
         if key.startswith(alias + " ") or key.startswith(alias + "-") or key.startswith(alias + "("):
-            return mapped, True
+            return STATUS_ALIASES[alias], True
     return DEFAULT_STATUS, False
+
+
+_ALIASES_LONGEST_FIRST: tuple[str, ...] = tuple(
+    sorted(STATUS_ALIASES, key=len, reverse=True)
+)
 
 
 # Expected direction of each movement type, mirroring core.movement_type.sign.
@@ -346,7 +355,7 @@ COLUMNS_BY_KIND: dict[BatchKind, dict[str, tuple[str, ...]]] = {
 
 # Without these a row cannot be identified at all, and the file is rejected.
 REQUIRED_COLUMNS: dict[BatchKind, tuple[str, ...]] = {
-    BatchKind.SHIPMENTS: ("tracking_number",),
+    BatchKind.SHIPMENTS: ("tracking_number", "created_date"),
     BatchKind.MOVEMENTS: ("amount",),
 }
 

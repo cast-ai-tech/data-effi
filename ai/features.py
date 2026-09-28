@@ -56,6 +56,8 @@ from api.settings import Settings
 logger = logging.getLogger(__name__)
 
 BRIEF_TTL_HOURS = 24
+# How many result rows the narrating model is shown.
+NARRATED_ROWS = 40
 ALERTS_TTL_HOURS = 2
 ASK_TTL_HOURS = 1
 
@@ -731,6 +733,16 @@ def ask_data(
             tokens=sql_response.input_tokens + sql_response.output_tokens,
         )
 
+    # The model is told "N resultados" but only ever sees the first 40. Without
+    # saying so, a question like "¿cuánto vendí por ciudad?" came back with a
+    # "total" the model added up over 40 of 200 rows - a number nobody computed.
+    shown = rows[:NARRATED_ROWS]
+    truncation_hint = (
+        f" Solo ves los primeros {len(shown)} de {len(rows)} resultados: no sumes, "
+        "promedies ni extrapoles sobre ellos como si fueran todos; di que la lista "
+        "completa está en la tabla."
+        if len(rows) > len(shown) else ""
+    )
     currency = _country_currency(conn, country)
     currency_hint = (
         f" Todo monto va con la moneda {currency}." if currency
@@ -744,10 +756,11 @@ def ask_data(
             ),
             user_message=(
                 f"Pregunta del dueño: {question}\n\n"
-                f"Cifras ya calculadas ({len(rows)} resultados):\n{_as_readable(rows[:40])}\n\n"
+                f"Cifras ya calculadas ({len(rows)} resultados):\n{_as_readable(shown)}\n\n"
                 f"Responde en 3 a 4 frases, en lenguaje de negocio, usando solo estas cifras y "
                 f"dándoles contexto (qué se despachó, qué se entregó, qué se devolvió, cuánto "
-                f"es en plata). No menciones cómo se obtuvieron ni nombres técnicos.{currency_hint}"
+                f"es en plata). No menciones cómo se obtuvieron ni nombres técnicos."
+                f"{truncation_hint}{currency_hint}"
             ),
             max_tokens=500,
         )

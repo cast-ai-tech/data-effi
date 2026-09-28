@@ -17,6 +17,7 @@ compares the outcome row by row.
 from __future__ import annotations
 
 import logging
+from collections.abc import Callable
 from datetime import UTC, datetime
 from decimal import Decimal
 from typing import Any
@@ -506,7 +507,10 @@ class PostgresStore:
             # Una fila mala aborta la tanda entera. Se rehace fila a fila, donde
             # cada una lleva su propio savepoint y una sola cae sin arrastrar al
             # resto - la misma garantía que daba el camino original.
-            return [self.upsert_shipment(ctx, s) for s in shipments]
+            return [
+                _isolated(lambda s=s: self.upsert_shipment(ctx, s), s.tracking_number)
+                for s in shipments
+            ]
 
         results: list[UpsertResult] = []
         pending: list[Discrepancy] = []
@@ -795,7 +799,13 @@ class PostgresStore:
                         if not cur.nextset():
                             break
         except psycopg.Error:
-            return [self.upsert_movement(ctx, m) for m in movements]
+            return [
+                _isolated(
+                    lambda m=m: self.upsert_movement(ctx, m),
+                    m.external_ref or m.dedupe_key[:12],
+                )
+                for m in movements
+            ]
 
         results: list[UpsertResult] = []
         pending: list[Discrepancy] = []
@@ -993,6 +1003,29 @@ class PostgresStore:
         if existing is None:      # pragma: no cover - would mean a broken constraint
             raise RuntimeError(f"could not resolve or create a row in {table}")
         return existing[0]
+
+
+def _isolated(upsert: Callable[[], UpsertResult], entity_key: str) -> UpsertResult:
+    """Una fila del camino de respaldo: si la base la rechaza, cae SOLA.
+
+    `upsert_shipment`/`upsert_movement` ya envuelven la fila en un savepoint,
+    así que un error deja la conexión usable - pero la excepción seguía
+    subiendo. Antes de las cargas por lotes la atrapaba el try por fila de
+    IngestEngine.ingest(); desde que la escritura ocurre al final, fuera de ese
+    bucle, una sola fila rechazada (un número fuera de rango, un CHECK)
+    tumbaba el archivo entero. Aquí vuelve a ser una fila fallida en el
+    reporte, con su motivo, y el resto se guarda.
+    """
+    try:
+        return upsert()
+    except psycopg.Error as exc:
+        logger.warning("row %s rejected by the database: %s", entity_key, exc)
+        message = str(exc).strip().splitlines()[0] if str(exc).strip() else type(exc).__name__
+        return UpsertResult(
+            RowOutcome.FAILED,
+            entity_key,
+            error=f"{entity_key}: la base de datos rechazó la fila ({message})",
+        )
 
 
 def _money_text(value: Any) -> str:

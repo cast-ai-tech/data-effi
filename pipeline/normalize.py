@@ -227,8 +227,17 @@ def normalize_tracking(value: Any) -> str | None:
     """Tracking numbers arrive with spaces, dashes and stray quotes."""
     if value is None:
         return None
+    # Una celda numérica de Excel llega como float. str(240012345670.0) da
+    # "240012345670.0" y, para números largos, notación científica: se pasa a
+    # entero antes de convertirlo en texto.
+    if isinstance(value, float) and value.is_integer():
+        value = int(value)
     text = str(value).strip().strip("'\"").replace(" ", "")
-    text = text.rstrip(".0") if re.fullmatch(r"\d+\.0+", text) else text
+    # Solo el sufijo decimal ".0", nunca los ceros de la guía. `rstrip(".0")`
+    # quitaba CARACTERES, no el sufijo: "240012345670.0" quedaba "24001234567"
+    # y el movimiento ya no encontraba su guía.
+    if re.fullmatch(r"\d+\.0+", text):
+        text = text.split(".", 1)[0]
     return text.upper() or None
 
 

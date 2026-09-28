@@ -897,8 +897,12 @@ class IngestEngine:
                 logger.warning("country mismatch: file=%s connection=%s", detected, country_code)
                 return report
 
+        # A guide without its creation date cannot be placed on the dashboard,
+        # which groups by it. Without the column every row used to fail one by
+        # one with "fecha de creación ilegible (None)"; the file is refused once
+        # with the column named instead.
         required = (
-            ("tracking_number",)
+            ("tracking_number", "created_date")
             if profile is not None and profile.kind is BatchKind.SHIPMENTS
             else REQUIRED_COLUMNS[kind]
         )
@@ -1114,7 +1118,20 @@ class IngestEngine:
             report.errors.append(RowError(row_number, "Movimiento sin valor legible"))
             return
 
-        movement_date = parse_date(mapped.get("movement_date")) or self._today
+        raw_date = mapped.get("movement_date")
+        parsed_date = parse_date(raw_date)
+        movement_date = parsed_date or self._today
+        if parsed_date is None:
+            # Stored on today's date so the row is not lost, but said out loud:
+            # it lands in today's money series, which is not where it belongs.
+            report.sanity_issues.append(
+                SanityIssue(
+                    row_number, str(mapped.get("external_ref") or row_number),
+                    "movement_without_date",
+                    f"Fecha de movimiento ilegible ({raw_date!r}); se registró con "
+                    f"la fecha de carga ({self._today}).",
+                )
+            )
 
         # A recognised profile already resolved the type against that platform's
         # own vocabulary; the generic alias table is the fallback.
@@ -1178,12 +1195,17 @@ class IngestEngine:
             # is precisely the failure the dedupe key exists to prevent.
             #
             # The fallback still uses the date, because a row with no id has
-            # nothing else to be identified by.
+            # nothing else to be identified by. It is the date the FILE wrote,
+            # never the load date that stands in for an unreadable one: keyed
+            # on `self._today`, the same undated row got a new key every day
+            # and every re-sync of the sheet added it again.
             dedupe_key=(
                 dedupe_key(ctx.connection_id, external_ref)
                 if external_ref
                 else dedupe_key(
-                    ctx.connection_id, tracking, None, type_code, movement_date, magnitude
+                    ctx.connection_id, tracking, None, type_code,
+                    parsed_date if parsed_date is not None else clean_text(raw_date),
+                    magnitude,
                 )
             ),
             tracking_number_raw=tracking,
