@@ -15,7 +15,7 @@ import psycopg
 from fastapi import Depends, Request
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 
-from api.db import check_rate_limit, connection, execute
+from api.db import check_rate_limit, connection, execute, fetch_one
 from api.errors import Forbidden, PaymentRequired, RateLimited, Unauthorized
 from api.security import TokenError, constant_time_equals, decode_access_token
 from api.settings import Settings, get_settings
@@ -210,8 +210,6 @@ def require_platform_admin(user: CurrentUserDep) -> CurrentUser:
     (migración 053): aunque este guardia dejara pasar a quien no debe, las guías,
     los movimientos y los compradores siguen fuera de su alcance.
     """
-    from api.db import fetch_one
-
     with connection(service=True) as conn:
         row = fetch_one(
             conn,
@@ -298,12 +296,22 @@ def _guard_subscription(conn: psycopg.Connection, user: CurrentUser) -> None:
     endpoints (login, /auth/me, /billing, the org chart) stay open so the
     person can see what happened and choose a plan. One small query per
     request, on a table outside row-level security.
+
+    EL PLAN ES DE LA ORGANIZACIÓN DUEÑA DE LA EMPRESA, NO DE QUIEN ENTRA. Antes
+    se miraba `user.org_id`, que es la organización de la PERSONA. Alguien
+    invitado desde otra organización (invitar a un correo que ya existe le da
+    acceso al instante) leía entonces la empresa ajena con el plan de la suya:
+    una empresa con la prueba vencida seguía abierta para él, y al revés, su
+    propia prueba vencida le cerraba una empresa que sí estaba al día.
     """
-    if user.org_id is None:
-        return
     from api.billing import subscription_state
 
-    state = subscription_state(conn, user.org_id)
+    owner =fetch_one(conn, "SELECT org_id FROM core.tenant WHERE id = %s", (user.tenant_id,))
+    org_id = (owner or {}).get("org_id") or user.org_id
+    if org_id is None:
+        return
+
+    state = subscription_state(conn, org_id)
     if state.blocked:
         raise PaymentRequired(
             state.message,
