@@ -29,7 +29,7 @@ from datetime import datetime
 from uuid import UUID
 
 from api import credentials
-from api.db import execute, fetch_all
+from api.db import execute, fetch_all, fetch_one
 from api.errors import ApiError
 from api.schemas import ConnectionPermissionRow, ConnectionPreflightResponse
 from pipeline.vault import CredentialUnreadable, VaultKeyMissing
@@ -47,13 +47,7 @@ def run_preflight_for_connection(
     consent_granted_at: datetime | None,
 ) -> ConnectionPreflightResponse:
     """Prove a connection works, and say precisely what is wrong when it does not."""
-    from connectors.effi.auth import (
-        AccountLocked,
-        EffiAuthenticator,
-        InvalidCredentials,
-        LoginContractUnverified,
-        LoginUnavailable,
-    )
+    from connectors.effi.auth import EffiAuthenticator
     from connectors.effi.permissions import run_preflight
     from connectors.effi.session_fetcher import EffiSessionFetcher
 
@@ -63,20 +57,168 @@ def run_preflight_for_connection(
             f"Todavía no se puede probar una conexión de {platform_name} desde aquí.",
         )
 
-    # -- 1. get a session, logging in only if we have to --------------------
-    stored = credentials.load_session(
-        conn, connection_id=connection_id, tenant_id=tenant_id
-    )
-    authenticator = EffiAuthenticator()
+    # -- 0. things that must stop us BEFORE the password is used -----------
+    if consent_granted_at is None:
+        # Logging in with a merchant's password is exactly what consent is for.
+        # Checked here, not only in the fetcher, because the fetcher is built
+        # AFTER the login - too late to have asked.
+        raise ApiError(
+            "consent_required",
+            "Esta conexión no tiene tu autorización registrada. Vuelve a guardar "
+            "el usuario y la contraseña aceptando la autorización.",
+        )
 
+    current = fetch_one(
+        conn,
+        """
+        SELECT c.credential_status, cc.last_login_error
+          FROM core.connection c
+          LEFT JOIN core.connection_credential cc ON cc.connection_id = c.id
+         WHERE c.id = %s AND c.tenant_id = %s
+        """,
+        (connection_id, tenant_id),
+    )
+    if current and current["credential_status"] in _TERMINAL_CREDENTIAL_STATUSES:
+        # "WRONG PASSWORD IS FINAL" (connectors/effi/auth.py) applies to this
+        # button too. Pressing it again with the same stored password is one
+        # more failed login on the merchant's real account; enough presses and
+        # we are the ones who locked them out. Only re-entering the credential
+        # (which resets the status to 'none') opens the door again.
+        return ConnectionPreflightResponse(
+            connection_id=connection_id,
+            credential_status=current["credential_status"],
+            is_usable=False,
+            summary=_terminal_summary(
+                current["credential_status"], current["last_login_error"]
+            ),
+            permissions=_permissions_from_view(conn, connection_id, tenant_id),
+        )
+
+    # -- 1+2. get a session and probe with it --------------------------------
+    # At most two passes, and a second one only when the FIRST used a stored
+    # session that Effi turned out to have dropped early. Then the password is
+    # still good: log in once and look again, instead of telling the merchant
+    # to retype a password that was never the problem. A session from a login
+    # we just did is never retried - that would be a login loop.
+    authenticator = EffiAuthenticator()
+    force_login = False
+    while True:
+        outcome = _acquire_session(
+            conn, connection_id, tenant_id, authenticator, force_login=force_login
+        )
+        if isinstance(outcome, ConnectionPreflightResponse):
+            return outcome
+        session, did_login = outcome
+
+        fetcher = EffiSessionFetcher.from_session(
+            session, consent_granted_at=consent_granted_at
+        )
+        report = run_preflight(fetcher, base_url=fetcher.base_url)
+        if report.session_valid or did_login or force_login:
+            break
+        credentials.clear_credential(conn, connection_id=connection_id, tenant_id=tenant_id)
+        force_login = True
+
+    # -- 3. write down what was found, so the next screen shows it ----------
+    _record_probes(conn, connection_id, tenant_id, report)
+
+    credential_status = report.credential_status()
+    execute(
+        conn,
+        "UPDATE core.connection SET credential_status = %s WHERE id = %s AND tenant_id = %s",
+        (credential_status, connection_id, tenant_id),
+    )
+    if credential_status == "expired":
+        credentials.clear_credential(
+            conn, connection_id=connection_id, tenant_id=tenant_id
+        )
+    if report.is_usable:
+        # The worker skips `error` rows forever. A connection the merchant has
+        # just proven works (after fixing a permission, or after Effi came
+        # back) must re-enter the schedule, or the green checklist on screen
+        # would sit next to a sync that never runs again.
+        execute(
+            conn,
+            """
+            UPDATE core.connection
+               SET status = CASE WHEN status = 'error' THEN 'active' ELSE status END,
+                   last_error = NULL
+             WHERE id = %s AND tenant_id = %s
+            """,
+            (connection_id, tenant_id),
+        )
+
+    logger.info(
+        "preflight tenant=%s connection=%s status=%s usable=%s",
+        tenant_id, connection_id, credential_status, report.is_usable,
+    )
+
+    return ConnectionPreflightResponse(
+        connection_id=connection_id,
+        credential_status=credential_status,
+        is_usable=report.is_usable,
+        summary=report.summary(),
+        # Read back through the view rather than rebuilding the rows from the
+        # probe. The probe knows the OUTCOME; the catalogue owns the contract -
+        # the wording of `why`, which actions we ask for, whether Effi restricts
+        # it to an administrator. Reconstructing those here would mean this
+        # response and the next GET disagreed about the same permission.
+        permissions=_permissions_from_view(conn, connection_id, tenant_id),
+    )
+
+
+_TERMINAL_CREDENTIAL_STATUSES = ("invalid", "locked")
+
+
+def _terminal_summary(credential_status: str, last_error: str | None) -> str:
+    if credential_status == "locked":
+        advice = ("Effi bloqueó la cuenta. Desbloquéala en Effi y vuelve a guardar el "
+                  "usuario y la contraseña aquí; no se volverá a intentar antes.")
+    else:
+        advice = ("Effi rechazó el usuario o la contraseña guardados. Vuelve a "
+                  "escribirlos; no se volverá a intentar con los mismos para no "
+                  "bloquear tu cuenta.")
+    return f"{last_error} {advice}" if last_error else advice
+
+
+def _record_probes(conn, connection_id: UUID, tenant_id: UUID, report) -> None:
+    for result in report.results:
+        execute(
+            conn,
+            """
+            INSERT INTO core.connection_permission_probe
+                (connection_id, tenant_id, permission_code, status, detail, checked_at)
+            VALUES (%s, %s, %s, %s, %s, %s)
+            ON CONFLICT (connection_id, permission_code) DO UPDATE SET
+                status     = EXCLUDED.status,
+                detail     = EXCLUDED.detail,
+                checked_at = EXCLUDED.checked_at
+            """,
+            (
+                connection_id, tenant_id, result.code, result.status,
+                result.detail, result.checked_at,
+            ),
+        )
+
+
+def _acquire_session(conn, connection_id: UUID, tenant_id: UUID, authenticator, *, force_login: bool):
+    """`(session, did_login)`, or the failure response to hand straight back."""
+    from connectors.effi.auth import (
+        AccountLocked,
+        InvalidCredentials,
+        LoginContractUnverified,
+        LoginUnavailable,
+    )
+
+    stored = credentials.load_session(conn, connection_id=connection_id, tenant_id=tenant_id)
     try:
         with credentials.use_credential(
             conn, connection_id=connection_id, tenant_id=tenant_id
         ) as credential:
             session, did_login = authenticator.ensure_session(
                 credential,
-                existing_token=stored.token,
-                existing_expires_at=stored.expires_at,
+                existing_token=None if force_login else stored.token,
+                existing_expires_at=None if force_login else stored.expires_at,
             )
     except LookupError as exc:
         return _failed(
@@ -112,59 +254,7 @@ def run_preflight_for_connection(
             expires_at=session.expires_at,
         )
 
-    # -- 2. probe each permission ------------------------------------------
-    fetcher = EffiSessionFetcher.from_session(
-        session, consent_granted_at=consent_granted_at
-    )
-    report = run_preflight(fetcher, base_url=fetcher.base_url)
-
-    # -- 3. write down what was found, so the next screen shows it ----------
-    for result in report.results:
-        execute(
-            conn,
-            """
-            INSERT INTO core.connection_permission_probe
-                (connection_id, tenant_id, permission_code, status, detail, checked_at)
-            VALUES (%s, %s, %s, %s, %s, %s)
-            ON CONFLICT (connection_id, permission_code) DO UPDATE SET
-                status     = EXCLUDED.status,
-                detail     = EXCLUDED.detail,
-                checked_at = EXCLUDED.checked_at
-            """,
-            (
-                connection_id, tenant_id, result.code, result.status,
-                result.detail, result.checked_at,
-            ),
-        )
-
-    credential_status = report.credential_status()
-    execute(
-        conn,
-        "UPDATE core.connection SET credential_status = %s WHERE id = %s AND tenant_id = %s",
-        (credential_status, connection_id, tenant_id),
-    )
-    if credential_status == "expired":
-        credentials.clear_credential(
-            conn, connection_id=connection_id, tenant_id=tenant_id
-        )
-
-    logger.info(
-        "preflight tenant=%s connection=%s status=%s usable=%s",
-        tenant_id, connection_id, credential_status, report.is_usable,
-    )
-
-    return ConnectionPreflightResponse(
-        connection_id=connection_id,
-        credential_status=credential_status,
-        is_usable=report.is_usable,
-        summary=report.summary(),
-        # Read back through the view rather than rebuilding the rows from the
-        # probe. The probe knows the OUTCOME; the catalogue owns the contract -
-        # the wording of `why`, which actions we ask for, whether Effi restricts
-        # it to an administrator. Reconstructing those here would mean this
-        # response and the next GET disagreed about the same permission.
-        permissions=_permissions_from_view(conn, connection_id, tenant_id),
-    )
+    return session, did_login
 
 
 def _permissions_from_view(
