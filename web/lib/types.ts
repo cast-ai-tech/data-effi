@@ -447,7 +447,9 @@ export type CredentialStatus =
   | "invalid"
   | "expired"
   | "insufficient_permissions"
-  | "locked";
+  | "locked"
+  /** Migration 070: the session sent from the browser extension died. */
+  | "session_expired";
 
 /** `PUT /config/connections/{id}/credential`. Owner only, write-only. */
 export interface ConnectionCredentialBody {
@@ -577,6 +579,39 @@ export interface ConnectionPreflight {
   /** One line that says what to do next, not what went wrong. */
   summary: string;
   permissions: ConnectionPermission[];
+  /** `browser_session` when the Effi extension sent the session (migration 070). */
+  auth_mode?: "password" | "browser_session" | null;
+}
+
+/** `POST /config/effi/connections/{id}/pairing`. The code is shown exactly once. */
+export interface EffiPairing {
+  pairing_id: string;
+  connection_id: string;
+  code: string;
+  expires_at: string;
+  ttl_seconds: number;
+  api_url: string;
+  message: string;
+}
+
+export type EffiPairingState =
+  | "pending"
+  | "connected"
+  | "insufficient_permissions"
+  | "session_rejected"
+  | "unverified"
+  | "expired"
+  | "revoked";
+
+/** `GET /config/effi/connections/{id}/pairing/{pairing_id}`. Never the cookie. */
+export interface EffiPairingStatus {
+  pairing_id: string;
+  connection_id: string;
+  state: EffiPairingState;
+  credential_status: CredentialStatus;
+  summary: string | null;
+  expires_at: string;
+  redeemed_at: string | null;
 }
 
 /** What a webhook connection accepts, when the caller does not say. */
