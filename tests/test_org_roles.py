@@ -259,6 +259,55 @@ def test_revoking_an_org_role_leaves_the_companies_alone(client, owner):
     assert len(body["workspaces"]) == 1
 
 
+def _partner_session_with_org_role(client, owner, role: str) -> tuple[str, dict]:
+    granted = client.post(
+        "/org/members", headers=auth(owner["access_token"]),
+        json={"email": PARTNER_EMAIL, "role": role},
+    )
+    assert granted.status_code == 201, granted.text
+    session = client.post(
+        "/auth/login", json={"email": PARTNER_EMAIL, "password": PARTNER_PASSWORD}
+    )
+    assert session.status_code == 200, session.text
+    assert session.json()["org_role"] == role
+    return granted.json()["user_id"], session.json()
+
+
+def test_removing_an_org_role_revokes_that_persons_refresh_tokens(
+    client, owner, partner_token
+):
+    """Otherwise the old role outlives the removal: refresh would re-mint it."""
+    partner_id, session = _partner_session_with_org_role(client, owner, "viewer")
+
+    revoked = client.delete(f"/org/members/{partner_id}", headers=auth(owner["access_token"]))
+    assert revoked.status_code == 204, revoked.text
+
+    refreshed = client.post("/auth/refresh", json={"refresh_token": session["refresh_token"]})
+    assert refreshed.status_code == 401, refreshed.text
+    # The admin who did it keeps their own session.
+    mine = client.post("/auth/refresh", json={"refresh_token": owner["refresh_token"]})
+    assert mine.status_code == 200, mine.text
+    owner["refresh_token"] = mine.json()["refresh_token"]
+    owner["access_token"] = mine.json()["access_token"]
+
+
+def test_changing_an_org_role_revokes_that_persons_refresh_tokens(
+    client, owner, partner_token
+):
+    partner_id, session = _partner_session_with_org_role(client, owner, "analyst")
+
+    changed = client.patch(
+        f"/org/members/{partner_id}", headers=auth(owner["access_token"]),
+        json={"role": "viewer"},
+    )
+    assert changed.status_code == 200, changed.text
+
+    refreshed = client.post("/auth/refresh", json={"refresh_token": session["refresh_token"]})
+    assert refreshed.status_code == 401, refreshed.text
+
+    client.delete(f"/org/members/{partner_id}", headers=auth(owner["access_token"]))
+
+
 # =============================================================================
 # The organisation itself
 # =============================================================================

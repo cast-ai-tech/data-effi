@@ -545,6 +545,7 @@ def update_org_member(
             "UPDATE core.org_membership SET is_active = %s WHERE org_id = %s AND user_id = %s",
             (fields["is_active"], _org_id(user), user_id),
         )
+    _revoke_refresh_tokens(conn, user_id)
     return _org_member_row(conn, _org_id(user), user_id)
 
 
@@ -567,6 +568,22 @@ def revoke_org_role(user_id: UUID, conn: UnscopedDbDep, user: OrgAdmin) -> None:
         conn,
         "DELETE FROM core.org_membership WHERE org_id = %s AND user_id = %s",
         (_org_id(user), user_id),
+    )
+    _revoke_refresh_tokens(conn, user_id)
+
+
+def _revoke_refresh_tokens(conn, user_id: UUID) -> None:
+    """Force the next mint, so an org role change lands within one access token.
+
+    The org role rides in every token (`orl`), whatever company it stands in, so
+    every refresh token of the person goes - not just one company's, as in
+    `update_member`. Their next refresh fails and the login reads the role anew.
+    """
+    execute(
+        conn,
+        "UPDATE core.refresh_token SET revoked_at = now() "
+        "WHERE user_id = %s AND revoked_at IS NULL",
+        (user_id,),
     )
 
 
