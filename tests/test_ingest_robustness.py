@@ -21,6 +21,7 @@ from pipeline.models import (
     ShipmentInput,
     UpsertResult,
 )
+from pipeline.mapping import resolve_status
 from pipeline.normalize import normalize_tracking
 from pipeline.store_pg import PostgresStore
 from tests.conftest import CONNECTION_ID, COUNTRY, PLATFORM, TENANT_ID
@@ -50,6 +51,26 @@ from tests.conftest import CONNECTION_ID, COUNTRY, PLATFORM, TENANT_ID
 )
 def test_tracking_keeps_its_trailing_zeros(raw, expected):
     assert normalize_tracking(raw) == expected
+
+
+# =============================================================================
+# Estados decorados
+# =============================================================================
+
+
+@pytest.mark.parametrize(
+    ("raw", "expected"),
+    [
+        # Con "entregado" antes en el diccionario, estas dos se contaban como
+        # entregadas y devolución en curso.
+        ("Entregado en agencia (Pasto)", "in_office"),
+        ("Devolución entregada - bodega", "returned"),
+        ("Entregado - OK", "delivered"),
+        ("Novedad (cliente ausente)", "delivery_issue"),
+    ],
+)
+def test_decorated_status_takes_the_most_specific_alias(raw, expected):
+    assert resolve_status(raw) == (expected, True)
 
 
 # =============================================================================
