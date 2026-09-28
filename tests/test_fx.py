@@ -78,6 +78,23 @@ def owner(client) -> dict:
     return response.json()
 
 
+@pytest.fixture(scope="module")
+def operator(client, owner, api_dsn) -> dict:
+    """La misma cuenta, promovida a operadora de la plataforma.
+
+    `core.fx_rate` es una sola tabla para todas las organizaciones, así que
+    fijar una tasa a mano es cosa de quien opera la plataforma. El rol no se
+    concede por ninguna ruta (ver test_platform_admin): aquí se escribe directo,
+    como haría scripts/grant_platform_admin.py.
+    """
+    with psycopg.connect(api_dsn, autocommit=True) as conn:
+        conn.execute(
+            "UPDATE core.app_user SET is_platform_admin = true WHERE lower(email) = lower(%s)",
+            (EMAIL,),
+        )
+    return owner
+
+
 def rates(client, token: str) -> dict[str, dict]:
     response = client.get("/config/fx", headers=auth(token))
     assert response.status_code == 200, response.text
@@ -119,7 +136,33 @@ def test_a_currency_without_a_rate_says_so(client, owner):
 # =============================================================================
 
 
-def test_a_hand_typed_rate_round_trips_in_the_direction_people_quote(client, owner):
+def test_a_merchant_cannot_rewrite_everyone_elses_rate(client):
+    """La tabla de tasas es de toda la plataforma, no de una empresa.
+
+    Cualquiera puede registrarse y quedar como owner de su propia empresa. Si
+    eso bastara para fijar la tasa del peso, cualquiera movería los consolidados
+    en dólares de todos los demás clientes.
+    """
+    registered = client.post(
+        "/auth/register",
+        json={
+            "email": "otra-tienda@masterdata.app",
+            "password": PASSWORD,
+            "full_name": "Otra dueña",
+            "tenant_name": "Otra sociedad",
+        },
+    )
+    assert registered.status_code == 201, registered.text
+
+    response = client.put(
+        "/config/fx",
+        headers=auth(registered.json()["access_token"]),
+        json={"currency_code": "COP", "per_usd": 1},
+    )
+    assert response.status_code == 403, response.text
+
+
+def test_a_hand_typed_rate_round_trips_in_the_direction_people_quote(client, operator):
     """Se escribe "un dólar son 3900 pesos" y se lee igual, no invertido.
 
     La tolerancia es 1e-4 y no algo más fino por una razón concreta:
@@ -135,7 +178,7 @@ def test_a_hand_typed_rate_round_trips_in_the_direction_people_quote(client, own
     """
     response = client.put(
         "/config/fx",
-        headers=auth(owner["access_token"]),
+        headers=auth(operator["access_token"]),
         json={"currency_code": "COP", "per_usd": 3900},
     )
     assert response.status_code == 200, response.text
@@ -146,41 +189,41 @@ def test_a_hand_typed_rate_round_trips_in_the_direction_people_quote(client, own
     assert body["to_usd"] == pytest.approx(1 / 3900, rel=1e-4)
 
 
-def test_the_peso_column_is_derived_from_the_dollar_one(client, owner):
+def test_the_peso_column_is_derived_from_the_dollar_one(client, operator):
     """1 GTQ = 3900 / 7,8 COP. Nunca se guarda: se calcula, y por eso no puede
     contradecir a la columna del dólar."""
     client.put(
         "/config/fx",
-        headers=auth(owner["access_token"]),
+        headers=auth(operator["access_token"]),
         json={"currency_code": "COP", "per_usd": 3900},
     )
     client.put(
         "/config/fx",
-        headers=auth(owner["access_token"]),
+        headers=auth(operator["access_token"]),
         json={"currency_code": "GTQ", "per_usd": 7.8},
     )
 
-    table = rates(client, owner["access_token"])
+    table = rates(client, operator["access_token"])
     assert table["GTQ"]["to_cop"] == pytest.approx(3900 / 7.8, rel=1e-4)
     # El peso contra sí mismo vale uno, que es la comprobación de que la
     # división usa la misma fuente en ambos lados.
     assert table["COP"]["to_cop"] == pytest.approx(1.0, rel=1e-9)
 
 
-def test_an_unsupported_currency_is_refused(client, owner):
+def test_an_unsupported_currency_is_refused(client, operator):
     response = client.put(
         "/config/fx",
-        headers=auth(owner["access_token"]),
+        headers=auth(operator["access_token"]),
         json={"currency_code": "JPY", "per_usd": 150},
     )
     assert response.status_code == 404, response.text
 
 
-def test_a_rate_of_zero_or_less_is_refused(client, owner):
+def test_a_rate_of_zero_or_less_is_refused(client, operator):
     for value in (0, -3900):
         response = client.put(
             "/config/fx",
-            headers=auth(owner["access_token"]),
+            headers=auth(operator["access_token"]),
             json={"currency_code": "COP", "per_usd": value},
         )
         assert response.status_code == 422, response.text
