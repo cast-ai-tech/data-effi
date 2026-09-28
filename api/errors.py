@@ -172,6 +172,39 @@ def register_error_handlers(app: FastAPI) -> None:
             ),
         )
 
+    from psycopg_pool import PoolTimeout
+
+    @app.exception_handler(PoolTimeout)
+    async def handle_pool_timeout(request: Request, exc: Exception) -> JSONResponse:
+        # Todas las conexiones a la base están ocupadas. No es un error de la
+        # petición ni un fallo: es saturación, y pasa en segundos. 503 con
+        # Retry-After para que el cliente reintente en vez de mostrar "falló".
+        logger.warning("pool exhausted on %s %s", request.method, request.url.path)
+        return JSONResponse(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            headers={"Retry-After": "5"},
+            content=_envelope(
+                "service_busy",
+                "Hay mucha gente consultando en este momento. Vuelve a intentarlo en "
+                "unos segundos.",
+            ),
+        )
+
+    @app.exception_handler(psycopg.errors.QueryCanceled)
+    async def handle_query_canceled(request: Request, exc: Exception) -> JSONResponse:
+        # La consulta superó el tope (DB_STATEMENT_TIMEOUT_MS). Casi siempre es
+        # un rango de fechas muy grande; se dice eso en vez de un 500 genérico.
+        logger.warning("statement timeout on %s %s", request.method, request.url.path)
+        return JSONResponse(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            headers={"Retry-After": "10"},
+            content=_envelope(
+                "query_timeout",
+                "La consulta tardó demasiado. Prueba con un rango de fechas más corto o "
+                "vuelve a intentarlo en un momento.",
+            ),
+        )
+
     @app.exception_handler(Exception)
     async def handle_unexpected(request: Request, exc: Exception) -> JSONResponse:
         # Log the real cause; never leak internals (or a DSN) to the client.

@@ -16,7 +16,7 @@ from uuid import UUID
 
 import psycopg
 from psycopg.rows import dict_row
-from psycopg_pool import ConnectionPool
+from psycopg_pool import ConnectionPool, PoolTimeout
 
 from api.settings import Settings, get_settings
 
@@ -25,6 +25,14 @@ logger = logging.getLogger(__name__)
 _pool: ConnectionPool | None = None
 _readonly_pool: ConnectionPool | None = None
 _ingest_pool: ConnectionPool | None = None
+# Tope por consulta de las peticiones de usuario, en ms (0 = sin tope). Se fija
+# en init_pools desde la configuración.
+_statement_timeout_ms = 0
+
+# Cuánto espera /health por una conexión. Corto: la plataforma (Render) consulta
+# /health para decidir si reinicia el servicio, y un pool ocupado no es un
+# servicio caído.
+HEALTH_POOL_TIMEOUT = 2.0
 
 
 def _host_of(dsn: str) -> str:
@@ -56,9 +64,10 @@ def init_pools(settings: Settings) -> None:
     global and the first shutdown then closes the SECOND pool. Closing first
     makes a repeated startup idempotent instead.
     """
-    global _pool, _readonly_pool, _ingest_pool
+    global _pool, _readonly_pool, _ingest_pool, _statement_timeout_ms
 
     close_pools()
+    _statement_timeout_ms = max(int(settings.db_statement_timeout_ms), 0)
 
     # prepare_threshold=None disables psycopg's automatic prepared statements.
     #
@@ -90,6 +99,10 @@ def init_pools(settings: Settings) -> None:
         kwargs={"autocommit": False, "prepare_threshold": None},
         check=ConnectionPool.check_connection,
         max_lifetime=300,
+        # Con el pool lleno, esperar esto y rendirse con PoolTimeout (que el
+        # manejador de errores convierte en un 503 claro), no los 30 s de
+        # psycopg_pool por defecto.
+        timeout=settings.db_pool_timeout,
         open=True,
     )
     # `open=True` NO espera a que la conexión se establezca: el pool se declara
@@ -187,12 +200,25 @@ def connection(
     with pool.connection() as conn:
         try:
             with conn.cursor() as cur:
-                if tenant_id is not None:
-                    cur.execute(
-                        "SELECT set_config('norte.tenant_id', %s, true)", (str(tenant_id),)
-                    )
                 if service:
+                    if tenant_id is not None:
+                        cur.execute(
+                            "SELECT set_config('norte.tenant_id', %s, true)", (str(tenant_id),)
+                        )
                     cur.execute("SELECT set_config('norte.service', 'on', true)")
+                else:
+                    # Empresa y tope por consulta en UN solo viaje a la base. El
+                    # tope es LOCAL: muere con la transacción, como el tenant, y
+                    # no se lo lleva la siguiente petición que use esta conexión.
+                    # La ingesta y el worker (service) fijan el suyo.
+                    cur.execute(
+                        "SELECT set_config('norte.tenant_id', %s, true), "
+                        "set_config('statement_timeout', %s, true)",
+                        (
+                            "" if tenant_id is None else str(tenant_id),
+                            str(_statement_timeout_ms),
+                        ),
+                    )
             yield conn
             conn.commit()
         except Exception:
@@ -255,11 +281,23 @@ def check_rate_limit(
 def healthcheck() -> dict[str, Any]:
     settings = get_settings()
     try:
-        with get_pool().connection() as conn, conn.cursor() as cur:
+        with get_pool().connection(timeout=HEALTH_POOL_TIMEOUT) as conn, conn.cursor() as cur:
             cur.execute("SELECT 1")
             cur.fetchone()
         database_ok = True
         detail = None
+    except PoolTimeout:
+        # Todas las conexiones están ocupadas atendiendo peticiones: la base
+        # responde y el API también. Contestar 503 aquí hacía que la plataforma
+        # reiniciara el servicio justo en el pico de uso, tirando todo lo que
+        # estaba en curso. Se informa, pero el servicio está vivo.
+        return {
+            "status": "ok",
+            "database": "busy",
+            "database_error": None,
+            "environment": settings.environment,
+            "ai_enabled": settings.ai_enabled,
+        }
     except Exception as exc:
         database_ok = False
         detail = type(exc).__name__

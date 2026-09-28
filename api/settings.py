@@ -50,6 +50,19 @@ class Settings(BaseSettings):
     # no responde, la respuesta útil es decirlo ya, no quedarse colgado sin
     # abrir puerto mientras la plataforma marca el despliegue como fallido.
     db_connect_timeout: float = 15.0
+    # Cuánto espera una petición a que el pool le preste una conexión. El valor
+    # de psycopg_pool es 30 s: con el pool lleno, cada petición se quedaba medio
+    # minuto colgada y salía como un 500 genérico. Mejor un 503 claro y pronto,
+    # que el navegador reintenta.
+    db_pool_timeout: float = 10.0
+    # Tope por consulta en las peticiones de usuario (no en la ingesta ni en el
+    # worker, que fijan el suyo). Una consulta que se pasa ocupa una conexión de
+    # un pool de diez; sin tope, cinco de esas bastan para dejar al resto
+    # esperando. 0 desactiva el tope.
+    db_statement_timeout_ms: int = 20_000
+    # Verificaciones de contraseña (argon2) simultáneas. Cada una reserva 64 MB
+    # de RAM: cuarenta logins a la vez eran ~700 MB en un servidor de 512.
+    password_hash_concurrency: int = 2
 
     # --- security ---
     jwt_secret: str = Field(..., description="openssl rand -hex 32")

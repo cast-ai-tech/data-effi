@@ -6,6 +6,7 @@ when it is not. Everything past /health and /auth/login requires a token.
 
 from __future__ import annotations
 
+import asyncio
 import logging
 from contextlib import asynccontextmanager
 from pathlib import Path
@@ -122,8 +123,13 @@ def create_app() -> FastAPI:
     register_error_handlers(app)
 
     @app.get("/health", tags=["system"], summary="Estado del servicio")
-    def health() -> JSONResponse:
-        payload = healthcheck()
+    async def health() -> JSONResponse:
+        # En el ejecutor de asyncio, NO en el threadpool de FastAPI: con el API
+        # saturado, los 40 hilos de ese threadpool están todos esperando una
+        # conexión del pool, y /health hacía fila detrás de ellos (9 s con 100
+        # usuarios en la prueba de carga). La plataforma lo lee como caído y
+        # reinicia el servicio en pleno pico.
+        payload = await asyncio.to_thread(healthcheck)
         return JSONResponse(status_code=200 if payload["status"] == "ok" else 503, content=payload)
 
     # Authorisation by surface, not by endpoint.
