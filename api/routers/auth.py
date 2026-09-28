@@ -16,7 +16,7 @@ from uuid import UUID
 from fastapi import APIRouter, Depends, Request, Response, status
 
 from api.billing import start_trial, subscription_state
-from api.db import execute, fetch_all, fetch_one, fetch_required
+from api.db import connection, execute, fetch_all, fetch_one, fetch_required
 from api.deps import (
     CAPABILITIES,
     CurrentUser,
@@ -147,6 +147,28 @@ def _record_auth_event(
             request.headers.get("user-agent", "")[:500],
         ),
     )
+
+
+def _record_failed_auth_event(
+    *, email: str | None, event: str, request: Request,
+    tenant_id: UUID | None = None, user_id: UUID | None = None,
+) -> None:
+    """Un intento FALLIDO, escrito en su propia transacción.
+
+    El endpoint que lo registra responde con un error justo después, y ese error
+    deshace la transacción de la petición. Escrito ahí, el evento desaparecía:
+    `raw.auth_event` nunca veía un `login_failed`, que es precisamente la fila
+    que dice que una cuenta está bajo ataque. Un fallo al auditar se anota en el
+    log y no cambia la respuesta: la persona tiene que recibir su 401 igual.
+    """
+    try:
+        with connection() as audit_conn:
+            _record_auth_event(
+                audit_conn, email=email, event=event, request=request,
+                tenant_id=tenant_id, user_id=user_id,
+            )
+    except Exception:
+        logger.warning("could not record auth event %s", event, exc_info=True)
 
 
 def _workspaces(conn, user_id: UUID) -> list[dict]:
@@ -367,7 +389,7 @@ def login(
     stored_hash = user["password_hash"] if user is not None else _DUMMY_HASH
     matched = verify_password(stored_hash, payload.password)
     if user is None or not matched:
-        _record_auth_event(conn, email=payload.email, event="login_failed", request=request)
+        _record_failed_auth_event(email=payload.email, event="login_failed", request=request)
         raise Unauthorized("Correo o contraseña incorrectos")
 
     if not user["is_active"]:
@@ -553,8 +575,8 @@ def change_password(
         raise NotFound("El usuario del token ya no existe")
 
     if not verify_password(row["password_hash"], payload.current_password):
-        _record_auth_event(
-            conn, email=user.email, event="password_change_refused",
+        _record_failed_auth_event(
+            email=user.email, event="password_change_refused",
             request=request, user_id=user.id, tenant_id=user.tenant_id,
         )
         raise Unauthorized("La contraseña actual no es correcta")

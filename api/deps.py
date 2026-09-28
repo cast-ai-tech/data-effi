@@ -400,15 +400,25 @@ def client_ip_inet(request: Request) -> str | None:
 
 
 def rate_limit(scope: str, limit_attr: str):
-    """Dependency factory for per-IP fixed-window limiting."""
+    """Dependency factory for per-IP fixed-window limiting.
 
-    def dependency(
-        request: Request,
-        settings: SettingsDep,
-        conn: UnscopedDbDep,
-    ) -> None:
+    EL CONTADOR SE CONFIRMA EN SU PROPIA TRANSACCIÓN, A PROPÓSITO. Antes usaba
+    `UnscopedDbDep`, que FastAPI cachea por petición: era la MISMA conexión que
+    el endpoint. Cuando el endpoint fallaba - un login con la contraseña
+    equivocada responde 401 - la excepción deshacía la transacción entera y con
+    ella el golpe al contador. Resultado: los intentos fallidos, que son
+    exactamente los que el límite existe para frenar, nunca se contaban, y
+    `/auth/login` admitía fuerza bruta sin tope. Una conexión corta propia hace
+    que el golpe quede escrito pase lo que pase después.
+    """
+
+    def dependency(request: Request, settings: SettingsDep) -> None:
         limit = getattr(settings, limit_attr)
-        if not check_rate_limit(conn, scope=scope, subject=client_ip(request), limit=limit):
+        with connection() as conn:
+            allowed = check_rate_limit(
+                conn, scope=scope, subject=client_ip(request), limit=limit
+            )
+        if not allowed:
             raise RateLimited()
 
     return dependency
