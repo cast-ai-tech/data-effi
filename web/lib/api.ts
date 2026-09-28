@@ -32,12 +32,47 @@ export class ApiError extends Error {
   readonly detail: Record<string, unknown>;
 
   constructor(status: number, body: ApiErrorBody | null, fallback: string) {
-    super(body?.error?.message ?? fallback);
+    super(withInvalidFields(body) ?? body?.error?.message ?? fallback);
     this.name = "ApiError";
     this.status = status;
     this.code = body?.error?.code ?? "unknown";
     this.detail = body?.error?.detail ?? {};
   }
+}
+
+/** How the fields a form sends are called on screen. */
+const FIELD_NAMES: Record<string, string> = {
+  email: "el correo",
+  password: "la contraseña",
+  new_password: "la contraseña nueva",
+  current_password: "la contraseña actual",
+  full_name: "el nombre",
+  name: "el nombre",
+  tenant_name: "el nombre de la empresa",
+  token: "el token",
+  code: "el código",
+};
+
+/**
+ * "Revisa los datos enviados: hay campos inválidos." does not tell a merchant
+ * WHICH one. The API lists them in `detail.fields`; name the ones we know so
+ * the message points at the box to fix. Unknown fields keep the API's text.
+ */
+export function withInvalidFields(body: ApiErrorBody | null): string | null {
+  if (body?.error?.code !== "validation_error") return null;
+  const fields = body.error.detail?.fields;
+  if (!Array.isArray(fields)) return null;
+  const names = [
+    ...new Set(
+      fields
+        .map((item) => FIELD_NAMES[String((item as { field?: unknown })?.field ?? "")])
+        .filter((name): name is string => Boolean(name)),
+    ),
+  ];
+  if (names.length === 0) return null;
+  const list =
+    names.length === 1 ? names[0] : `${names.slice(0, -1).join(", ")} y ${names[names.length - 1]}`;
+  return `Hay datos que no son válidos. Revisa ${list}.`;
 }
 
 /**
