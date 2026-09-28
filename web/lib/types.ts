@@ -568,6 +568,33 @@ export interface CaptureToken {
   message: string;
 }
 
+/** `GET /config/dropi/connections/{id}`. No token: it never comes back down. */
+export interface DropiConnectionStatus {
+  connection_id: string;
+  country_code: string | null;
+  source_mode: string;
+  status: string;
+  has_token: boolean;
+  credential_status: string;
+  last_login_at: string | null;
+  last_login_error: string | null;
+  last_sync_at: string | null;
+  last_error: string | null;
+  synced_through: string | null;
+  last_orders_seen: number | null;
+  last_warning: string | null;
+  message: string | null;
+}
+
+/** `POST /config/dropi/connections/{id}/test`. */
+export interface DropiTestResult {
+  connection_id: string;
+  ok: boolean;
+  credential_status: string;
+  orders_visible: boolean;
+  message: string;
+}
+
 /** `GET .../permissions` and `POST .../test` answer with the same shape. */
 export interface ConnectionPreflight {
   connection_id: string;

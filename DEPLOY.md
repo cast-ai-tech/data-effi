@@ -417,6 +417,7 @@ mismos horarios (UTC) que `build_scheduler()` en `worker/main.py`:
 |---|---|
 | :05 y :35 de cada hora | `sync_sheets`, `relink_orphans` |
 | 06:15 y 18:15 | `sync_tier3` |
+| :20 cada 3 horas | `sync_dropi` (conexiones Dropi por token) |
 | 07:30 | `calibrate_maturation` |
 | 10:05 | `refresh_fx` |
 | 10:50, 11:50, 12:50, 13:50 | `daily_digest` (resumen por país a las 7 am locales) |

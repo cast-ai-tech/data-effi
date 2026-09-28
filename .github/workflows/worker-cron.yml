@@ -12,6 +12,7 @@
 #     relink_orphans        cada 30 min  (se agrupa con el anterior; el desfase
 #                                         de 5 min no le cambia nada a un relink)
 #     sync_tier3            06:15 y 18:15
+#     sync_dropi            :20 cada 3 horas (00:20, 03:20 ... 21:20)
 #     calibrate_maturation  07:30
 #     refresh_fx            10:05
 #     daily_digest          10:50, 11:50, 12:50 y 13:50  (05:50-08:50 Bogota;
@@ -28,6 +29,7 @@ on:
   schedule:
     - cron: '5,35 * * * *'
     - cron: '15 6,18 * * *'
+    - cron: '20 */3 * * *'
     - cron: '30 7 * * *'
     - cron: '5 10 * * *'
     - cron: '50 10,11,12,13 * * *'
@@ -59,6 +61,7 @@ jobs:
           case "$SCHEDULE" in
             '5,35 * * * *')   JOBS='sync_sheets relink_orphans' ;;
             '15 6,18 * * *')  JOBS='sync_tier3' ;;
+            '20 */3 * * *')   JOBS='sync_dropi' ;;
             '30 7 * * *')     JOBS='calibrate_maturation' ;;
             '5 10 * * *')     JOBS='refresh_fx' ;;
             '50 10,11,12,13 * * *') JOBS='daily_digest' ;;

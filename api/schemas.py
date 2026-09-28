@@ -701,6 +701,63 @@ class ConnectionPreflightResponse(BaseModel):
 
 
 # =============================================================================
+# Dropi por API (migraciones 060-061, api/routers/dropi.py)
+#
+# El token de integración SUBE y nunca BAJA, igual que la contraseña de Effi:
+# ningún modelo de respuesta de esta sección tiene un campo que lo devuelva.
+# =============================================================================
+
+DropiToken = Annotated[str, StringConstraints(strip_whitespace=True, min_length=8, max_length=2000)]
+
+
+class DropiConnectionCreateRequest(BaseModel):
+    """Una cuenta de Dropi en un país, conectada por su token de integración."""
+
+    country_code: str = Field(min_length=2, max_length=2)
+    name: str | None = Field(default=None, min_length=1, max_length=120)
+    store_name: str | None = None
+    token: DropiToken = Field(
+        description="Token de integración de Dropi (Dropi → Integraciones). Se cifra "
+                    "antes de guardarse y no se puede volver a ver desde aquí."
+    )
+
+
+class DropiTokenRequest(BaseModel):
+    token: DropiToken
+
+
+class DropiConnectionStatus(BaseModel):
+    """Lo que una pantalla puede saber de una conexión Dropi por API. Sin token."""
+
+    connection_id: UUID
+    country_code: str | None
+    source_mode: str
+    status: str
+    has_token: bool
+    credential_status: str
+    last_login_at: datetime | None = None
+    last_login_error: str | None = None
+    last_sync_at: datetime | None = None
+    last_error: str | None = None
+    synced_through: date | None = None
+    last_orders_seen: int | None = None
+    last_warning: str | None = None
+    message: str | None = None
+
+
+class DropiTestResponse(BaseModel):
+    """La respuesta de «Probar conexión»: una consulta de una orden, nada más."""
+
+    connection_id: UUID
+    ok: bool
+    credential_status: str
+    orders_visible: bool = Field(
+        description="True si la cuenta devolvió al menos una orden en la prueba."
+    )
+    message: str
+
+
+# =============================================================================
 # El buzón de capturas (migración 052)
 #
 # Lo que llega aquí lo manda una extensión que corre en el computador de alguien
