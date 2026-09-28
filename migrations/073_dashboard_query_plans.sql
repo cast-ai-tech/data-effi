@@ -1,7 +1,8 @@
 -- =============================================================================
--- Data Effi - 073 - Maduración de cohortes en una sola pasada.
+-- Data Effi - 073 - Dos consultas del tablero que hacían mucho más trabajo del
+--                   necesario (prueba de carga, 140k guías en la empresa grande).
 --
--- QUÉ PASABA (prueba de carga, 140k guías en la empresa grande)
+-- 1. MADURACIÓN DE COHORTES EN UNA SOLA PASADA
 --
 -- mart.v_cohort_maturation cruzaba cada cohorte con los 31 días de la curva y,
 -- para CADA uno de esos 31 pares, volvía a unir todas las guías de la cohorte:
@@ -67,3 +68,49 @@ SELECT cv.tenant_id,
 FROM curve cv
 LEFT JOIN core.workspace_country wc
        ON wc.tenant_id = cv.tenant_id AND wc.country_code = cv.country_code;
+
+-- =============================================================================
+-- 2. mart.f_excluded_no_date: plan hecho para los valores de CADA llamada.
+--
+-- QUÉ PASABA
+--
+-- Todas las tarjetas con rango de fechas la llaman (218 llamadas en 30 s de
+-- prueba). Era LANGUAGE sql con un SELECT: PostgreSQL no la "inlinea" y la
+-- planifica UNA vez con parámetros genéricos, así que no puede simplificar
+-- `$1 IS NULL OR ...` ni ver que con 'creacion' el filtro es
+-- `created_date IS NULL` - una columna que casi nunca es nula y que está en el
+-- índice. Resultado: recorrer las 74k guías del país, 165-230 ms por llamada.
+--
+-- QUÉ CAMBIA
+--
+-- La misma consulta, ejecutada con EXECUTE ... USING: se planifica con los
+-- valores reales en cada llamada (unos milisegundos de planificación) y con
+-- 'creacion' baja a un index scan de ~1 ms. Mismo nombre, mismos argumentos,
+-- mismo resultado; las otras fechas cuestan lo mismo que antes.
+-- =============================================================================
+
+CREATE OR REPLACE FUNCTION mart.f_excluded_no_date(
+    p_country text DEFAULT NULL::text,
+    p_date_field text DEFAULT 'creacion'::text,
+    p_platform text DEFAULT NULL::text
+)
+RETURNS bigint
+LANGUAGE plpgsql
+STABLE
+AS $fn$
+DECLARE
+    v_excluded bigint;
+BEGIN
+    EXECUTE $q$
+        SELECT count(*)
+        FROM core.shipment s
+        WHERE s.tenant_id = core.current_tenant_id()
+          AND mart.f_platform_matches(s.connection_id, $3)
+          AND ($1 IS NULL OR s.country_code = upper($1))
+          AND mart.f_pick_date($2, s.created_date, s.dispatched_at, s.delivered_at) IS NULL
+    $q$
+    INTO v_excluded
+    USING p_country, p_date_field, p_platform;
+    RETURN v_excluded;
+END;
+$fn$;
