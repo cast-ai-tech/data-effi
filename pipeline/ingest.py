@@ -74,6 +74,11 @@ from pipeline.readers import iter_records, read_tabular
 
 logger = logging.getLogger(__name__)
 
+# Filas por tanda de escritura. Suficientes para que el executemany pipelined
+# amortice los viajes a la base; pocas para que la memoria no crezca con el
+# tamaño del archivo.
+FLUSH_ROWS = 2000
+
 # A guide older than this is almost certainly a mis-parsed date, not history.
 MAX_BACKDATE_DAYS = 1095
 # Collecting more than this multiple of the declared value means a bad column map.
@@ -930,13 +935,31 @@ class IngestEngine:
 
         pii_headers = profile.pii_columns_norm if profile else frozenset()
         archive: list[SourceRow] = []
-        # Guías y movimientos válidos se acumulan aquí y se graban en lote al
-        # final del bucle (una escritura pipelined en vez de ~3 viajes a la base
-        # por fila).
+        # Guías y movimientos válidos se acumulan aquí y se graban en lote (una
+        # escritura pipelined en vez de ~3 viajes a la base por fila) cada
+        # FLUSH_ROWS filas, no al final: acumular el archivo entero antes de
+        # escribir llevó el API a 1,6 GB de RAM con un CSV de 25 MB (190k
+        # guías), en un servidor de 512 MB.
         self._pending_shipments = []
         self._pending_movements = []
 
+        def flush() -> None:
+            if self._pending_shipments:
+                for result in self._store.upsert_shipments(ctx, self._pending_shipments):
+                    _tally(report, result)
+                self._pending_shipments = []
+            if self._pending_movements:
+                for result in self._store.upsert_movements(ctx, self._pending_movements):
+                    _tally(report, result)
+                self._pending_movements = []
+            if archive:
+                report.rows_stored += self._store.save_source_rows(ctx, archive)
+                archive.clear()
+
         for row_number, mapped, raw in iter_records(headers, rows, header_map):
+            # La fila leída ya no hace falta en la lista: soltarla deja que la
+            # memoria del archivo se libere a medida que se procesa.
+            rows[row_number - 1] = []
             report.rows_total += 1
             fields: dict[str, Any] = mapped
             try:
@@ -960,18 +983,13 @@ class IngestEngine:
                     )
                 )
 
-        # Graba en lote lo acumulado y cuenta el resultado de cada fila
-        # (INSERTED/UPDATED/SKIPPED + discrepancias), igual que hacía el _tally
-        # fila-a-fila - solo que ahora en una tanda.
-        if self._pending_shipments:
-            for result in self._store.upsert_shipments(ctx, self._pending_shipments):
-                _tally(report, result)
-        if self._pending_movements:
-            for result in self._store.upsert_movements(ctx, self._pending_movements):
-                _tally(report, result)
+            if row_number % FLUSH_ROWS == 0:
+                flush()
 
-        if archive:
-            report.rows_stored = self._store.save_source_rows(ctx, archive)
+        # Lo que quedó de la última tanda. Cada tanda cuenta el resultado de sus
+        # filas (INSERTED/UPDATED/SKIPPED + discrepancias) igual que el _tally
+        # fila-a-fila.
+        flush()
 
         report.finished_at = datetime.now(UTC)
         self._store.finish_batch(ctx, report)
