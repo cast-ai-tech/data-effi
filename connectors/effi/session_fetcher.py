@@ -75,6 +75,19 @@ class FetchError(RuntimeError):
     """The fetch failed for a reason the caller should surface, not retry blindly."""
 
 
+class TransientFetchError(FetchError):
+    """Effi was unreachable, slow, overloaded or rate-limiting.
+
+    Nothing is wrong with the connection itself, so the worker records the error
+    and tries again on its NEXT scheduled run - it must not park the connection
+    in `error`, which the worker never picks up again on its own.
+    """
+
+
+class PermissionDeniedError(FetchError):
+    """The session is alive but may not read this report: a missing permission."""
+
+
 @dataclass(slots=True)
 class FetchResult:
     """A downloaded report, ready to hand to the same IngestEngine an upload uses."""
@@ -116,6 +129,9 @@ class EffiSessionFetcher:
             raise FetchError("No hay sesión configurada para esta conexión de Effi")
 
         self._token = session_token
+        # How the session travels. Mirrors EffiLoginContract.session_carrier:
+        # a 'json' token goes as a bearer header, anything else as a Cookie.
+        self._carrier = (os.environ.get("EFFI_SESSION_CARRIER", "").strip() or "cookie").lower()
         self._consent_granted_at = consent_granted_at
         self._base_url = base_url.rstrip("/")
         self._timeout = timeout_seconds
@@ -206,7 +222,7 @@ class EffiSessionFetcher:
         if date_from > date_to:
             raise FetchError("El rango de fechas está invertido")
 
-        path = os.environ.get(f"EFFI_PATH_{kind.name}", REPORT_PATHS[kind])
+        path = os.environ.get(f"EFFI_PATH_{kind.name}", "").strip() or REPORT_PATHS[kind]
         url = f"{self._base_url}{path}"
         params = {
             "fecha_inicio": date_from.isoformat(),
@@ -222,9 +238,12 @@ class EffiSessionFetcher:
             raise FetchError("Effi devolvió un reporte vacío")
 
         content_type = response.headers.get("content-type", "")
-        if "text/html" in content_type:
-            # An HTML body where a spreadsheet was expected means the session
-            # bounced us to a login page.
+        if _looks_like_login_page(payload) or (
+            "text/html" in content_type and not _looks_like_html_table(payload)
+        ):
+            # A login form where a spreadsheet was expected means the session
+            # bounced us to the login page. An HTML <table> is NOT that: Effi's
+            # "Excel" exports are HTML tables, and the reader parses them.
             raise SessionExpiredError(
                 "La sesión de Effi expiró. El usuario debe volver a autorizar la conexión."
             )
@@ -269,11 +288,7 @@ class EffiSessionFetcher:
         except ImportError as exc:  # pragma: no cover - declared dependency
             raise FetchError("Falta la dependencia httpx para el conector de Effi") from exc
 
-        headers = {
-            "User-Agent": USER_AGENT,
-            "Accept": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,text/csv",
-            "Cookie": self._token,
-        }
+        headers = self._headers()
 
         try:
             with httpx.Client(timeout=self._timeout, follow_redirects=False) as client:
@@ -297,9 +312,16 @@ class EffiSessionFetcher:
         if response.status_code >= 400:
             return "unreachable"
 
+        body = response.content or b""
+        if _looks_like_login_page(body):
+            raise SessionExpiredError(
+                "Effi devolvió la pantalla de entrada durante la comprobación de permisos."
+            )
         # A 200 carrying HTML where a spreadsheet belongs is the panel rendering
-        # its own "no tienes permiso" page with a success code.
-        if "text/html" in response.headers.get("content-type", ""):
+        # its own "no tienes permiso" page with a success code - unless it is
+        # the HTML table Effi uses as its "Excel" export.
+        content_type = response.headers.get("content-type", "")
+        if "text/html" in content_type and not _looks_like_html_table(body):
             return "denied"
         return "granted"
 
@@ -310,35 +332,61 @@ class EffiSessionFetcher:
         except ImportError as exc:      # pragma: no cover - declared dependency
             raise FetchError("Falta la dependencia httpx para el conector de Effi") from exc
 
-        headers = {
-            "User-Agent": USER_AGENT,
-            "Accept": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,text/csv",
-            "Cookie": self._token,
-        }
+        headers = self._headers()
 
         try:
             with httpx.Client(timeout=self._timeout, follow_redirects=False) as client:
                 response = client.get(url, params=params, headers=headers)
         except Exception as exc:
             # The token lives in `headers`; never let an exception carry it.
-            raise FetchError(f"No se pudo contactar a Effi: {type(exc).__name__}") from None
+            raise TransientFetchError(
+                f"No se pudo contactar a Effi: {type(exc).__name__}"
+            ) from None
 
-        if response.status_code in (401, 403):
+        if response.status_code == 401:
             # Do not retry, do not rotate user agents, do not work around it.
             raise SessionExpiredError(
-                "Effi rechazó la sesión (HTTP "
-                f"{response.status_code}). El usuario debe volver a autorizar."
+                "Effi rechazó la sesión (HTTP 401). El usuario debe volver a autorizar."
+            )
+        if response.status_code == 403:
+            # A live session that may not read THIS report: a missing permission
+            # (the preflight reads a 403 the same way). Calling it an expired
+            # session would send the merchant to retype a password that was fine.
+            raise PermissionDeniedError(
+                "Effi negó el acceso a este reporte (HTTP 403): al usuario conectado "
+                "le falta un permiso. Pulsa «Probar conexión» para ver cuál."
             )
         if response.status_code in (301, 302, 303, 307, 308):
             raise SessionExpiredError(
                 "Effi redirigió la petición, normalmente al login. La sesión ya no sirve."
             )
         if response.status_code == 429:
-            raise FetchError("Effi pidió reducir el ritmo (HTTP 429). Se reintentará más tarde.")
+            raise TransientFetchError(
+                "Effi pidió reducir el ritmo (HTTP 429). Se reintentará más tarde."
+            )
+        if response.status_code >= 500:
+            raise TransientFetchError(
+                f"Effi respondió HTTP {response.status_code}. Se reintentará en la "
+                "siguiente sincronización."
+            )
         if response.status_code >= 400:
             raise FetchError(f"Effi respondió HTTP {response.status_code}")
 
         return response
+
+    def _headers(self) -> dict[str, str]:
+        headers = {
+            "User-Agent": USER_AGENT,
+            "Accept": (
+                "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,"
+                "application/vnd.ms-excel,text/csv"
+            ),
+        }
+        if self._carrier == "json":
+            headers["Authorization"] = f"Bearer {self._token}"
+        else:
+            headers["Cookie"] = self._token
+        return headers
 
     def _respect_rate_limit(self) -> None:
         elapsed = time.monotonic() - self._last_request_at
@@ -349,3 +397,26 @@ class EffiSessionFetcher:
     def __repr__(self) -> str:      # pragma: no cover - defensive
         # Never let a repr in a log or a traceback expose the session token.
         return f"<EffiSessionFetcher base_url={self._base_url!r} token=***>"
+
+
+def _head(payload: bytes, size: int = 65536) -> bytes:
+    return payload[:size].lower()
+
+
+def _looks_like_html_table(payload: bytes) -> bool:
+    return b"<table" in _head(payload)
+
+
+def _looks_like_login_page(payload: bytes) -> bool:
+    """An HTML page with a password input: the login form, whatever the header says.
+
+    Checked on the body because a panel can answer an expired session with a 200
+    and the ORIGINAL content type. A spreadsheet never carries a password input.
+    """
+    head = _head(payload)
+    if not head.lstrip(b"\xef\xbb\xbf \t\r\n").startswith(b"<"):
+        return False
+    return any(
+        marker in head
+        for marker in (b'type="password"', b"type='password'", b"type=password")
+    )

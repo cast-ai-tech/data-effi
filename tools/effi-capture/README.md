@@ -111,6 +111,7 @@ El contrato trae esto:
 ```
 EFFI_BASE_URL=https://effi.com.co
 EFFI_LOGIN_PATH=/ingreso/validar_usuario
+EFFI_LOGIN_PAGE_PATH=/ingreso
 EFFI_LOGIN_USER_FIELD=email
 EFFI_LOGIN_PASS_FIELD=password
 EFFI_LOGIN_CSRF_FIELD=token
