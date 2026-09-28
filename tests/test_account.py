@@ -219,16 +219,22 @@ def test_logging_out_revokes_the_refresh_token_server_side(client, account):
     assert refreshed.status_code == 401
 
 
-def test_an_unknown_email_takes_as_long_as_a_wrong_password(client, account):
+def test_an_unknown_email_takes_as_long_as_a_wrong_password(client, account, api_dsn):
     """Both answers must look the same; the timing must not tell them apart.
 
     argon2 verification dominates the request, so a login that skips it for an
     unknown email answers an order of magnitude faster. The bound is loose on
     purpose: it catches "skipped entirely", not scheduler jitter.
+
+    Eight failed logins in a row now trip the per-IP limit (the hits persist
+    even when the 401 rolls back), so the counter is cleared before each one:
+    this test measures timing, not the limiter.
     """
     import time
 
     def elapsed(email: str) -> float:
+        with psycopg.connect(api_dsn, autocommit=True) as conn:
+            conn.execute("DELETE FROM raw.rate_limit_hit")
         started = time.perf_counter()
         response = client.post("/auth/login", json={"email": email, "password": "wrong-pw-1"})
         assert response.status_code == 401
