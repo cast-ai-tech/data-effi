@@ -190,6 +190,13 @@ def _file_connection_for(
     return created
 
 
+# How the upload screen names each kind ("1. Tipo de reporte").
+_KIND_WORDS: dict[BatchKind, str] = {
+    BatchKind.SHIPMENTS: "guías",
+    BatchKind.MOVEMENTS: "movimientos de dinero",
+}
+
+
 def _refuse_platform_mismatch(
     filename: str, payload: bytes, kind: BatchKind, target_platform: str | None
 ) -> None:
@@ -207,7 +214,23 @@ def _refuse_platform_mismatch(
         headers, _rows = read_tabular(payload, filename)
     except (UnsupportedFileError, EmptyFileError):
         return
-    profile = detect_profile(headers, kind)
+    # Any known shape, whatever the kind: an Effi money report sent as "Guías"
+    # used to slip past the kind-filtered lookup and fail in the job with
+    # "Faltan columnas obligatorias: tracking_number" and fifty headers.
+    profile = detect_profile(headers)
+    if profile is not None and profile.kind is not kind:
+        raise ApiError(
+            "kind_mismatch",
+            f"'{filename}' es un reporte de {_KIND_WORDS[profile.kind]} "
+            f"({profile.label}), no de {_KIND_WORDS[kind]}. En «Tipo de reporte» elige "
+            f"«{_KIND_WORDS[profile.kind].capitalize()}» y súbelo de nuevo.",
+            status_code=422,
+            detail={
+                "filename": filename,
+                "detected_kind": profile.kind.value,
+                "requested_kind": kind.value,
+            },
+        )
     if profile is None or profile.platform_code == target_platform:
         return
     raise ApiError(
@@ -876,6 +899,7 @@ async def detect(
         profile_label=profile.label,
         detected_platform_code=profile.platform_code,
         detected_platform_name=_platform_name(conn, profile.platform_code),
+        detected_kind=profile.kind.value,
         detected_country_code=country_code,
         detected_country_raw=country_raw,
         row_count=len(rows),

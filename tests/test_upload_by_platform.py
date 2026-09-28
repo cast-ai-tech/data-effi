@@ -300,6 +300,7 @@ def test_detect_names_the_platform_of_a_recognised_report(
     ).json()
     assert known["detected_platform_code"] == "effi"
     assert known["detected_platform_name"].startswith("Effi")
+    assert known["detected_kind"] == "shipments"
 
     unknown = client.post(
         "/ingest/detect",
@@ -307,6 +308,39 @@ def test_detect_names_the_platform_of_a_recognised_report(
         headers=auth(owner_token),
     ).json()
     assert unknown["detected_platform_code"] is None
+    assert unknown["detected_kind"] is None
+
+
+def test_a_money_report_chosen_as_guides_is_refused_in_plain_words(
+    client, owner_token, workspace
+):
+    """QA 2026-09-28: an Effi movements export sent as "Guías" reached the job
+    and failed with "Faltan columnas obligatorias: tracking_number" plus fifty
+    headers. It is refused at the door and the message says which type to pick."""
+    movements = (FIXTURES / "effi_movimientos_real_shape.xls").read_bytes()
+    detected = client.post(
+        "/ingest/detect",
+        files={"file": ("movimientos.xls", movements, "application/vnd.ms-excel")},
+        headers=auth(owner_token),
+    ).json()
+    assert detected["detected_kind"] == "movements"
+
+    response = client.post(
+        "/ingest/upload",
+        data={"platform_code": "effi", "country_code": COUNTRY, "kind": "shipments"},
+        files={"files": ("movimientos.xls", movements, "application/vnd.ms-excel")},
+        headers=auth(owner_token),
+    )
+    assert response.status_code == 422, response.text
+    body = response.json()["error"]
+    assert body["code"] == "kind_mismatch"
+    assert body["detail"] == {
+        "filename": "movimientos.xls",
+        "detected_kind": "movements",
+        "requested_kind": "shipments",
+    }
+    assert "Movimientos de dinero" in body["message"]
+    assert "tracking_number" not in body["message"]
 
 
 # =============================================================================

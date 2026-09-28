@@ -60,7 +60,8 @@ export function platformsForKind<T extends Platform>(
 export type FileVerdict =
   | { kind: "ok"; platform: string }
   | { kind: "suggest"; platform: string; label: string }
-  | { kind: "mismatch"; chosen: string; detected: string; label: string };
+  | { kind: "mismatch"; chosen: string; detected: string; label: string }
+  | { kind: "wrong_kind"; detectedKind: string; label: string };
 
 /**
  * Compare what the operator chose with what the file says about itself.
@@ -72,10 +73,21 @@ export type FileVerdict =
  *                                         CSV says nothing about where it came
  *                                         from, and that is what manual_xlsx
  *                                         is for
+ *   - a money report while "Guías" is  -> wrong_kind, before anything else: the
+ *     chosen (or the other way round)     platform may well be right
  */
-export function judgeFile(chosen: string | null, detected: DetectResult | null): FileVerdict | null {
+export function judgeFile(
+  chosen: string | null,
+  detected: DetectResult | null,
+  kind?: string,
+): FileVerdict | null {
   const detectedPlatform = detected?.detected_platform_code ?? null;
   const label = detected?.detected_platform_name ?? detected?.profile_label ?? detectedPlatform ?? "";
+
+  const detectedKind = detected?.detected_kind ?? null;
+  if (kind && detectedKind && detectedKind !== kind) {
+    return { kind: "wrong_kind", detectedKind, label: detected?.profile_label ?? label };
+  }
 
   if (!chosen) {
     return detectedPlatform ? { kind: "suggest", platform: detectedPlatform, label } : null;
