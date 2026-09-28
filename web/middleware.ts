@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
 
+import { loginUrlFor, safeNextPath } from "@/lib/safe-next";
 import { apiOrigin } from "@/lib/upload-transport";
 
 /**
@@ -86,18 +87,18 @@ export function middleware(request: NextRequest) {
   );
 
   if (!hasSession && !isPublic) {
-    const url = request.nextUrl.clone();
-    url.pathname = "/login";
-    // Come back where you were once you are in.
-    url.searchParams.set("next", pathname);
-    return withCsp(request, url);
+    // Come back where you were once you are in - filters included.
+    return withCsp(
+      request,
+      new URL(loginUrlFor(pathname, request.nextUrl.search), request.url),
+    );
   }
 
   if (hasSession && isPublic) {
-    const url = request.nextUrl.clone();
-    url.pathname = "/global";
-    url.search = "";
-    return withCsp(request, url);
+    // Already signed in (another tab renewed the session): go where the link
+    // was taking you, not to the default screen.
+    const target = safeNextPath(request.nextUrl.searchParams.get("next"));
+    return withCsp(request, new URL(target, request.url));
   }
 
   return withCsp(request);

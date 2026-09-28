@@ -13,6 +13,7 @@
  */
 
 import { PLANS_PATH, shouldRedirectToPlans } from "@/lib/billing";
+import { loginUrlFor } from "@/lib/safe-next";
 import { SESSION_EXPIRED_HEADER } from "@/lib/session";
 import type { ApiErrorBody } from "@/lib/types";
 
@@ -83,8 +84,7 @@ export class ApiError extends Error {
 function sendToLogin(): void {
   if (typeof window === "undefined") return;
   if (window.location.pathname.startsWith("/login")) return;
-  const next = window.location.pathname + window.location.search;
-  window.location.assign(`/login?next=${encodeURIComponent(next)}`);
+  window.location.assign(loginUrlFor(window.location.pathname, window.location.search));
 }
 
 /** End the session: the proxy revokes the refresh token and clears the cookies. */
