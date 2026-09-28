@@ -31,6 +31,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 
+import { EffiExtensionPairingPanel } from "@/components/EffiExtensionPairingPanel";
 import { Button, Chip, Field, Input, StatusDot, cx } from "@/components/ui";
 import { ApiError, api } from "@/lib/api";
 import { formatRelative } from "@/lib/format";
@@ -52,6 +53,7 @@ const STATUS_LABELS: Record<CredentialStatus, string> = {
   expired: "Hay que reingresar la cuenta",
   insufficient_permissions: "Falta un permiso",
   locked: "Cuenta bloqueada en la plataforma",
+  session_expired: "La sesión enviada desde la extensión venció",
 };
 
 const STATUS_TONES: Record<
@@ -64,6 +66,7 @@ const STATUS_TONES: Record<
   expired: "warning",
   insufficient_permissions: "warning",
   locked: "negative",
+  session_expired: "warning",
 };
 
 const PERMISSION_TONES = {
@@ -285,6 +288,17 @@ export function ConnectionCredentialPanel({
           </>
         )}
       </section>
+
+      {/* -- Effi: the extension path (migration 070) ---------------------- */}
+      {isOwner && connection.platform_code === "effi" && (
+        <EffiExtensionPairingPanel
+          connection={connection}
+          onConnected={() => {
+            void load();
+            onChanged?.();
+          }}
+        />
+      )}
 
       {/* -- the form, second -------------------------------------------- */}
       {!isOwner ? (

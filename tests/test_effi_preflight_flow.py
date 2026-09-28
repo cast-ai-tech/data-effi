@@ -41,6 +41,7 @@ def world(monkeypatch):
     state = SimpleNamespace(
         credential_status="ok", last_login_error=None, sql=[], logins=0,
         cleared=0, reports=[], stored_token="ci_session=guardada",
+        auth_mode="password", session_expired=[],
     )
 
     monkeypatch.setattr(
@@ -55,8 +56,10 @@ def world(monkeypatch):
 
     def load_session(conn, **k):
         if state.stored_token:
-            return credentials.StoredSession(state.stored_token, datetime.now(UTC) + timedelta(hours=6))
-        return credentials.StoredSession(None, None)
+            return credentials.StoredSession(
+                state.stored_token, datetime.now(UTC) + timedelta(hours=6), state.auth_mode
+            )
+        return credentials.StoredSession(None, None, state.auth_mode)
 
     def clear(conn, **k):
         state.cleared += 1
@@ -76,6 +79,10 @@ def world(monkeypatch):
     monkeypatch.setattr(credentials, "save_session", lambda conn, **k: None)
     monkeypatch.setattr(credentials, "use_credential", lambda conn, **k: _Cred())
     monkeypatch.setattr(credentials, "record_login_failure", lambda conn, **k: None)
+    monkeypatch.setattr(
+        credentials, "mark_session_expired",
+        lambda conn, **k: state.session_expired.append(k["message"]),
+    )
 
     class _Auth:
         def ensure_session(self, credential, *, existing_token, existing_expires_at):
@@ -152,4 +159,41 @@ def test_no_consent_means_no_login(world):
     with pytest.raises(ApiError):
         _press(consent=False)
 
+    assert world.logins == 0
+
+
+# -- a session sent from the browser extension (migration 070) ----------------
+
+
+def test_an_extension_session_is_probed_without_any_login(world):
+    world.auth_mode = "browser_session"
+    world.reports = [_Report(session_valid=True)]
+
+    response = _press()
+
+    assert world.logins == 0
+    assert response.credential_status == "ok"
+
+
+def test_a_dead_extension_session_asks_for_a_new_one_and_never_logs_in(world):
+    world.auth_mode = "browser_session"
+    world.reports = [_Report(session_valid=False), _Report(session_valid=True)]
+
+    response = _press()
+
+    assert world.logins == 0, "Una sesión de la extensión no tiene contraseña con qué reentrar"
+    assert len(world.reports) == 1, "Se probó dos veces una sesión que Effi ya rechazó"
+    assert response.credential_status == "session_expired"
+    assert "extensión" in response.summary
+    assert world.session_expired
+
+
+def test_an_extension_connection_without_a_session_does_not_touch_effi(world):
+    world.auth_mode = "browser_session"
+    world.stored_token = None
+    world.reports = []
+
+    response = _press()
+
+    assert response.credential_status == "session_expired"
     assert world.logins == 0

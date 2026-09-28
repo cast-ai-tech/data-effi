@@ -840,9 +840,10 @@ def _connection_for_credential(conn, user: CurrentUser, connection_id: UUID) -> 
         """
         SELECT c.id, c.platform_code, c.source_mode, c.consent_granted_at,
                c.credential_status, p.name AS platform_name, p.auth_type,
-               p.requires_consent
+               p.requires_consent, cc.auth_mode
           FROM core.connection c
           JOIN core.platform p ON p.code = c.platform_code
+          LEFT JOIN core.connection_credential cc ON cc.connection_id = c.id
          WHERE c.id = %s AND c.tenant_id = %s
         """,
         (connection_id, user.tenant_id),
@@ -903,6 +904,7 @@ def list_connection_permissions(
         is_usable=row["credential_status"] == "ok",
         summary=_permission_summary(row, permissions, denied_required),
         permissions=[ConnectionPermissionRow(**p) for p in permissions],
+        auth_mode=row.get("auth_mode"),
     )
 
 
@@ -929,6 +931,11 @@ def _permission_summary(
         )
     if row["credential_status"] == "expired":
         return "La sesión venció. Vuelve a ingresar tu usuario y contraseña."
+    if row["credential_status"] == "session_expired":
+        return (
+            f"Tu sesión de {row['platform_name']} venció: vuelve a enviarla desde "
+            "la extensión con un código nuevo."
+        )
     return "La conexión funciona."
 
 

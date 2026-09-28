@@ -238,7 +238,7 @@ def test_login_not_possible_yet_is_transient_not_a_broken_connection(monkeypatch
 
     monkeypatch.setattr(
         credentials, "load_session",
-        lambda conn, **k: SimpleNamespace(token=None, expires_at=None),
+        lambda conn, **k: credentials.StoredSession(token=None, expires_at=None),
     )
 
     class _Cred:
@@ -256,3 +256,87 @@ def test_login_not_possible_yet_is_transient_not_a_broken_connection(monkeypatch
         jobs._build_tier3_fetcher(_Conn(), _row())
 
     assert issubclass(TransientFetchError, FetchError)
+
+
+# -- sessions sent from the browser extension (migration 070) -----------------
+
+
+def test_the_query_never_picks_a_dead_extension_session():
+    conn = _Conn([])
+    _run(conn)
+    select = conn.sql[0][0]
+    assert "'session_expired'" in select.split("NOT IN", 1)[1]
+
+
+def test_a_dead_extension_session_parks_the_connection_and_rings_once(monkeypatch):
+    from ai import alerts
+    from api import credentials
+
+    row = {**_row("Effi CO"), "auth_mode": "browser_session"}
+    conn = _Conn([row])
+    marked, notified = [], []
+    monkeypatch.setattr(
+        jobs, "_sync_one_tier3",
+        lambda *a, **k: (_ for _ in ()).throw(SessionExpiredError("Effi redirigió al login")),
+    )
+    monkeypatch.setattr(credentials, "mark_session_expired", lambda conn, **k: marked.append(k))
+    monkeypatch.setattr(
+        alerts, "persist_findings",
+        lambda conn, tenant_id, country, findings, **k: notified.extend(findings) or [1],
+    )
+
+    result = _run(conn)
+
+    assert conn.statements("status = 'error'"), "Una sesión muerta siguió en el horario"
+    assert marked and marked[0]["connection_id"] == row["id"]
+    assert not conn.statements("SET credential_status = %s"), (
+        "Se marcó 'expired' (reingresar contraseña) en una conexión que no tiene contraseña"
+    )
+    assert len(notified) == 1
+    assert notified[0]["title"] == jobs.SESSION_EXPIRED_TITLE
+    assert "extensión" in notified[0]["title"]
+    assert result["connections"][0]["status"] == "needs_new_session"
+
+
+def test_an_extension_session_is_used_without_a_login(monkeypatch):
+    from api import credentials
+
+    def no_password(*a, **k):
+        raise AssertionError("Se pidió la contraseña de una conexión de la extensión")
+
+    monkeypatch.setattr(credentials, "use_credential", no_password)
+    monkeypatch.setattr(
+        credentials, "load_session",
+        lambda conn, **k: credentials.StoredSession(
+            "ci_session=abc", None, "browser_session", "Mozilla/5.0"
+        ),
+    )
+
+    fetcher, can_relogin = jobs._build_tier3_fetcher(_Conn(), _row())
+
+    assert can_relogin is False
+    assert fetcher.base_url.startswith("https://")
+
+
+def test_an_extension_connection_without_a_session_needs_the_merchant(monkeypatch):
+    from api import credentials
+
+    monkeypatch.setattr(
+        credentials, "load_session",
+        lambda conn, **k: credentials.StoredSession(None, None, "browser_session"),
+    )
+
+    with pytest.raises(SessionExpiredError):
+        jobs._build_tier3_fetcher(_Conn(), _row())
+
+
+def test_the_browser_user_agent_is_replayed_only_when_the_operator_says_so(monkeypatch):
+    from connectors.effi.session_fetcher import USER_AGENT, EffiSessionFetcher
+
+    session = SimpleNamespace(token="ci_session=abc", user_agent="Mozilla/5.0 Navegador")
+    fetcher = EffiSessionFetcher.from_session(session, consent_granted_at=datetime.now(UTC))
+
+    monkeypatch.delenv("EFFI_REPLAY_BROWSER_USER_AGENT", raising=False)
+    assert fetcher._headers()["User-Agent"] == USER_AGENT
+    monkeypatch.setenv("EFFI_REPLAY_BROWSER_USER_AGENT", "true")
+    assert fetcher._headers()["User-Agent"] == "Mozilla/5.0 Navegador"

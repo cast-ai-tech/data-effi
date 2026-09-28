@@ -17,6 +17,7 @@ from fastapi.responses import JSONResponse
 from api.db import close_pools, healthcheck, init_pools
 from api.deps import require_any_cap, require_cap
 from api.errors import register_error_handlers
+from api.extension_cors import build_middleware as effi_extension_cors
 from api.ingest_queue import get_queue, init_queue
 from api.routers import (
     ai,
@@ -26,6 +27,7 @@ from api.routers import (
     config,
     customers,
     dropi,
+    effi_pairing,
     events,
     ingest,
     kpis,
@@ -98,6 +100,11 @@ def create_app() -> FastAPI:
         allow_headers=["Authorization", "Content-Type"],
         max_age=600,
     )
+    # Added AFTER the global CORS on purpose: the last middleware added is the
+    # outermost, so this one answers the extension's preflight on its single
+    # endpoint before the global list (which must never include extensions)
+    # gets to refuse it. See api/extension_cors.py.
+    app.middleware("http")(effi_extension_cors(settings, effi_pairing.REDEEM_PATH))
 
     @app.middleware("http")
     async def security_headers(request: Request, call_next):
@@ -170,6 +177,10 @@ def create_app() -> FastAPI:
     # the whole credential. The owner-facing endpoints in the router assert
     # their own role guard.
     app.include_router(captures.router)
+    # Same reasoning again: `POST /config/effi/pairing/redeem` is called by the
+    # Effi browser extension with a one-time code and no JWT. The two owner
+    # endpoints in the router carry their own `require_role("owner")`.
+    app.include_router(effi_pairing.router)
     app.include_router(worker.router)
 
     return app

@@ -439,10 +439,12 @@ def job_sync_tier3(
         cur.execute(
             """
             SELECT c.id, c.tenant_id, c.country_code, c.platform_code, c.secret_ref,
-                   c.consent_granted_at, c.name, c.credential_status, co.currency_code
+                   c.consent_granted_at, c.name, c.credential_status, co.currency_code,
+                   cc.auth_mode
             FROM core.connection c
             JOIN core.platform p ON p.code = c.platform_code
             JOIN core.country co ON co.code = c.country_code
+            LEFT JOIN core.connection_credential cc ON cc.connection_id = c.id
             WHERE p.tier = 3 AND c.status = 'active' AND c.consent_granted_at IS NOT NULL
               -- Migration 042: an Effi connection fed by uploaded files has no
               -- session to replay. Only the ones the operator wired as one.
@@ -456,7 +458,12 @@ def job_sync_tier3(
               -- who gets locked out of their own Effi over it. Both states are
               -- terminal until a human re-enters the credential, which sets the
               -- status back to 'none' and lets this query see the row again.
-              AND c.credential_status NOT IN ('invalid', 'locked')
+              --
+              -- Migration 070 adds `session_expired`: a session sent from the
+              -- browser extension that Effi stopped accepting. There is no
+              -- password behind it, so no retry can revive it - only a new
+              -- session from the extension, which resets the status.
+              AND c.credential_status NOT IN ('invalid', 'locked', 'session_expired')
             """
         )
         connections = cur.fetchall()
@@ -495,6 +502,14 @@ def job_sync_tier3(
         except (ConsentError, SessionExpiredError) as exc:
             # These need a human. Mark the connection so the UI can ask.
             conn.rollback()
+            if isinstance(exc, SessionExpiredError) and _is_browser_session(connection_row):
+                # A session the merchant sent from the extension died. Nothing
+                # here can log in again: park it, say so in the bell, stop.
+                _mark_browser_session_expired(conn, connection_row, str(exc))
+                entry["status"] = "needs_new_session"
+                entry["error"] = str(exc)
+                results.append(entry)
+                continue
             _mark_connection_error(
                 conn, connection_row["id"], str(exc), credential_status="expired"
             )
@@ -627,6 +642,21 @@ def _build_tier3_fetcher(conn: psycopg.Connection, row: dict[str, Any]) -> tuple
     stored = credentials.load_session(
         conn, connection_id=row["id"], tenant_id=row["tenant_id"]
     )
+    if stored.is_browser_session:
+        # Migration 070: the merchant logged in in their own browser and the
+        # extension sent the session. No password, so no login and no second
+        # chance: a dead session is the merchant's to renew, not ours.
+        if not stored.token:
+            from api.preflight import BROWSER_SESSION_MISSING
+
+            raise SessionExpiredError(BROWSER_SESSION_MISSING)
+        return (
+            EffiSessionFetcher.from_session(
+                stored, consent_granted_at=row["consent_granted_at"]
+            ),
+            False,
+        )
+
     try:
         with credentials.use_credential(
             conn, connection_id=row["id"], tenant_id=row["tenant_id"]
@@ -764,6 +794,74 @@ def _mark_credential_status(
         # more than telling anybody about it.
         logger.exception("no se pudo notificar la credencial caída")
 
+    conn.commit()
+
+
+def _is_browser_session(row: dict[str, Any]) -> bool:
+    """A vault session sent from the extension, and not overridden by an env var."""
+    return row.get("auth_mode") == "browser_session" and not row.get("secret_ref")
+
+
+SESSION_EXPIRED_TITLE = "Tu sesión de Effi venció: vuelve a enviarla desde la extensión"
+
+
+def _mark_browser_session_expired(
+    conn: psycopg.Connection, row: dict[str, Any], message: str
+) -> None:
+    """Park a connection whose extension session died, and ring the bell ONCE.
+
+    Two writes that both stop the loop: `status = 'error'` (the worker only
+    selects `active`) and `credential_status = 'session_expired'` (excluded in
+    the query too). Either alone would do; both means a later write that
+    revives one of them by accident still does not start replaying a dead
+    cookie every run. Sending a new session from the extension resets both.
+    """
+    from ai.alerts import persist_findings
+    from api import credentials
+    from api.preflight import BROWSER_SESSION_REJECTED
+
+    with conn.cursor() as cur:
+        cur.execute(
+            "UPDATE core.connection SET status = 'error', last_error = %s WHERE id = %s",
+            (BROWSER_SESSION_REJECTED[:1000], row["id"]),
+        )
+    credentials.mark_session_expired(
+        conn, connection_id=row["id"], tenant_id=row["tenant_id"],
+        message=BROWSER_SESSION_REJECTED,
+    )
+    # `message` is one of our own sentences, never an Effi response body.
+    logger.info("effi browser session expired connection=%s: %s", row["id"], message)
+
+    try:
+        persist_findings(
+            conn,
+            row["tenant_id"],
+            row.get("country_code"),
+            [{
+                "code": "effi_session_expired",
+                "severity": "critical",
+                "title": SESSION_EXPIRED_TITLE,
+                "finding": (
+                    f"Effi dejó de aceptar la sesión de «{row.get('name') or 'Effi'}» "
+                    "que enviaste desde la extensión. Desde este momento no entran "
+                    "guías nuevas y el tablero se quedó con lo último que alcanzó a "
+                    "cargar."
+                ),
+                "action": (
+                    "Entra a Effi en tu navegador, abre la extensión de Effi "
+                    "y envía la sesión con un código nuevo de "
+                    "Configuración → Conexiones. Master Data no lo reintenta solo."
+                ),
+                "deep_link": "/connections",
+            }],
+            # Each expiry is its own event: the worker stops after the first,
+            # so there is no repeat to deduplicate.
+            dedup_days=0,
+        )
+    except Exception:
+        # The status writes above are what stop the retry loop; a notification
+        # that fails must never undo them.
+        logger.exception("no se pudo notificar la sesión de Effi vencida")
     conn.commit()
 
 
