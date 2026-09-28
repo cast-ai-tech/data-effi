@@ -143,9 +143,13 @@ def encrypt_secret(value: str) -> bytes:
 
     Blank is rejected rather than encrypted: an empty secret in the vault would
     read as "connected" on every screen and fail on every sync.
+
+    The value is stored EXACTLY as given - never stripped. A password may begin
+    or end with a space, and storing a trimmed copy would make every login fail
+    with "contraseña incorrecta", which is terminal (`invalid`) by design.
     """
-    text = (value or "").strip()
-    if not text:
+    text = value or ""
+    if not text.strip():
         raise ValueError("No se cifra un secreto vacío")
     return _fernet().encrypt(text.encode("utf-8"))
 

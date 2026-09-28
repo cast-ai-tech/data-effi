@@ -98,6 +98,15 @@ def test_empty_secret_is_refused(vault_key):
         encrypt_secret("   ")
 
 
+def test_a_password_with_edge_spaces_is_stored_verbatim(vault_key):
+    """Trimming a password changes it, and a changed password is `invalid`.
+
+    `invalid` is terminal: the worker would never try again and the merchant
+    would be told their (correct) password is wrong.
+    """
+    assert decrypt_secret(encrypt_secret(" clave con espacios ")) == " clave con espacios "
+
+
 # =============================================================================
 # The password does not leak through the objects that carry it
 # =============================================================================
