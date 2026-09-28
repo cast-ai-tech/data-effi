@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import hashlib
 import secrets
+import threading
 from datetime import UTC, datetime, timedelta
 from typing import Any
 from uuid import UUID
@@ -24,6 +25,31 @@ from api.settings import Settings
 # lowering them below the library defaults is not.
 _hasher = PasswordHasher()
 
+# Cada hash o verificación de argon2 reserva `memory_cost` (64 MB con los
+# valores por defecto) mientras dura. Sin tope, una ráfaga de logins - la gente
+# entrando a la vez a primera hora, o alguien probando contraseñas desde muchas
+# IPs - corre tantas como hilos tenga el servidor: en la prueba de carga,
+# cuarenta logins simultáneos llevaron el proceso de 140 MB a 740 MB, en un
+# servidor de 512 MB. El semáforo las pone en fila; cada una dura ~50-100 ms,
+# así que la fila se vacía rápido. El resto del API no espera por ella.
+_hash_slots: threading.BoundedSemaphore | None = None
+_hash_slots_lock = threading.Lock()
+
+
+def _slots() -> threading.BoundedSemaphore:
+    global _hash_slots
+    if _hash_slots is None:
+        with _hash_slots_lock:
+            if _hash_slots is None:
+                from api.settings import get_settings
+
+                try:
+                    size = max(int(get_settings().password_hash_concurrency), 1)
+                except (Exception, SystemExit):  # sin configuración (herramientas)
+                    size = 2
+                _hash_slots = threading.BoundedSemaphore(size)
+    return _hash_slots
+
 MIN_PASSWORD_LENGTH = 10
 
 
@@ -36,12 +62,14 @@ def hash_password(password: str) -> str:
         raise ValueError(
             f"La contraseña debe tener al menos {MIN_PASSWORD_LENGTH} caracteres"
         )
-    return _hasher.hash(password)
+    with _slots():
+        return _hasher.hash(password)
 
 
 def verify_password(password_hash: str, password: str) -> bool:
     try:
-        return _hasher.verify(password_hash, password)
+        with _slots():
+            return _hasher.verify(password_hash, password)
     except (VerifyMismatchError, InvalidHashError):
         return False
 

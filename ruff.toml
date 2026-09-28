@@ -33,3 +33,7 @@ ignore = [
 # never used for anything security-related, and the two S608 sites interpolate
 # column names from module constants with every value bound as a parameter.
 "scripts/seed_demo.py" = ["S105", "S311", "S608"]
+# Prueba de carga (solo desarrollo): la contraseña es la de las cuentas de la
+# semilla desechable, y `random` solo reparte endpoints y páginas.
+"scripts/seed_stress.py" = ["S105"]
+"scripts/loadtest.py" = ["S311"]

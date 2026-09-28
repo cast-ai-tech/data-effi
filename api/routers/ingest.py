@@ -353,8 +353,13 @@ async def upload(
             "y el país del archivo (platform_code + country_code).",
         )
 
+    # Cada consulta de este endpoint va a un hilo: el endpoint es async (lee el
+    # archivo por trozos) y psycopg es síncrono. Hecha en el bucle de eventos,
+    # una consulta que tarda - la base ocupada en plena carga - congelaba TODAS
+    # las peticiones del API mientras duraba, /health incluido.
     if connection_id is not None:
-        owner = fetch_one(
+        owner = await run_in_threadpool(
+            fetch_one,
             conn,
             "SELECT id, country_code, platform_code FROM core.connection "
             "WHERE id = %s AND tenant_id = %s",
@@ -363,7 +368,9 @@ async def upload(
         if owner is None:
             raise NotFound("Esa conexión no existe en tu workspace")
     else:
-        owner = _file_connection_for(conn, user, country_code or "", platform_code or "")
+        owner = await run_in_threadpool(
+            _file_connection_for, conn, user, country_code or "", platform_code or ""
+        )
         connection_id = owner["id"]
 
     # Subir por una conexión de otro país es escribir en un país que no puedes
@@ -413,7 +420,8 @@ async def upload(
             written.append(stored_path)
             await run_in_threadpool(stored_path.write_bytes, payload)
 
-            row = fetch_required(
+            row = await run_in_threadpool(
+                fetch_required,
                 conn,
                 """
                 INSERT INTO raw.upload_job
@@ -430,14 +438,15 @@ async def upload(
             )
             jobs.append(UploadJobResponse(**row))
             # The screen hears "queued" in the same commit that makes the job real.
-            emit(
+            await run_in_threadpool(
+                emit,
                 conn, tenant_of(user), "upload_job.updated",
                 country_code=owner["country_code"],
                 payload=_job_event(row, "queued"),
             )
 
         # Commit before queueing: the worker must be able to see the rows.
-        conn.commit()
+        await run_in_threadpool(conn.commit)
     except BaseException:
         for path in written:
             path.unlink(missing_ok=True)
@@ -875,7 +884,9 @@ async def detect(
         profile_code=profile.code,
         profile_label=profile.label,
         detected_platform_code=profile.platform_code,
-        detected_platform_name=_platform_name(conn, profile.platform_code),
+        detected_platform_name=await run_in_threadpool(
+            _platform_name, conn, profile.platform_code
+        ),
         detected_country_code=country_code,
         detected_country_raw=country_raw,
         row_count=len(rows),
