@@ -659,15 +659,18 @@ class ConnectionCredentialRequest(BaseModel):
     )
 
 
+CredentialStatusLiteral = Literal[
+    "none", "ok", "invalid", "expired", "insufficient_permissions", "locked",
+    "session_expired",
+]
+
+
 class ConnectionCredentialResponse(BaseModel):
     """Everything a screen may know about a stored credential. No password."""
 
     connection_id: UUID
     username: str
-    credential_status: Literal[
-        "none", "ok", "invalid", "expired", "insufficient_permissions", "locked",
-        "session_expired",
-    ]
+    credential_status: CredentialStatusLiteral
     last_login_at: datetime | None = None
     last_login_error: str | None = None
     session_expires_at: datetime | None = None

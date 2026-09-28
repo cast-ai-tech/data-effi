@@ -110,7 +110,7 @@ def csv_filename(country_code: str, date_from: date, date_to: date) -> str:
 def _sort_key(order: dict[str, Any]) -> tuple[int, str]:
     raw = order.get("id")
     try:
-        return (0, f"{int(raw):020d}")
+        return (0, f"{int(str(raw)):020d}")
     except (TypeError, ValueError):
         return (1, str(raw))
 
@@ -189,7 +189,7 @@ def _supplier_total(details: Any) -> str:
             (product, "sale_price"),
             (line, "price_supplier"),
         ):
-            price = _decimal(source.get(key))
+            price = _decimal((source or {}).get(key))
             if price is not None:
                 break
         if price is None:

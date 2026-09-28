@@ -20,6 +20,7 @@ import logging
 from collections.abc import Callable
 from datetime import UTC, datetime
 from decimal import Decimal
+from functools import partial
 from typing import Any
 from uuid import UUID
 
@@ -472,7 +473,7 @@ class PostgresStore:
         return UpsertResult(outcome, shipment.tracking_number, discrepancies=discrepancies)
 
     def upsert_shipments(
-        self, ctx: BatchContext, shipments: list["ShipmentInput"]
+        self, ctx: BatchContext, shipments: list[ShipmentInput]
     ) -> list[UpsertResult]:
         """Toda la tanda de guías de una vez, en vez de fila por fila.
 
@@ -508,7 +509,7 @@ class PostgresStore:
             # cada una lleva su propio savepoint y una sola cae sin arrastrar al
             # resto - la misma garantía que daba el camino original.
             return [
-                _isolated(lambda s=s: self.upsert_shipment(ctx, s), s.tracking_number)
+                _isolated(partial(self.upsert_shipment, ctx, s), s.tracking_number)
                 for s in shipments
             ]
 
@@ -691,7 +692,7 @@ class PostgresStore:
         out: dict[str, dict[str, Any]] = {}
         with self._conn.cursor(row_factory=dict_row) as cur:
             cur.execute(
-                f"SELECT tracking_number, {columns} FROM core.shipment "
+                f"SELECT tracking_number, {columns} FROM core.shipment "  # noqa: S608 - MONEY_COLUMNS es constante
                 "WHERE connection_id = %s AND tracking_number = ANY(%s)",
                 (ctx.connection_id, tracking_numbers),
             )
@@ -801,7 +802,7 @@ class PostgresStore:
         except psycopg.Error:
             return [
                 _isolated(
-                    lambda m=m: self.upsert_movement(ctx, m),
+                    partial(self.upsert_movement, ctx, m),
                     m.external_ref or m.dedupe_key[:12],
                 )
                 for m in movements

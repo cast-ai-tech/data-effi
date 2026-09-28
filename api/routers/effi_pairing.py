@@ -41,7 +41,7 @@ import logging
 import os
 import secrets
 from datetime import UTC, datetime, timedelta
-from typing import Any
+from typing import Any, cast
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, Request, status
@@ -59,6 +59,7 @@ from api.schemas import (
     EffiPairingRedeemResponse,
     EffiPairingResponse,
     EffiPairingStatusResponse,
+    PairingState,
 )
 from api.security import hash_token
 
@@ -207,7 +208,7 @@ def pairing_status(
     return EffiPairingStatusResponse(
         pairing_id=row["id"],
         connection_id=row["connection_id"],
-        state=pairing_state(row),
+        state=cast(PairingState, pairing_state(row)),
         credential_status=row["credential_status"],
         summary=row["outcome_detail"],
         expires_at=row["expires_at"],

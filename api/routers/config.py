@@ -22,7 +22,7 @@ from __future__ import annotations
 
 import logging
 from datetime import UTC, datetime
-from typing import Annotated, Literal
+from typing import Annotated, Literal, cast
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, Query, Request, Response, status
@@ -39,6 +39,7 @@ from api.deps import (
     require_cap,
     require_platform_admin,
     require_role,
+    tenant_of,
 )
 from api.errors import ApiError, Conflict, Forbidden, NotFound
 from api.preflight import run_preflight_for_connection
@@ -52,6 +53,7 @@ from api.schemas import (
     ConnectionResponse,
     ConnectionUpdateRequest,
     CountryResponse,
+    CredentialStatusLiteral,
     FxRateRow,
     FxRateUpsertRequest,
     MemberRow,
@@ -990,7 +992,7 @@ def put_connection_credential(
         summary = credentials.store_credential(
             conn,
             connection_id=connection_id,
-            tenant_id=user.tenant_id,
+            tenant_id=tenant_of(user),
             username=payload.username,
             password=payload.password,
         )
@@ -1030,7 +1032,7 @@ def put_connection_credential(
     return ConnectionCredentialResponse(
         connection_id=connection_id,
         username=summary.username,
-        credential_status=summary.credential_status,
+        credential_status=cast(CredentialStatusLiteral, summary.credential_status),
         last_login_at=summary.last_login_at,
         last_login_error=summary.last_login_error,
         session_expires_at=summary.session_expires_at,
@@ -1060,7 +1062,7 @@ def delete_connection_credential(
     """
     _assert_connection_in_scope(conn, user, connection_id)
     credentials.delete_credential(
-        conn, connection_id=connection_id, tenant_id=user.tenant_id
+        conn, connection_id=connection_id, tenant_id=tenant_of(user)
     )
     execute(
         conn,
@@ -1097,7 +1099,7 @@ def test_connection(
     return run_preflight_for_connection(
         conn,
         connection_id=connection_id,
-        tenant_id=user.tenant_id,
+        tenant_id=tenant_of(user),
         platform_code=row["platform_code"],
         platform_name=row["platform_name"],
         consent_granted_at=row["consent_granted_at"],

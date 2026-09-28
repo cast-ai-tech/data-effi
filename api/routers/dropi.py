@@ -32,7 +32,7 @@ from fastapi import APIRouter, Depends, Response, status
 
 from api import credentials
 from api.db import execute, fetch_one, fetch_required
-from api.deps import CurrentUser, CurrentUserDep, DbDep, require_role
+from api.deps import CurrentUser, CurrentUserDep, DbDep, require_role, tenant_of
 from api.errors import ApiError, NotFound
 from api.routers.config import _assert_connection_in_scope, create_connection
 from api.schemas import (
@@ -114,7 +114,7 @@ def _store_token(conn, user: CurrentUser, connection_id: UUID, token: str) -> No
         credentials.store_credential(
             conn,
             connection_id=connection_id,
-            tenant_id=user.tenant_id,
+            tenant_id=tenant_of(user),
             username=TOKEN_LABEL,
             password=token,
         )
@@ -286,7 +286,7 @@ def test_dropi_connection(
 
     try:
         with credentials.use_credential(
-            conn, connection_id=connection_id, tenant_id=user.tenant_id
+            conn, connection_id=connection_id, tenant_id=tenant_of(user)
         ) as credential:
             client = client_factory(token=credential.password, country_code=row["country_code"])
             page = client.test_connection()
@@ -300,7 +300,7 @@ def test_dropi_connection(
         raise ApiError("vault_unavailable", str(exc)) from None
     except DropiAuthError as exc:
         credentials.record_login_failure(
-            conn, connection_id=connection_id, tenant_id=user.tenant_id,
+            conn, connection_id=connection_id, tenant_id=tenant_of(user),
             credential_status="invalid", message=str(exc),
         )
         return DropiTestResponse(
@@ -316,7 +316,7 @@ def test_dropi_connection(
             message=str(exc),
         )
 
-    credentials.record_login_ok(conn, connection_id=connection_id, tenant_id=user.tenant_id)
+    credentials.record_login_ok(conn, connection_id=connection_id, tenant_id=tenant_of(user))
     visible = bool(page.orders)
     return DropiTestResponse(
         connection_id=connection_id,
@@ -347,7 +347,7 @@ def delete_dropi_token(connection_id: UUID, conn: DbDep, user: OwnerDep) -> Resp
     Master Data from using it.
     """
     _dropi_connection(conn, user, connection_id)
-    credentials.delete_credential(conn, connection_id=connection_id, tenant_id=user.tenant_id)
+    credentials.delete_credential(conn, connection_id=connection_id, tenant_id=tenant_of(user))
     execute(
         conn,
         """
