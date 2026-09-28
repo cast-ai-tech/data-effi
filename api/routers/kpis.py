@@ -903,8 +903,9 @@ def layout(
     estado están; las preferencias dicen cómo las quiere ESTA persona: en qué
     orden y de qué ancho. Se combinan aquí, no en el frontend, para que la
     pantalla siga renderizando una sola lista ya resuelta. Sin preferencias
-    guardadas, `COALESCE` devuelve el orden del catálogo y ancho 1 - es decir,
-    exactamente el tablero de siempre.
+    guardadas, `COALESCE` devuelve el orden del catálogo y el ancho sale NULL:
+    el ancho de fábrica de cada tarjeta lo decide el frontend, así que el
+    servidor no puede inventar un 1 que lo pise.
     """
     rows = fetch_all(
         conn,
@@ -914,7 +915,7 @@ def layout(
                l.missing_required, l.missing_optional, l.awaiting_data,
                l.state, l.state_message,
                COALESCE(p.sort_order, l.sort_order) AS sort_order,
-               COALESCE(p.width, 1)                 AS width,
+               p.width                              AS width,
                COALESCE(p.hidden, false)            AS hidden
           FROM mart.v_country_dashboard_layout l
           LEFT JOIN core.dashboard_widget_pref p
@@ -1005,4 +1006,28 @@ def save_layout(
             },
         )
 
+    return layout(conn, user, country)
+
+
+@router.delete(
+    "/layout",
+    response_model=LayoutResponse,
+    summary="Borrar la personalización del tablero de esta persona",
+)
+def reset_layout(
+    conn: DbDep, user: CurrentUserDep, country: CountryQuery
+) -> LayoutResponse:
+    """Devuelve el tablero de fábrica: borra las preferencias de quien llama.
+
+    Mandar el orden de fábrica con un PUT no sirve: el servidor no sabe cuál es
+    el ancho de fábrica y la persona seguiría "personalizada" para siempre. Solo
+    se borran las filas de ESTA persona y de ESTE país - el tablero de un
+    compañero, o el del mismo usuario en otro país, no se toca.
+    """
+    execute(
+        conn,
+        "DELETE FROM core.dashboard_widget_pref "
+        "WHERE user_id = %(user)s AND country_code = %(country)s",
+        {"user": user.id, "country": country.upper()},
+    )
     return layout(conn, user, country)

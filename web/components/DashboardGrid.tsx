@@ -149,29 +149,26 @@ export function DashboardGrid({
     [persist, setOrder, widthOf],
   );
 
-  const reset = useCallback(async () => {
-    const previous = order;
+  // Borrar, no reescribir: mandar "el orden de fábrica" con un PUT dejaba
+  // guardado el orden ya personalizado y la cuenta marcada como acomodada para
+  // siempre. Sin preferencias, el servidor devuelve el orden del catálogo y
+  // ancho null, y aquí manda el ancho de fábrica. Va en la misma fila que los
+  // guardados: un PUT pendiente que llegara después resucitaría lo borrado.
+  const reset = useCallback(() => {
+    const id = ++latest.current;
     setSaving(true);
     setError(null);
-    try {
-      // Ancho de fábrica y el orden del catálogo: se manda `width` de fábrica y
-      // el orden actual del servidor, que es lo que el catálogo dictó.
-      await api.put(`/kpis/layout?country=${country.code}`, {
-        placements: widgets.map((widget, index) => ({
-          widget_code: widget.widget_code,
-          sort_order: index + 1,
-          width: defaultFullWidth.has(widget.widget_code) ? 2 : 1,
-          hidden: false,
-        })),
-      });
-      onSaved?.();
-    } catch {
-      setOrder(previous);
-      setError("No se pudo restablecer el tablero.");
-    } finally {
-      setSaving(false);
-    }
-  }, [country.code, widgets, defaultFullWidth, onSaved, order, setOrder]);
+    queue.current = queue.current.then(async () => {
+      try {
+        await api.delete(`/kpis/layout?country=${country.code}`);
+        if (id === latest.current) onSaved?.();
+      } catch {
+        setError("No se pudo restablecer el tablero.");
+      } finally {
+        if (id === latest.current) setSaving(false);
+      }
+    });
+  }, [country.code, onSaved]);
 
   return (
     <>
@@ -184,7 +181,7 @@ export function DashboardGrid({
           {customised && !saving && !error && (
             <button
               type="button"
-              onClick={() => void reset()}
+              onClick={reset}
               className="text-ink-muted underline decoration-dotted hover:text-ink"
             >
               Restablecer el orden

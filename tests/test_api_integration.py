@@ -441,6 +441,63 @@ def test_layout_blocks_cpa_and_cs(client, owner_token):
     assert len(widgets) >= 10
 
 
+
+def _invited_token(client, owner_token, email: str, role: str = "viewer") -> str:
+    invite = client.post(
+        "/auth/invite", json={"email": email, "role": role}, headers=auth(owner_token),
+    )
+    assert invite.status_code == 201, invite.text
+    accepted = client.post(
+        "/auth/accept-invite",
+        json={
+            "token": invite.json()["invitation_token"],
+            "password": "clave-de-prueba-1234",
+            "full_name": "Compañero",
+        },
+    )
+    assert accepted.status_code == 200, accepted.text
+    return accepted.json()["access_token"]
+
+
+def test_layout_reset_deletes_only_the_callers_preferences(client, owner_token):
+    """"Restablecer" borra; no reescribe el orden ya personalizado.
+
+    Sin nada guardado el ancho sale null para que el frontend ponga el de
+    fábrica, y `customised` vuelve a false. El tablero de un compañero no se
+    toca.
+    """
+    peer_token = _invited_token(client, owner_token, "layout-peer@masterdata.app")
+    fresh = client.get("/kpis/layout?country=CO", headers=auth(owner_token)).json()
+    assert fresh["customised"] is False
+    assert all(w["width"] is None for w in fresh["widgets"])
+    first, second = fresh["widgets"][0]["widget_code"], fresh["widgets"][1]["widget_code"]
+
+    placements = {
+        "placements": [
+            {"widget_code": second, "sort_order": 1, "width": 2},
+            {"widget_code": first, "sort_order": 2, "width": 1},
+        ]
+    }
+    for token in (owner_token, peer_token):
+        saved = client.put("/kpis/layout?country=CO", json=placements, headers=auth(token))
+        assert saved.status_code == 200, saved.text
+        assert saved.json()["customised"] is True
+
+    reset = client.delete("/kpis/layout?country=CO", headers=auth(owner_token))
+    assert reset.status_code == 200, reset.text
+    body = reset.json()
+    assert body["customised"] is False
+    assert body["widgets"] == fresh["widgets"]
+
+    peer = client.get("/kpis/layout?country=CO", headers=auth(peer_token)).json()
+    assert peer["customised"] is True
+    widths = {w["widget_code"]: w["width"] for w in peer["widgets"]}
+    assert widths[second] == 2 and widths[first] == 1
+
+
+def test_layout_reset_requires_a_session(client):
+    assert client.delete("/kpis/layout?country=CO").status_code == 401
+
 def test_global_endpoint(client, owner_token):
     response = client.get("/kpis/global", headers=auth(owner_token))
     assert response.status_code == 200

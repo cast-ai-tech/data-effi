@@ -1503,8 +1503,9 @@ class LayoutWidget(BaseModel):
     widget_code: str
     tab: str
     # Personalización de esta persona (core.dashboard_widget_pref). Sin nada
-    # guardado: el orden del catálogo, ancho 1 y visible - el tablero de siempre.
-    width: int = 1
+    # guardado: el orden del catálogo, visible y ancho null - el ancho de
+    # fábrica de cada tarjeta lo pone el frontend.
+    width: int | None = None
     hidden: bool = False
     title: str
     description: str
@@ -1522,8 +1523,8 @@ class LayoutResponse(BaseModel):
     country_code: str
     widgets: list[LayoutWidget]
     # ¿Esta persona acomodó el tablero, o está viendo el de fábrica? No se puede
-    # deducir de los widgets: el layout siempre trae un `width`, porque el
-    # servidor rellena el de fábrica cuando no hay preferencia. Ofrecer
+    # deducir de los widgets con certeza: una persona pudo guardar justo los
+    # anchos de fábrica. Ofrecer
     # "Restablecer" en un tablero que nadie tocó es ruido, así que la respuesta
     # lo dice explícitamente.
     customised: bool = False

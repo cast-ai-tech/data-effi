@@ -11,9 +11,10 @@ import type { Country, LayoutWidget } from "@/lib/types";
  */
 const net = vi.hoisted(() => ({
   put: vi.fn<(path: string, body: unknown) => Promise<unknown>>(),
+  delete: vi.fn<(path: string) => Promise<unknown>>(),
 }));
 
-vi.mock("@/lib/api", () => ({ api: { put: net.put } }));
+vi.mock("@/lib/api", () => ({ api: { put: net.put, delete: net.delete } }));
 
 vi.mock("@/components/WidgetRenderer", () => ({
   WidgetRenderer: ({ widget }: { widget: LayoutWidget }) => <div>{widget.title}</div>,
@@ -41,6 +42,7 @@ const country = { code: "CO" } as Country;
 
 beforeEach(() => {
   net.put.mockReset();
+  net.delete.mockReset();
 });
 
 afterEach(cleanup);
@@ -110,5 +112,61 @@ describe("DashboardGrid - guardado", () => {
     // which travelled inside it.
     expect(screen.getByLabelText("a: ocupar una columna")).toBeInTheDocument();
     expect(screen.getByLabelText("b: ocupar una columna")).toBeInTheDocument();
+  });
+});
+
+describe("DashboardGrid - restablecer", () => {
+  it("borra la personalización con DELETE y recarga, sin reenviar el orden", async () => {
+    net.delete.mockResolvedValue(undefined);
+    const onSaved = vi.fn();
+    render(
+      <DashboardGrid
+        widgets={[widget("a"), widget("b")]}
+        country={country}
+        defaultFullWidth={new Set()}
+        customised
+        onSaved={onSaved}
+      />,
+    );
+
+    await act(async () => {
+      fireEvent.click(screen.getByRole("button", { name: "Restablecer el orden" }));
+    });
+
+    expect(net.delete).toHaveBeenCalledWith("/kpis/layout?country=CO");
+    expect(net.put).not.toHaveBeenCalled();
+    expect(onSaved).toHaveBeenCalledTimes(1);
+  });
+
+  it("si el DELETE falla, lo dice", async () => {
+    net.delete.mockRejectedValue(new Error("x"));
+    render(
+      <DashboardGrid
+        widgets={[widget("a")]}
+        country={country}
+        defaultFullWidth={new Set()}
+        customised
+      />,
+    );
+
+    await act(async () => {
+      fireEvent.click(screen.getByRole("button", { name: "Restablecer el orden" }));
+    });
+
+    expect(screen.getByText("No se pudo restablecer el tablero.")).toBeInTheDocument();
+  });
+
+  it("sin ancho guardado (null) usa el ancho de fábrica", () => {
+    render(
+      <DashboardGrid
+        widgets={[{ ...widget("a"), width: null }, { ...widget("b"), width: null }]}
+        country={country}
+        defaultFullWidth={new Set(["a"])}
+        customised={false}
+      />,
+    );
+
+    expect(screen.getByLabelText("a: ocupar una columna")).toBeInTheDocument();
+    expect(screen.getByLabelText("b: ocupar dos columnas")).toBeInTheDocument();
   });
 });

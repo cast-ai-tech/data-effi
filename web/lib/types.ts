@@ -913,8 +913,9 @@ export interface LayoutWidget {
   title: string;
   description: string;
   sort_order: number;
-  /** Cuántas columnas ocupa: 1 o 2. Lo guarda cada persona (migración 057). */
-  width?: number;
+  /** Cuántas columnas ocupa: 1 o 2. Lo guarda cada persona (migración 057);
+   * null si nunca la tocó, y entonces manda el ancho de fábrica. */
+  width?: number | null;
   hidden?: boolean;
   state: WidgetState;
   state_message: string | null;
