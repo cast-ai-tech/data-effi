@@ -83,6 +83,11 @@ def run_job(
             result = body(conn)
         except Exception as exc:
             logger.exception("job %s failed", job_name)
+            # A database error leaves the transaction aborted, and every
+            # statement after it - the INSERT into raw.job_run included - fails
+            # with InFailedSqlTransaction. Without this rollback the failure
+            # record was lost and a second exception escaped run_job.
+            _safe_rollback(conn)
             _record(conn, job_name, tenant_id, "failed", {}, f"{type(exc).__name__}: {exc}")
             return {"status": "failed", "error": f"{type(exc).__name__}: {exc}"}
 
@@ -92,6 +97,13 @@ def run_job(
         logger.info("job %s ok in %.2fs: %s", job_name, elapsed, result)
         broadcast(conn, "job_run.finished", {"job": job_name, "ok": True})
         return {"status": "ok", **result}
+
+
+def _safe_rollback(conn: psycopg.Connection) -> None:
+    try:
+        conn.rollback()
+    except Exception:
+        logger.warning("rollback failed", exc_info=True)
 
 
 def _record(
@@ -498,6 +510,16 @@ def job_sync_tier3(
             _mark_connection_error(conn, connection_row["id"], str(exc))
             entry["status"] = "error"
             entry["error"] = str(exc)
+        except Exception as exc:
+            # Anything else (a database error mid-load, a malformed report) is
+            # this connection's problem, not every other merchant's: before,
+            # it escaped the loop and the remaining connections were never
+            # synced. The status is left alone so the next pass retries it.
+            _safe_rollback(conn)
+            logger.exception("tier-3 sync failed for connection %s", connection_row["id"])
+            _note_connection_error(conn, connection_row["id"], f"{type(exc).__name__}: {exc}")
+            entry["status"] = "error"
+            entry["error"] = f"{type(exc).__name__}: {exc}"
 
         results.append(entry)
 
@@ -669,6 +691,22 @@ def _mark_connection_error(conn: psycopg.Connection, connection_id: UUID, messag
     conn.commit()
 
 
+def _note_connection_error(conn: psycopg.Connection, connection_id: UUID, message: str) -> None:
+    """Record the error for the screen WITHOUT taking the connection out of the
+    schedule (status stays as it was). Never raises: the loop must go on."""
+    try:
+        with conn.cursor() as cur:
+            cur.execute(
+                "UPDATE core.connection SET last_error = %s WHERE id = %s",
+                (message[:1000], connection_id),
+            )
+        conn.commit()
+    except Exception:
+        _safe_rollback(conn)
+        logger.warning("could not record the error of connection %s", connection_id,
+                       exc_info=True)
+
+
 # =============================================================================
 # Job: Google Sheets sync
 # =============================================================================
@@ -717,6 +755,14 @@ def job_sync_sheets(conn: psycopg.Connection, *, pii_salt: str) -> dict[str, Any
             _mark_connection_error(conn, connection_row["id"], str(exc))
             entry["status"] = "error"
             entry["error"] = str(exc)
+        except Exception as exc:
+            # Same rule as the tier-3 sync: one broken sheet must not stop the
+            # others, and an unexpected error is retried on the next pass.
+            _safe_rollback(conn)
+            logger.exception("sheet sync failed for connection %s", connection_row["id"])
+            _note_connection_error(conn, connection_row["id"], f"{type(exc).__name__}: {exc}")
+            entry["status"] = "error"
+            entry["error"] = f"{type(exc).__name__}: {exc}"
 
         results.append(entry)
 
