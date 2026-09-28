@@ -218,8 +218,10 @@ def test_daily_status_groups_the_twelve_statuses_into_five_columns(client, owner
     assert effi_day1["cerradas"] == 3
 
     # The two percentages the migration explains: over all guides of the day
-    # (what the hand-made report prints) and over the closed ones.
-    assert effi_day1["pct_devolucion_total"] == 25.0
+    # (what the hand-made report prints) and over the closed ones. Since 054
+    # the day's return counts everything not delivered except indemnización:
+    # the returned guide AND the one still in transit, 2 of 4.
+    assert effi_day1["pct_devolucion_total"] == 50.0
     assert effi_day1["pct_devolucion_cerradas"] == pytest.approx(33.33, abs=0.01)
     assert effi_day1["pct_entrega_cerradas"] == pytest.approx(66.67, abs=0.01)
     # Fewer than ten closed guides: an estimate, and flagged as one.
