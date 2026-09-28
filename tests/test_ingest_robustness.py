@@ -37,6 +37,29 @@ def _ingest(store, payload: bytes, kind: BatchKind, *, today: date, name: str = 
 
 
 # =============================================================================
+# Guías sin columna de fecha de creación
+# =============================================================================
+
+
+@pytest.mark.parametrize(
+    "payload",
+    [
+        # Alias genérico.
+        b"guia;estado;valor\nG-1;Entregado;1000\nG-2;En transito;2000\n",
+        # Reporte de Effi reconocido, exportado sin "Fecha de creacion".
+        "Guía transportadora;Fecha de envío;Estado global guía inicial;"
+        "Nombre transportadora Efficommerce;Valor recaudo\n"
+        "G-1;01/07/2026;Entregado;Servientrega;1000\n".encode(),
+    ],
+)
+def test_a_guides_file_without_creation_date_is_refused_once_by_name(payload):
+    report = _ingest(MemoryStore(), payload, BatchKind.SHIPMENTS, today=date(2026, 8, 1))
+    assert report.rows_inserted == 0
+    assert len(report.errors) == 1
+    assert "created_date" in report.errors[0].message
+
+
+# =============================================================================
 # Movimientos sin fecha legible
 # =============================================================================
 

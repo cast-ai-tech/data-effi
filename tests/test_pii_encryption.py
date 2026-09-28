@@ -26,7 +26,7 @@ from tests.conftest import CONNECTION_ID, COUNTRY, CURRENCY, PLATFORM, TENANT_ID
 # Only the ones this file is about are here; the profile needs no more than its
 # four signature columns to recognise the report.
 HEADERS = (
-    "Guía transportadora;Prefijo ID guía;Fecha de envío;Estado global guía inicial;"
+    "Guía transportadora;Prefijo ID guía;Fecha de envío;Fecha de creación;Estado global guía inicial;"
     "Nombre transportadora Efficommerce;Valor recaudo;Destinatario;"
     "Teléfonos destinatario;ID. destinatario;Dirección destinatario;"
     "Ciudad destinatario;País destinatario;Contenido"
@@ -35,17 +35,17 @@ HEADERS = (
 # Two guides, ONE customer: the same phone written two different ways, which is
 # what a real export looks like when the same person orders twice.
 GUIDES_DAY_ONE = f"""{HEADERS}
-G-0001;EF-1;01/07/2026;Entregado;Interrapidisimo;89900;Juana Ficticia;3001234567;1012345678;Calle 45 # 12-34 Apto 501;Bogotá;Colombia;1 * FAJA REDUCTORA.
-G-0002;EF-2;05/07/2026;En transito;Interrapidisimo;120000;Juana Ficticia;300 123 4567;1012345678;Calle 45 # 12-34 Apto 501;Bogotá;Colombia;2 * CLOROFILA.
-G-0003;EF-3;06/07/2026;En transito;Servientrega;45000;Pedro Ficticio;3109876543;;;Medellín;Colombia;1 * ZOOONE.
+G-0001;EF-1;01/07/2026;01/07/2026;Entregado;Interrapidisimo;89900;Juana Ficticia;3001234567;1012345678;Calle 45 # 12-34 Apto 501;Bogotá;Colombia;1 * FAJA REDUCTORA.
+G-0002;EF-2;05/07/2026;05/07/2026;En transito;Interrapidisimo;120000;Juana Ficticia;300 123 4567;1012345678;Calle 45 # 12-34 Apto 501;Bogotá;Colombia;2 * CLOROFILA.
+G-0003;EF-3;06/07/2026;06/07/2026;En transito;Servientrega;45000;Pedro Ficticio;3109876543;;;Medellín;Colombia;1 * ZOOONE.
 """.encode()
 
 # The same three guides one day later: G-0001 has moved on, and G-0003 now
 # carries the address and document that were blank the first time.
 GUIDES_DAY_TWO = f"""{HEADERS}
-G-0001;EF-1;01/07/2026;Entregado;Interrapidisimo;89900;Juana Ficticia;3001234567;1012345678;Calle 45 # 12-34 Apto 501;Bogotá;Colombia;1 * FAJA REDUCTORA.
-G-0002;EF-2;05/07/2026;Entregado;Interrapidisimo;120000;Juana Ficticia;300 123 4567;1012345678;Calle 45 # 12-34 Apto 501;Bogotá;Colombia;2 * CLOROFILA.
-G-0003;EF-3;06/07/2026;Entregado;Servientrega;45000;Pedro Ficticio;3109876543;71234567;Carrera 70 # 30-15;Medellín;Colombia;1 * ZOOONE.
+G-0001;EF-1;01/07/2026;01/07/2026;Entregado;Interrapidisimo;89900;Juana Ficticia;3001234567;1012345678;Calle 45 # 12-34 Apto 501;Bogotá;Colombia;1 * FAJA REDUCTORA.
+G-0002;EF-2;05/07/2026;05/07/2026;Entregado;Interrapidisimo;120000;Juana Ficticia;300 123 4567;1012345678;Calle 45 # 12-34 Apto 501;Bogotá;Colombia;2 * CLOROFILA.
+G-0003;EF-3;06/07/2026;06/07/2026;Entregado;Servientrega;45000;Pedro Ficticio;3109876543;71234567;Carrera 70 # 30-15;Medellín;Colombia;1 * ZOOONE.
 """.encode()
 
 

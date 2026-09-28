@@ -897,8 +897,12 @@ class IngestEngine:
                 logger.warning("country mismatch: file=%s connection=%s", detected, country_code)
                 return report
 
+        # A guide without its creation date cannot be placed on the dashboard,
+        # which groups by it. Without the column every row used to fail one by
+        # one with "fecha de creación ilegible (None)"; the file is refused once
+        # with the column named instead.
         required = (
-            ("tracking_number",)
+            ("tracking_number", "created_date")
             if profile is not None and profile.kind is BatchKind.SHIPMENTS
             else REQUIRED_COLUMNS[kind]
         )

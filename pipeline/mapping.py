@@ -355,7 +355,7 @@ COLUMNS_BY_KIND: dict[BatchKind, dict[str, tuple[str, ...]]] = {
 
 # Without these a row cannot be identified at all, and the file is rejected.
 REQUIRED_COLUMNS: dict[BatchKind, tuple[str, ...]] = {
-    BatchKind.SHIPMENTS: ("tracking_number",),
+    BatchKind.SHIPMENTS: ("tracking_number", "created_date"),
     BatchKind.MOVEMENTS: ("amount",),
 }
 
