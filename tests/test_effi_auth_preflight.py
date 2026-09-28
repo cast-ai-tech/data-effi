@@ -344,3 +344,24 @@ def test_we_only_ever_ask_for_read_permissions():
                 f"La migración 051 pide el permiso de escritura «{word}». "
                 "Master Data solo lee."
             )
+
+
+def test_a_guessed_probe_path_can_be_corrected_from_the_environment(monkeypatch):
+    """Four probe paths are guesses. Fixing one must not need a deploy."""
+    monkeypatch.setenv("EFFI_PROBE_PATH_NOVEDADES_GUIAS", "/app/novedad_guia/excel")
+    fetcher = _FakeFetcher({})
+
+    run_preflight(fetcher, base_url=BASE)
+
+    assert f"{BASE}/app/novedad_guia/excel" in fetcher.asked
+    assert not any("/reportes/novedades/" in url for url in fetcher.asked)
+
+
+def test_a_probe_can_be_switched_off_from_the_environment(monkeypatch):
+    monkeypatch.setenv("EFFI_PROBE_PATH_ARTICULOS", "-")
+    fetcher = _FakeFetcher({})
+
+    report = run_preflight(fetcher, base_url=BASE)
+
+    assert not any("/reportes/articulos/" in url for url in fetcher.asked)
+    assert {r.code: r.status for r in report.results}["articulos"] == "unknown"

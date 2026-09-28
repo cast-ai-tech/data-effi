@@ -39,6 +39,7 @@ nine more requests to a panel that has already said no.
 from __future__ import annotations
 
 import logging
+import os
 from dataclasses import dataclass
 from datetime import UTC, date, datetime, timedelta
 
@@ -210,8 +211,9 @@ def run_preflight(
 
     for probe in PERMISSION_PROBES:
         now = datetime.now(UTC)
+        path = probe_path(probe)
 
-        if not probe.path:
+        if not path:
             results.append(ProbeResult(
                 probe.code, probe.name, "unknown",
                 "Effi no expone un reporte para este permiso, así que no se puede "
@@ -230,7 +232,7 @@ def run_preflight(
             continue
 
         try:
-            status = fetcher.probe(f"{base_url.rstrip('/')}{probe.path}", params)
+            status = fetcher.probe(f"{base_url.rstrip('/')}{path}", params)
         except SessionExpiredError:
             # The session died mid-preflight. Everything after this would report
             # `denied` for the wrong reason, which would send the merchant to fix
@@ -259,6 +261,20 @@ def run_preflight(
             skip_rest = True
 
     return PreflightReport(results=results, session_valid=session_valid)
+
+
+def probe_path(probe: PermissionProbe) -> str:
+    """The path to probe, with `EFFI_PROBE_PATH_<CODE>` taking precedence.
+
+    The comment above PERMISSION_PROBES promised these were overridable by
+    environment; they were not. Four of them are known guesses, and correcting
+    a guess must not need a deploy. Set the variable to "-" to mark a
+    permission as untestable (reported `unknown`) without a code change.
+    """
+    override = os.environ.get(f"EFFI_PROBE_PATH_{probe.code.upper()}", "").strip()
+    if override == "-":
+        return ""
+    return override or probe.path
 
 
 def _detail_for(status: str, probe: PermissionProbe) -> str:
