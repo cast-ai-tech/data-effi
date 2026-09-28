@@ -8,6 +8,7 @@
  */
 
 import { formatPercent, parseIsoDate } from "@/lib/format";
+import { STATUS_GROUPS, type StatusGroup } from "@/lib/status";
 import type { ContributionSplit, CustomerGrade } from "@/lib/types";
 
 /** Same five tones the shared `Chip` and `StatusDot` understand. */
@@ -319,4 +320,99 @@ export function pickSplit(
   if (!Array.isArray(data)) return data;
   if (data.length === 0) return null;
   return data.find((row) => row.country_code === countryCode) ?? data[0];
+}
+
+// ---------------------------------------------------------------------------
+// Orders screen filters, kept in the URL
+// ---------------------------------------------------------------------------
+
+/**
+ * What the Órdenes table is filtered on.
+ *
+ * In the URL, not in component state: with it in state, opening a guide's
+ * customer and pressing Back, reloading, or going to the dashboard and back,
+ * all dropped the search, the status, the dates and the page. An operator
+ * working through page 4 of "novedad" had to rebuild it every single time.
+ */
+export interface OrderFilters {
+  search: string;
+  group: StatusGroup | "";
+  from: string;
+  to: string;
+  onlyOpen: boolean;
+  page: number;
+  /** The guide whose card is open, if any. */
+  order: string | null;
+}
+
+/** URL names, in Spanish like the rest of what the reader sees. */
+const ORDER_PARAM = {
+  search: "buscar",
+  group: "estado",
+  from: "desde",
+  to: "hasta",
+  onlyOpen: "abiertas",
+  page: "pagina",
+  order: "guia",
+} as const;
+
+const ISO_DATE = /^\d{4}-\d{2}-\d{2}$/;
+
+export function readOrderFilters(search: URLSearchParams): OrderFilters {
+  const group = search.get(ORDER_PARAM.group) ?? "";
+  const page = Number(search.get(ORDER_PARAM.page));
+  const from = search.get(ORDER_PARAM.from) ?? "";
+  const to = search.get(ORDER_PARAM.to) ?? "";
+  const order = search.get(ORDER_PARAM.order);
+  return {
+    search: (search.get(ORDER_PARAM.search) ?? "").slice(0, 100),
+    group: (STATUS_GROUPS as readonly string[]).includes(group) ? (group as StatusGroup) : "",
+    from: ISO_DATE.test(from) ? from : "",
+    to: ISO_DATE.test(to) ? to : "",
+    onlyOpen: search.get(ORDER_PARAM.onlyOpen) === "1",
+    page: Number.isInteger(page) && page > 1 ? page : 1,
+    order: order && /^[A-Za-z0-9-]{1,64}$/.test(order) ? order : null,
+  };
+}
+
+/**
+ * Apply a change to the filters, keeping every other parameter.
+ *
+ * Changing what is asked for sends you back to page 1: page 7 of the old
+ * filter is not page 7 of the new one. Opening or closing a guide, or moving
+ * between pages, keeps the rest as it is.
+ */
+export function writeOrderFilters(
+  current: URLSearchParams,
+  patch: Partial<OrderFilters>,
+): URLSearchParams {
+  const next = new URLSearchParams(current.toString());
+  const merged = { ...readOrderFilters(current), ...patch };
+  const narrows = (["search", "group", "from", "to", "onlyOpen"] as const).some(
+    (key) => key in patch,
+  );
+  if (narrows && !("page" in patch)) merged.page = 1;
+
+  const set = (key: string, value: string | null) => {
+    if (value) next.set(key, value);
+    else next.delete(key);
+  };
+  set(ORDER_PARAM.search, merged.search.trim() || null);
+  set(ORDER_PARAM.group, merged.group || null);
+  set(ORDER_PARAM.from, merged.from || null);
+  set(ORDER_PARAM.to, merged.to || null);
+  set(ORDER_PARAM.onlyOpen, merged.onlyOpen ? "1" : null);
+  set(ORDER_PARAM.page, merged.page > 1 ? String(merged.page) : null);
+  set(ORDER_PARAM.order, merged.order);
+  return next;
+}
+
+export function hasOrderFilters(filters: OrderFilters): boolean {
+  return (
+    filters.search.trim() !== "" ||
+    filters.group !== "" ||
+    filters.from !== "" ||
+    filters.to !== "" ||
+    filters.onlyOpen
+  );
 }
