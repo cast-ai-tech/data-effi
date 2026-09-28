@@ -118,6 +118,14 @@ export default function CountryDashboard() {
         <EmptyState
           title={`${countryCode} no está activo en tu workspace`}
           instruction="Actívalo en Configuración para ver su tablero."
+          action={
+            <Link
+              href="/settings"
+              className="rounded-control bg-accent px-3.5 py-2 text-sm font-semibold text-on-accent no-underline"
+            >
+              Ir a Configuración
+            </Link>
+          }
         />
       </AppShell>
     );
@@ -188,10 +196,7 @@ export default function CountryDashboard() {
 
       {error && (
         <Card>
-          <EmptyState
-            title="No se pudo cargar el tablero"
-            instruction="Revisa que la API esté corriendo y vuelve a intentarlo."
-          />
+          <ErrorState message={error.message} onRetry={refreshLayout} />
         </Card>
       )}
 
@@ -201,7 +206,23 @@ export default function CountryDashboard() {
         <Card>
           <EmptyState
             title="Esta pestaña todavía no tiene datos"
-            instruction="Sube un reporte en Cargar datos o conecta una plataforma en Configuración → Conexiones."
+            instruction="Sube el reporte de guías de tu plataforma, o conéctala para que los datos lleguen solos."
+            action={
+              <div className="flex flex-wrap justify-center gap-2">
+                <Link
+                  href={`/${countryCode.toLowerCase()}/cargar`}
+                  className="rounded-control bg-accent px-3.5 py-2 text-sm font-semibold text-on-accent no-underline"
+                >
+                  Cargar datos
+                </Link>
+                <Link
+                  href="/connections"
+                  className="rounded-control border border-line-strong px-3.5 py-2 text-sm font-semibold text-ink-2 no-underline hover:border-accent"
+                >
+                  Ir a Conexiones
+                </Link>
+              </div>
+            }
           />
         </Card>
       )}
