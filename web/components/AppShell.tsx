@@ -71,18 +71,20 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   const rail = collapsed && !drawerOpen;
   const { range, field } = useDateRange();
 
-  // The long-poll runs only while a signed-in screen is on: the login page
-  // never mounts this shell, so it never asks `/events` without a session.
-  const { setActive } = useNotifications();
-  useEffect(() => {
-    setActive(true);
-    return () => setActive(false);
-  }, [setActive]);
-
   const { data: user } = useApi<User>("/auth/me");
   // Nothing company-scoped is asked for until the person stands in a company:
   // right after registering there is none, and every such call would be a 403.
   const hasCompany = Boolean(user?.tenant_id);
+
+  // The long-poll runs only while a signed-in screen is on: the login page
+  // never mounts this shell, so it never asks `/events` without a session.
+  // Notifications and events belong to a company too, so the loop also waits
+  // until there is one; before, "Crea tu primera empresa" polled two 403s.
+  const { setActive } = useNotifications();
+  useEffect(() => {
+    setActive(hasCompany);
+    return () => setActive(false);
+  }, [setActive, hasCompany]);
   const { data: countries } = useApi<Country[]>(
     hasCompany ? "/config/countries" : null,
   );
