@@ -171,6 +171,8 @@ export interface User {
   org_id: string | null;
   org_name: string | null;
   is_org_admin: boolean;
+  /** Quien opera la plataforma. Solo esa persona cambia las tasas globales. */
+  is_platform_admin?: boolean;
   /** admin | analyst | viewer sobre el holding. Distinto de `role`, que aplica
    *  dentro de la sociedad donde estás parado. */
   org_role: OrgRole | null;

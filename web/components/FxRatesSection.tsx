@@ -48,7 +48,9 @@ export function FxRatesSection({ onError }: { onError: (message: string) => void
   const { data: rates, loading, reload } = useApi<FxRate[]>("/config/fx");
   const [editing, setEditing] = useState<string | null>(null);
 
-  const canEdit = (user?.capabilities ?? []).includes("config");
+  // `core.fx_rate` es una sola tabla para todas las organizaciones: la API solo
+  // deja cambiarla a quien opera la plataforma (PUT /config/fx).
+  const canEdit = user?.is_platform_admin === true;
 
   return (
     <Card

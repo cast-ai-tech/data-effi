@@ -472,6 +472,7 @@ def me(user: CurrentUserDep, conn: UnscopedDbDep) -> UserResponse:
         conn,
         """
         SELECT u.id, u.email, u.full_name, u.created_at, u.is_org_admin,
+               u.is_platform_admin,
                u.org_id, o.name AS org_name,
                t.id AS tenant_id, t.name AS tenant_name
         FROM core.app_user u
@@ -487,6 +488,7 @@ def me(user: CurrentUserDep, conn: UnscopedDbDep) -> UserResponse:
     workspaces = _workspaces(conn, user.id)
     org_role = _org_role(conn, user.id)
     row["is_org_admin"] = bool(row.get("is_org_admin")) or org_role == "admin"
+    row["is_platform_admin"] = bool(row.get("is_platform_admin"))
     subscription = (
         SubscriptionSummary(**subscription_state(conn, row["org_id"]).as_dict())
         if row.get("org_id")

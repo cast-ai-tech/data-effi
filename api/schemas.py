@@ -112,6 +112,9 @@ class TokenResponse(BaseModel):
     tenant_name: str | None = None
     role: Role | None = None
     is_org_admin: bool = False
+    # Quien opera la plataforma (migración 053). Solo decide qué botones ve la
+    # web; cada endpoint lo vuelve a leer de la base con require_platform_admin.
+    is_platform_admin: bool = False
     org_role: OrgRole | None = None
     countries: list[str] | None = None
     workspaces: list[WorkspaceSummary] = Field(default_factory=list)
