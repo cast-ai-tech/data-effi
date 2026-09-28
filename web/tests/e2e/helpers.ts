@@ -69,7 +69,60 @@ export async function logIn(
   await expect(page).not.toHaveURL(/\/login/, { timeout: 30_000 });
 }
 
-export type Problem = { kind: "console" | "pageerror" | "request"; text: string };
+export type Merchant = { email: string; password: string; token: string; tenantId: string };
+
+async function apiCall<T>(
+  path: string,
+  init: { method?: string; body?: unknown; token?: string } = {},
+): Promise<T> {
+  const response = await fetch(`${API_URL}${path}`, {
+    method: init.method ?? "GET",
+    headers: {
+      "content-type": "application/json",
+      ...(init.token ? { authorization: `Bearer ${init.token}` } : {}),
+    },
+    body: init.body === undefined ? undefined : JSON.stringify(init.body),
+  });
+  const text = await response.text();
+  if (!response.ok) throw new Error(`${init.method ?? "GET"} ${path} -> ${response.status}: ${text}`);
+  return (text ? JSON.parse(text) : null) as T;
+}
+
+/**
+ * A brand-new merchant with one company in `countries`, built through the API
+ * so a spec about uploads does not also re-test registration. The token is
+ * the one standing in that company.
+ */
+export async function createMerchant(
+  prefix: string,
+  countries: string[] = ["CO"],
+): Promise<Merchant> {
+  const email = uniqueEmail(prefix);
+  const password = "clave-e2e-segura-01";
+  await apiCall("/auth/register", {
+    method: "POST",
+    body: { email, password, full_name: `E2E ${prefix}` },
+  });
+  const first = await apiCall<{ access_token: string }>("/auth/login", {
+    method: "POST",
+    body: { email, password },
+  });
+  const tenant = await apiCall<{ tenant_id: string }>("/org/tenants", {
+    method: "POST",
+    token: first.access_token,
+    body: { name: `Empresa ${prefix}`, countries, company_type: "dropshipping" },
+  });
+  const switched = await apiCall<{ access_token: string }>("/auth/switch", {
+    method: "POST",
+    token: first.access_token,
+    body: { tenant_id: tenant.tenant_id },
+  });
+  return { email, password, token: switched.access_token, tenantId: tenant.tenant_id };
+}
+
+export { apiCall };
+
+export type Problem ={ kind: "console" | "pageerror" | "request"; text: string };
 
 /**
  * Collects console errors, uncaught exceptions and failed network requests.
