@@ -898,10 +898,23 @@ def list_jobs(
     conn: DbDep,
     user: CurrentUserDep,
     limit: Annotated[int, Query(ge=1, le=100)] = 20,
+    country: Annotated[
+        str | None,
+        Query(
+            min_length=2,
+            max_length=2,
+            description=(
+                "Solo las cargas de este país. La pantalla Cargar datos de un país la usa "
+                "para volver a mostrar lo que sigue procesándose al regresar a ella."
+            ),
+        ),
+    ] = None,
 ) -> list[UploadJobResponse]:
     # El país de una carga vive en su conexión, no en la carga: duplicarlo sería
     # una segunda fuente de verdad. Por eso el alcance se aplica con un JOIN.
     scope_sql, scope_params = country_scope_sql(user, "c.country_code")
+    country_sql = " AND c.country_code = %s" if country else ""
+    country_params: tuple[str, ...] = (country.upper(),) if country else ()
     rows = fetch_all(
         conn,
         f"""
@@ -909,10 +922,10 @@ def list_jobs(
                j.queued_at, j.finished_at
         FROM raw.upload_job j
         JOIN core.connection c ON c.id = j.connection_id
-        WHERE j.tenant_id = %s{scope_sql}
+        WHERE j.tenant_id = %s{scope_sql}{country_sql}
         ORDER BY j.queued_at DESC LIMIT %s
         """,
-        (user.tenant_id, *scope_params, limit),
+        (user.tenant_id, *scope_params, *country_params, limit),
     )
     return [UploadJobResponse(**row) for row in rows]
 
