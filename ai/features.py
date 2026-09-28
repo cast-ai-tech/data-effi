@@ -822,6 +822,15 @@ def _execute_readonly(sql: str, tenant_id: UUID) -> tuple[list[dict[str, Any]], 
     The role can only SELECT from mart, its search_path is mart, and the
     statement timeout means a pathological query dies in five seconds instead of
     holding a connection.
+
+    TODO EN UNA SOLA TRANSACCIÓN, con SET LOCAL. El pool es autocommit y va por el
+    transaction pooler de Supabase (6543): cada sentencia suelta es su propia
+    transacción y puede caer en otro backend. Con `set_config(..., false)` el
+    tenant quedaba fijado a nivel de SESIÓN en un backend y el SELECT podía correr
+    en otro que arrastraba el tenant de OTRO cliente de una consulta anterior - las
+    vistas mart filtran por `core.current_tenant_id()`, así que el copiloto podía
+    responder con datos ajenos. Dentro de `conn.transaction()` las tres
+    configuraciones y la consulta van al mismo backend y mueren con el COMMIT.
     """
     pool = get_readonly_pool()
     if pool is None:
@@ -834,16 +843,18 @@ def _execute_readonly(sql: str, tenant_id: UUID) -> tuple[list[dict[str, Any]], 
     from psycopg.rows import dict_row
 
     with pool.connection() as conn:
-        with conn.cursor() as cur:
-            cur.execute(f"SET statement_timeout = {STATEMENT_TIMEOUT_MS}")
-            cur.execute("SET search_path = mart")
-            cur.execute("SELECT set_config('norte.tenant_id', %s, false)", (str(tenant_id),))
-
         try:
-            with conn.cursor(row_factory=dict_row) as cur:
-                cur.execute(sql)
-                rows = cur.fetchmany(MAX_ROWS)
-                columns = [desc.name for desc in (cur.description or [])]
+            with conn.transaction():
+                with conn.cursor() as cur:
+                    cur.execute(f"SET LOCAL statement_timeout = {STATEMENT_TIMEOUT_MS}")
+                    cur.execute("SET LOCAL search_path = mart")
+                    cur.execute(
+                        "SELECT set_config('norte.tenant_id', %s, true)", (str(tenant_id),)
+                    )
+                with conn.cursor(row_factory=dict_row) as cur:
+                    cur.execute(sql)
+                    rows = cur.fetchmany(MAX_ROWS)
+                    columns = [desc.name for desc in (cur.description or [])]
         except Exception as exc:
             logger.warning("read-only execution failed: %s", type(exc).__name__)
             raise AiUnavailable(

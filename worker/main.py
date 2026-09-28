@@ -14,6 +14,8 @@ from __future__ import annotations
 import logging
 import signal
 import sys
+from collections.abc import Iterator
+from contextlib import contextmanager
 from typing import Any
 
 import psycopg
@@ -35,17 +37,55 @@ from worker.jobs import (
 logger = logging.getLogger("masterdata.worker")
 
 
-def _connect() -> psycopg.Connection:
+@contextmanager
+def _connect() -> Iterator[psycopg.Connection]:
     """Open a worker connection.
 
     Declares the service context so row-level security lets these jobs see every
     tenant - which is the point of a worker. See migration 007.
+
+    POR QUÉ EL SESSION POOLER Y POR QUÉ EL RESET AL FINAL. El worker depende de
+    estado de SESIÓN: `norte.service`, el `norte.tenant_id` que fija
+    `_scope_session` y los `pg_try_advisory_lock` de `run_job`. Por el transaction
+    pooler (6543, `DATABASE_URL`) cada transacción puede caer en otro backend: el
+    `norte.service = 'on'` se quedaba en un backend compartido con la API - y ahí
+    la política de RLS deja ver TODOS los tenants a la siguiente petición que lo
+    reciba -, y un advisory lock tomado en un backend no se suelta desde otro. Por
+    eso va por `DATABASE_URL_INGEST` (session pooler, un backend fijo) cuando está
+    configurada, y antes de cerrar se limpia lo que se fijó para que el backend no
+    vuelva al pool con el contexto de servicio puesto.
     """
-    conn = db_connect(get_settings().database_url, autocommit=False)
-    with conn.cursor() as cur:
-        cur.execute("SELECT set_config('norte.service', 'on', false)")
-    conn.commit()
-    return conn
+    settings = get_settings()
+    conn = db_connect(settings.database_url_ingest or settings.database_url, autocommit=False)
+    try:
+        with conn.cursor() as cur:
+            cur.execute("SELECT set_config('norte.service', 'on', false)")
+        conn.commit()
+        try:
+            yield conn
+        except BaseException:
+            conn.rollback()
+            raise
+        conn.commit()
+    finally:
+        _reset_session(conn)
+        conn.close()
+
+
+def _reset_session(conn: psycopg.Connection) -> None:
+    """Deja el backend limpio antes de devolverlo al pooler. Nunca falla hacia arriba."""
+    try:
+        if not conn.closed:
+            conn.rollback()
+            with conn.cursor() as cur:
+                cur.execute(
+                    "SELECT set_config('norte.service', '', false), "
+                    "set_config('norte.tenant_id', '', false), "
+                    "pg_advisory_unlock_all()"
+                )
+            conn.commit()
+    except psycopg.Error:
+        logger.warning("worker: no se pudo limpiar la sesión antes de cerrar", exc_info=True)
 
 
 def run_named_job(job_name: str) -> dict[str, Any]:
