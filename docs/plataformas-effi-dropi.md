@@ -246,6 +246,92 @@ país y de una plataforma. `/ingest` sigue existiendo solo para reenviar — al 
 uno, o a una lista de países si hay varios — para que los enlaces viejos y el botón del
 onboarding no se rompan.
 
+## 8b. Conectar Effi con la extensión del navegador (migración 070)
+
+El login de Effi (`/ingreso`) lleva un reCAPTCHA v2 invisible: el servidor no puede
+entrar con usuario y contraseña (`connectors/effi/auth.py` lo detecta como
+`CaptchaRequired` y nunca manda la contraseña). La salida elegida: **el comerciante
+entra a Effi en su propio navegador** y la extensión `extension/effi-connector` le
+entrega a Master Data la cookie de sesión (`ci_session`). Master Data nunca ve la
+contraseña.
+
+### Instalar la extensión ("cargar extensión descomprimida")
+
+La extensión no está en ninguna tienda: se carga desde la carpeta.
+
+**Chrome**
+1. Abre `chrome://extensions`.
+2. Activa **Modo de desarrollador** (arriba a la derecha).
+3. **Cargar extensión sin empaquetar** → elige la carpeta `extension/effi-connector`.
+4. Fíjala con el ícono del rompecabezas para tenerla a mano.
+
+**Opera**
+1. Abre `opera://extensions`.
+2. Activa **Modo de desarrollador**.
+3. **Cargar desempaquetada** → la misma carpeta `extension/effi-connector`.
+
+Por defecto envía a `https://master-data-api.onrender.com`. Para otro servidor hay dos
+caminos: cambiar `apiBase` en `config.js` **y** el mismo origen en `host_permissions` de
+`manifest.json` (si solo cambias uno, el navegador bloquea el envío), o usar
+«Servidor de Data Effi» dentro de la ventanita, que pide permiso solo para ese origen.
+
+Permisos que pide: `cookies`, `storage`, y acceso únicamente a `effi.com.co` y al
+servidor de Master Data. Sin código remoto, sin analítica. No lee páginas ni
+formularios.
+
+### El flujo, de punta a punta
+
+1. **Dueño, en la app**: Configuración → Conexiones → Effi → *Gestionar* →
+   **Conectar con la extensión**. Acepta la autorización y pulsa *Generar código*
+   (`POST /config/effi/connections/{id}/pairing`, solo `owner`, dentro de su empresa y
+   de sus países). Sale un código `XXXX-XXXX-XXXX` que **dura 10 minutos, sirve una
+   vez** y deja muerto cualquier código anterior de esa conexión. La base guarda solo
+   su SHA-256 (`core.connection_pairing`).
+2. **Comerciante, en su navegador**: entra a Effi normalmente (resuelve el captcha),
+   abre la extensión, pega el código y pulsa **Enviar sesión a Data Effi**.
+3. **Extensión → API**: `POST /config/effi/pairing/redeem` con `{code, cookies,
+   user_agent}`. Sin JWT: el código es la credencial. Solo viajan las cookies de la
+   lista de sesión (`ci_session`); analítica y demás se quedan en el navegador.
+4. **API**: límite por IP (`RATE_LIMIT_EFFI_PAIRING_PER_MINUTE`, 10/min) antes de mirar
+   el código → valida la cookie (sin gastar el código si falta) → **reclama el código
+   de forma atómica** (un solo uso aunque lleguen dos a la vez) → guarda la sesión
+   **cifrada** en `core.connection_credential` (`auth_mode = 'browser_session'`, sin
+   contraseña) → pasa la conexión a `source_mode = 'session'` con la autorización del
+   dueño → corre el mismo «Probar conexión» de siempre y le contesta a la extensión
+   cómo quedó. La conexión y la empresa salen **del código**, nunca del cuerpo: un
+   código no puede escribir en otra empresa.
+5. **App**: el panel consulta `GET /config/effi/connections/{id}/pairing/{pairing_id}`
+   cada 3 s hasta ver el resultado y refresca la conexión.
+6. **Worker**: `job_sync_tier3` usa esa sesión tal cual (sin login). Cuando Effi deja
+   de aceptarla, la conexión pasa a `status = 'error'` y
+   `credential_status = 'session_expired'`, se borra la sesión guardada y suena la
+   campana: **«Tu sesión de Effi venció: vuelve a enviarla desde la extensión»**. No se
+   reintenta: la consulta del worker excluye `session_expired`. Enviar una sesión nueva
+   la reactiva.
+
+Cada fila de `core.connection_pairing` es también la bitácora: quién generó el código,
+cuándo se canjeó, desde qué IP, con qué User-Agent y cómo terminó (`outcome`). Nunca la
+cookie.
+
+### Variables de entorno nuevas
+
+| Variable | Para qué |
+|---|---|
+| `RATE_LIMIT_EFFI_PAIRING_PER_MINUTE` | Canjes por IP y minuto (10). |
+| `EFFI_EXTENSION_ORIGINS` | Orígenes `chrome-extension://<id>` permitidos por CORS **solo** en el canje. Vacío = cualquier extensión (el código es lo que autoriza). |
+| `EFFI_SESSION_COOKIE` | Ya existía: nombre de la cookie de sesión (`ci_session`). |
+| `EFFI_EXTRA_SESSION_COOKIES` | Cookies adicionales si Effi resultara necesitarlas (y agregarlas en `config.js`). |
+| `EFFI_REPLAY_BROWSER_USER_AGENT` | `true` para que el worker mande el User-Agent del navegador del comerciante en vez del nuestro. Apagado por defecto (regla de no disfrazarse); encenderlo solo si Effi rechaza la sesión porque la ata al navegador. |
+
+### Lo que falta comprobar con una cuenta real de Effi
+
+- Si `ci_session` sirve desde la IP del servidor (Render) y con otro User-Agent
+  (CodeIgniter puede atar la sesión a IP o navegador).
+- Si la sesión cabe en esa sola cookie o Effi usa otra más.
+- Cuánto dura la sesión en el servidor de Effi (la cookie puede ser "de sesión" y aun
+  así morir antes).
+- Si abrir Effi en el navegador después de enviar la sesión la invalida (sesión única).
+
 ## 9. Lo que queda pendiente
 
 - **Guías ya cargadas como `manual_xlsx`.** Las 1.649 guías de EC entraron por la
