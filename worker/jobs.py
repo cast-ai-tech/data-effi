@@ -419,7 +419,9 @@ def job_sync_tier3(
     from connectors.effi.session_fetcher import (
         ConsentError,
         FetchError,
+        PermissionDeniedError,
         SessionExpiredError,
+        TransientFetchError,
     )
 
     results: list[dict[str, Any]] = []
@@ -458,39 +460,37 @@ def job_sync_tier3(
             "name": connection_row["name"],
         }
         try:
-            fetcher = _build_tier3_fetcher(conn, connection_row)
-            store = PostgresStore(conn)
-            engine = IngestEngine(store, pii_salt=pii_salt)
-            ingested = []
-
-            for kind in (BatchKind.SHIPMENTS, BatchKind.MOVEMENTS):
-                fetch = fetcher.fetch_report(kind, date_from=date_from, date_to=date_to)
-                report = engine.ingest(
-                    payload=fetch.payload,
-                    source_name=fetch.filename,
-                    kind=kind,
-                    tenant_id=connection_row["tenant_id"],
-                    connection_id=connection_row["id"],
-                    country_code=connection_row["country_code"],
-                    platform_code=connection_row["platform_code"],
-                    default_currency=connection_row["currency_code"],
-                )
-                conn.commit()
-                ingested.append(
-                    {
-                        "kind": kind.value,
-                        "already_loaded": report.already_loaded,
-                        "inserted": report.rows_inserted,
-                        "updated": report.rows_updated,
-                    }
-                )
-            entry["ingested"] = ingested
+            entry["ingested"] = _sync_one_tier3(
+                conn, connection_row, pii_salt=pii_salt,
+                date_from=date_from, date_to=date_to,
+            )
+            _mark_connection_synced(conn, connection_row["id"])
             entry["status"] = "ok"
 
+        except TransientFetchError as exc:
+            # Effi down, slow or rate-limiting, or automatic login not possible
+            # yet. Nothing the merchant can fix: say so on the connection, but
+            # leave it `active` so the next scheduled run tries again. Parking it
+            # in `error` here used to stop the sync for good - the worker never
+            # selects an `error` row again.
+            conn.rollback()
+            _note_connection_error(conn, connection_row["id"], str(exc))
+            entry["status"] = "retry_later"
+            entry["error"] = str(exc)
+        except PermissionDeniedError as exc:
+            conn.rollback()
+            _mark_connection_error(
+                conn, connection_row["id"], str(exc),
+                credential_status="insufficient_permissions",
+            )
+            entry["status"] = "needs_permissions"
+            entry["error"] = str(exc)
         except (ConsentError, SessionExpiredError) as exc:
             # These need a human. Mark the connection so the UI can ask.
             conn.rollback()
-            _mark_connection_error(conn, connection_row["id"], str(exc))
+            _mark_connection_error(
+                conn, connection_row["id"], str(exc), credential_status="expired"
+            )
             entry["status"] = "needs_reauthorization"
             entry["error"] = str(exc)
         except FetchError as exc:
@@ -498,18 +498,97 @@ def job_sync_tier3(
             _mark_connection_error(conn, connection_row["id"], str(exc))
             entry["status"] = "error"
             entry["error"] = str(exc)
+        except Exception as exc:
+            # One merchant's odd file must not abort the sync for every other
+            # merchant queued behind it - which is what an exception escaping
+            # this loop used to do. Recorded, left active, retried next run.
+            logger.exception("tier3 sync failed for connection %s", connection_row["id"])
+            conn.rollback()
+            message = (
+                "No se pudo procesar el reporte descargado de Effi "
+                f"({type(exc).__name__}). Se reintentará en la siguiente sincronización."
+            )
+            _note_connection_error(conn, connection_row["id"], message)
+            entry["status"] = "error"
+            entry["error"] = message
 
         results.append(entry)
 
     return {"connections": results, "count": len(results)}
 
 
-def _build_tier3_fetcher(conn: psycopg.Connection, row: dict[str, Any]) -> Any:
+def _sync_one_tier3(
+    conn: psycopg.Connection, row: dict[str, Any], *, pii_salt: str,
+    date_from: date, date_to: date,
+) -> list[dict[str, Any]]:
+    """Download and ingest every report of one connection.
+
+    A stored session can die before the twelve hours we assume it lasts (Effi
+    logged it out, the merchant logged in elsewhere). When that happens to a
+    session we REUSED, the stored password is still perfectly good: forget the
+    session, log in once, and carry on. Without this the connection went to
+    `error` and the merchant was asked to retype a password that was fine.
+
+    Only once, and only for a reused session - a session we have just obtained
+    by logging in that is rejected straight away is a real problem, and a second
+    login would just be the retry loop the auth module forbids.
+    """
+    from connectors.effi.session_fetcher import SessionExpiredError
+
+    fetcher, can_relogin = _build_tier3_fetcher(conn, row)
+    engine = IngestEngine(PostgresStore(conn), pii_salt=pii_salt)
+    ingested: list[dict[str, Any]] = []
+
+    for kind in (BatchKind.SHIPMENTS, BatchKind.MOVEMENTS):
+        try:
+            fetch = fetcher.fetch_report(kind, date_from=date_from, date_to=date_to)
+        except SessionExpiredError:
+            if not can_relogin:
+                raise
+            from api import credentials
+
+            logger.info("stored effi session rejected early; logging in again once")
+            credentials.clear_credential(
+                conn, connection_id=row["id"], tenant_id=row["tenant_id"]
+            )
+            conn.commit()
+            fetcher, _ = _build_tier3_fetcher(conn, row)
+            can_relogin = False
+            fetch = fetcher.fetch_report(kind, date_from=date_from, date_to=date_to)
+
+        report = engine.ingest(
+            payload=fetch.payload,
+            source_name=fetch.filename,
+            kind=kind,
+            tenant_id=row["tenant_id"],
+            connection_id=row["id"],
+            country_code=row["country_code"],
+            platform_code=row["platform_code"],
+            default_currency=row["currency_code"],
+        )
+        conn.commit()
+        ingested.append(
+            {
+                "kind": kind.value,
+                "already_loaded": report.already_loaded,
+                "inserted": report.rows_inserted,
+                "updated": report.rows_updated,
+            }
+        )
+    return ingested
+
+
+def _build_tier3_fetcher(conn: psycopg.Connection, row: dict[str, Any]) -> tuple[Any, bool]:
     """Get a fetcher for one tier-3 connection, from an env var or from the vault.
+
+    Returns `(fetcher, reused_stored_session)`. The flag is True only when the
+    session came out of the vault without logging in - the one case where a
+    rejection can be answered with a fresh login instead of a human.
 
     Raises FetchError with a message aimed at whoever has to fix it - which is a
     different person in each case. A missing env var is for the administrator; a
-    missing credential is for the merchant.
+    missing credential is for the merchant. Raises TransientFetchError when
+    nobody has to fix anything and the next run should simply try again.
     """
     from connectors.effi.auth import (
         AccountLocked,
@@ -518,12 +597,21 @@ def _build_tier3_fetcher(conn: psycopg.Connection, row: dict[str, Any]) -> Any:
         LoginContractUnverified,
         LoginUnavailable,
     )
-    from connectors.effi.session_fetcher import EffiSessionFetcher, FetchError, SessionExpiredError
+    from connectors.effi.session_fetcher import (
+        EffiSessionFetcher,
+        FetchError,
+        SessionExpiredError,
+        TransientFetchError,
+    )
 
     if row.get("secret_ref"):
-        return EffiSessionFetcher.from_env(
-            secret_ref=row["secret_ref"],
-            consent_granted_at=row["consent_granted_at"],
+        # A pasted session cannot be renewed from here: no re-login.
+        return (
+            EffiSessionFetcher.from_env(
+                secret_ref=row["secret_ref"],
+                consent_granted_at=row["consent_granted_at"],
+            ),
+            False,
         )
 
     from api import credentials
@@ -543,8 +631,14 @@ def _build_tier3_fetcher(conn: psycopg.Connection, row: dict[str, Any]) -> Any:
             )
     except LookupError as exc:
         raise FetchError(str(exc)) from None
-    except (CredentialUnreadable, VaultKeyMissing) as exc:
-        raise FetchError(str(exc)) from None
+    except CredentialUnreadable as exc:
+        # The merchant has to type the password again: that is a re-authorisation,
+        # and the handler marks the connection `expired` so the screen asks.
+        raise SessionExpiredError(str(exc)) from None
+    except VaultKeyMissing as exc:
+        # The SERVER is misconfigured. Parking the merchant's connection over it
+        # would outlive the fix; retry next run instead.
+        raise TransientFetchError(str(exc)) from None
     except InvalidCredentials as exc:
         # A wrong password is terminal. Writing `invalid` here is what stops the
         # next scheduled pass from trying the same password again and walking the
@@ -561,9 +655,12 @@ def _build_tier3_fetcher(conn: psycopg.Connection, row: dict[str, Any]) -> Any:
         )
         raise SessionExpiredError(str(exc)) from None
     except LoginContractUnverified as exc:
-        raise FetchError(str(exc)) from None
+        # Automatic login is not possible yet (unverified contract, or Effi's
+        # captcha). Nobody did anything wrong - the connection must not be
+        # parked in `error` for it, which is what used to happen on every run.
+        raise TransientFetchError(str(exc)) from None
     except LoginUnavailable as exc:
-        raise FetchError(str(exc)) from None
+        raise TransientFetchError(str(exc)) from None
 
     if did_login:
         credentials.save_session(
@@ -575,8 +672,11 @@ def _build_tier3_fetcher(conn: psycopg.Connection, row: dict[str, Any]) -> Any:
         )
         conn.commit()
 
-    return EffiSessionFetcher.from_session(
-        session, consent_granted_at=row["consent_granted_at"]
+    return (
+        EffiSessionFetcher.from_session(
+            session, consent_granted_at=row["consent_granted_at"]
+        ),
+        not did_login,
     )
 
 
@@ -660,11 +760,63 @@ def _mark_credential_status(
     conn.commit()
 
 
-def _mark_connection_error(conn: psycopg.Connection, connection_id: UUID, message: str) -> None:
+def _mark_connection_error(
+    conn: psycopg.Connection, connection_id: UUID, message: str,
+    *, credential_status: str | None = None,
+) -> None:
+    """Park a connection that needs a human. The worker skips it from now on.
+
+    `credential_status`, when given, is written only for connections that
+    actually hold a vault credential, and never over `invalid`/`locked`: those
+    are the terminal words that stop the login loop, and a later, vaguer error
+    must not soften them.
+    """
     with conn.cursor() as cur:
         cur.execute(
             "UPDATE core.connection SET status = 'error', last_error = %s WHERE id = %s",
             (message[:1000], connection_id),
+        )
+        if credential_status:
+            cur.execute(
+                """
+                UPDATE core.connection c
+                   SET credential_status = %s
+                 WHERE c.id = %s
+                   AND c.credential_status NOT IN ('invalid', 'locked')
+                   AND EXISTS (SELECT 1 FROM core.connection_credential cc
+                                WHERE cc.connection_id = c.id)
+                """,
+                (credential_status, connection_id),
+            )
+            if credential_status == "expired":
+                # A session that was rejected is worthless; do not replay it.
+                cur.execute(
+                    """
+                    UPDATE core.connection_credential
+                       SET session_enc = NULL, session_expires_at = NULL, updated_at = now()
+                     WHERE connection_id = %s
+                    """,
+                    (connection_id,),
+                )
+    conn.commit()
+
+
+def _note_connection_error(conn: psycopg.Connection, connection_id: UUID, message: str) -> None:
+    """Record why this run failed WITHOUT taking the connection out of the schedule."""
+    with conn.cursor() as cur:
+        cur.execute(
+            "UPDATE core.connection SET last_error = %s WHERE id = %s",
+            (message[:1000], connection_id),
+        )
+    conn.commit()
+
+
+def _mark_connection_synced(conn: psycopg.Connection, connection_id: UUID) -> None:
+    """A clean run clears the error a previous run left on screen."""
+    with conn.cursor() as cur:
+        cur.execute(
+            "UPDATE core.connection SET last_sync_at = now(), last_error = NULL WHERE id = %s",
+            (connection_id,),
         )
     conn.commit()
 
