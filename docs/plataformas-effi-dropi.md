@@ -270,7 +270,7 @@ La extensión no está en ninguna tienda: se carga desde la carpeta.
 2. Activa **Modo de desarrollador**.
 3. **Cargar desempaquetada** → la misma carpeta `extension/effi-connector`.
 
-Por defecto envía a `https://master-data-api.onrender.com`. Para otro servidor hay dos
+Por defecto envía a `https://master-data-api-zmfq.onrender.com`. Para otro servidor hay dos
 caminos: cambiar `apiBase` en `config.js` **y** el mismo origen en `host_permissions` de
 `manifest.json` (si solo cambias uno, el navegador bloquea el envío), o usar
 «Servidor de Master Data» dentro de la ventanita, que pide permiso solo para ese origen.

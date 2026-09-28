@@ -8,7 +8,7 @@
   "host_permissions": [
     "https://effi.com.co/*",
     "https://*.effi.com.co/*",
-    "https://master-data-api.onrender.com/*"
+    "https://master-data-api-zmfq.onrender.com/*"
   ],
   "optional_host_permissions": ["https://*/*", "http://localhost/*"],
   "action": {

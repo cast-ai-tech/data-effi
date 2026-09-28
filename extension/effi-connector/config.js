@@ -6,7 +6,7 @@
 // archivos, usa «Servidor de Master Data» en la propia ventanita: pide permiso
 // solo para ese origen.
 export const CONFIG = Object.freeze({
-  apiBase: "https://master-data-api.onrender.com",
+  apiBase: "https://master-data-api-zmfq.onrender.com",
   redeemPath: "/config/effi/pairing/redeem",
 
   // Dónde vive Effi. Las cookies se buscan en este dominio y sus subdominios.
