@@ -254,10 +254,32 @@ onboarding no se rompan.
   **mover** `core.shipment`, `core.movement` y `raw.load_batch` de la conexión manual
   a la conexión `effi · file`. Es un UPDATE de datos de producción; se hace con el OK
   del operador.
-- **Conector Dropi por API.** Hoy Dropi entra por archivo. Un conector con credenciales
-  vive en `connectors/dropi/` cuando exista acceso a la API; mientras tanto el catálogo
-  lo dice en `setup_hint`.
+- **Conector Dropi por API — hecho (060–061), sin probar con cuenta real.** Ver §10.
 - **Perfil exacto de Dropi.** `pipeline/profiles.py` reconoce el export de Effi por sus
   encabezados. El de Dropi entra por el mapeo genérico de columnas (040 añade
   `total de la orden`, `precio flete`, `departamento destino`). Con un export real a la
   mano se escribe el perfil y desaparece la ambigüedad.
+
+## 10. Dropi por API (migraciones 060–061, `connectors/dropi/`)
+
+Una conexión Dropi de un país recibe datos por archivo **o** por API; la plataforma
+sigue siendo `auth_type = 'file'` y la vía se dice con `source_mode = 'api'` (042).
+
+- **Credencial.** El token de integración de la cuenta (Dropi → Integraciones), cifrado
+  en `core.connection_credential` con la misma bóveda que la contraseña de Effi. Entra
+  por `PUT /config/dropi/connections/{id}/token` (o al crear con
+  `POST /config/dropi/connections`) y no vuelve a salir.
+- **Mejor en la conexión que ya existe.** La clave de una guía es
+  `(conexión, número de guía)`: pegar el token en la conexión donde ya se sube el export
+  une lo de la API con lo cargado. Crear otra conexión del mismo país se rechaza (409).
+- **Un solo camino a la base.** Las órdenes JSON se escriben como el CSV del export
+  (`connectors/dropi/orders.py`, mismas cabeceras) y entran por `IngestEngine` con el
+  perfil `dropi_ordenes`: mismos estados, misma clave `DROPI-<id>`, mismo cifrado.
+- **Job `sync_dropi`** cada 3 h (:20). Primera pasada: 90 días; después, ventana móvil
+  de 45 días que nunca empieza después del cursor (`core.connection_sync_state`), en
+  tramos de 15 días. 401/403 → `credential_status = 'invalid'`, notificación crítica y
+  no se reintenta; 429/5xx → reintento con espera, y si sigue, solo `last_error`.
+- **Pendiente de cuenta real:** todo lo marcado `TODO verificar con cuenta real` en
+  `connectors/dropi/client.py` y `orders.py` (prefijo `/integrations` fuera de CO/GT,
+  semántica de `start`, tamaño máximo de página, límite de peticiones, nombres de
+  campos de costo de proveedor, transportadora y tienda) y los estados candidatos de 061.
