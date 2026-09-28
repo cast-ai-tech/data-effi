@@ -18,7 +18,7 @@ import { DecisionStrip } from "@/components/DecisionStrip";
 import { DashboardGrid } from "@/components/DashboardGrid";
 import { TABS, type TabKey } from "@/components/widgets/registry";
 import { HelpTip } from "@/components/HelpTip";
-import { Card, EmptyState, SkeletonRows, Tabs, cx } from "@/components/ui";
+import { Card, EmptyState, ErrorState, SkeletonRows, Tabs } from "@/components/ui";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { countryFlag } from "@/lib/format";
 import { TAB_HELP } from "@/lib/glossary";
@@ -72,7 +72,12 @@ export default function CountryDashboard() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [search]);
 
-  const { data: countries, loading: loadingCountries } = useApi<Country[]>(
+  const {
+    data: countries,
+    loading: loadingCountries,
+    error: countriesError,
+    reload: reloadCountries,
+  } = useApi<Country[]>(
     "/config/countries",
   );
   const country = useMemo(
@@ -94,6 +99,18 @@ export default function CountryDashboard() {
     () => (layout?.widgets ?? []).filter((widget) => widget.tab === tab),
     [layout, tab],
   );
+
+  // Without the country row there are no formatting rules and no dashboard;
+  // the header would say "Cargando…" forever.
+  if (!loadingCountries && countriesError) {
+    return (
+      <AppShell>
+        <Card>
+          <ErrorState message={countriesError.message} onRetry={reloadCountries} />
+        </Card>
+      </AppShell>
+    );
+  }
 
   if (!loadingCountries && countries && !country) {
     return (
@@ -178,7 +195,9 @@ export default function CountryDashboard() {
         </Card>
       )}
 
-      {country && widgets.length === 0 && !loadingLayout && (
+      {/* Not after a failed read: "todavía no tiene datos" under "no se pudo
+          cargar" contradicts it and suggests uploading data that is there. */}
+      {country && widgets.length === 0 && !loadingLayout && !error && (
         <Card>
           <EmptyState
             title="Esta pestaña todavía no tiene datos"

@@ -22,7 +22,7 @@ import { useState } from "react";
 
 import { AppShell } from "@/components/AppShell";
 import { OrgStructure } from "@/components/OrgStructure";
-import { Card, Chip, EmptyState, SkeletonRows, cx } from "@/components/ui";
+import { Card, Chip, EmptyState, ErrorState, SkeletonRows, cx } from "@/components/ui";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { api } from "@/lib/api";
 import { useRangedApi } from "@/lib/date-range";
@@ -38,7 +38,7 @@ function usd(value: number | null | undefined): string {
 }
 
 export default function OrganizacionPage() {
-  const { data, loading } = useRangedApi<OrgSummary>("/org/summary");
+  const { data, loading, error, reload } = useRangedApi<OrgSummary>("/org/summary");
   const { data: user } = useApi<User>("/auth/me");
 
   const totals = data?.totals;
@@ -61,7 +61,15 @@ export default function OrganizacionPage() {
 
       {loading && <SkeletonRows rows={4} />}
 
-      {!loading && companies.length === 0 && (
+      {/* A failed read is not "no companies": saying so would invite the
+          reader to create one they already have. */}
+      {!loading && error && (
+        <Card>
+          <ErrorState message={error.message} onRetry={reload} />
+        </Card>
+      )}
+
+      {!loading && !error && companies.length === 0 && (
         <Card>
           <EmptyState
             title="Todavía no hay empresas que consolidar"
@@ -70,7 +78,7 @@ export default function OrganizacionPage() {
         </Card>
       )}
 
-      {!loading && data && companies.length > 0 && (
+      {!loading && !error && data && companies.length > 0 && (
         <>
           {/* Named before any total is read: these companies are NOT in it. */}
           {data.unavailable.length > 0 && (
@@ -81,10 +89,11 @@ export default function OrganizacionPage() {
           )}
 
           <div className="mb-5 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-            <Tile label="Guías" value={formatNumber(totals?.shipments ?? 0, undefined, 0)} />
+            {/* No `?? 0`: a missing total prints "—", never an invented zero. */}
+            <Tile label="Guías" value={formatNumber(totals?.shipments, undefined, 0)} />
             <Tile
               label="Entregadas"
-              value={formatNumber(totals?.delivered ?? 0, undefined, 0)}
+              value={formatNumber(totals?.delivered, undefined, 0)}
               hint={formatPercent(totals?.delivery_rate_pct)}
             />
             <Tile label="Ingresos" value={usd(totals?.revenue_usd)} hint="USD" />
@@ -251,6 +260,7 @@ function OpenCompany({
   disabled: boolean;
 }) {
   const [busy, setBusy] = useState(false);
+  const [failed, setFailed] = useState<string | null>(null);
 
   if (disabled) {
     return <span className="text-base font-semibold text-ink-2">{name}</span>;
@@ -258,23 +268,33 @@ function OpenCompany({
 
   async function open() {
     setBusy(true);
+    setFailed(null);
     try {
       await api.post<Tokens>("/auth/switch", { tenant_id: tenantId });
       window.location.assign("/global");
-    } catch {
+    } catch (err) {
+      // Re-enabling the button in silence read as "the click did nothing".
+      setFailed(err instanceof Error ? err.message : "No se pudo abrir la empresa");
       setBusy(false);
     }
   }
 
   return (
-    <button
-      type="button"
-      onClick={open}
-      disabled={busy}
-      className="text-left text-base font-semibold text-ink-2 hover:text-accent-ink disabled:opacity-60"
-    >
-      {name}
-      {busy && " …"}
-    </button>
+    <>
+      <button
+        type="button"
+        onClick={open}
+        disabled={busy}
+        className="text-left text-base font-semibold text-ink-2 hover:text-accent-ink disabled:opacity-60"
+      >
+        {name}
+        {busy && " …"}
+      </button>
+      {failed && (
+        <span role="alert" className="block text-xs text-negative-ink">
+          {failed}
+        </span>
+      )}
+    </>
   );
 }
