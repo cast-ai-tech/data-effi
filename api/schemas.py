@@ -17,7 +17,7 @@ from decimal import Decimal
 from typing import Annotated, Any, Generic, Literal, TypeVar
 from uuid import UUID
 
-from pydantic import BaseModel, EmailStr, Field, StringConstraints
+from pydantic import BaseModel, EmailStr, Field, StringConstraints, field_validator
 
 # `uploader` is not a rung below `viewer`: it may write loads and may not read a
 # single number. See api/deps.CAPABILITIES for what each one actually unlocks.
@@ -662,7 +662,8 @@ class ConnectionCredentialResponse(BaseModel):
     connection_id: UUID
     username: str
     credential_status: Literal[
-        "none", "ok", "invalid", "expired", "insufficient_permissions", "locked"
+        "none", "ok", "invalid", "expired", "insufficient_permissions", "locked",
+        "session_expired",
     ]
     last_login_at: datetime | None = None
     last_login_error: str | None = None
@@ -698,6 +699,103 @@ class ConnectionPreflightResponse(BaseModel):
     )
     summary: str = Field(description="Una línea que dice qué hacer, no qué pasó.")
     permissions: list[ConnectionPermissionRow]
+    # Migration 070: how the stored account got here. `browser_session` means
+    # the extension sent it and there is no password to show or to change.
+    auth_mode: Literal["password", "browser_session"] | None = None
+
+
+# =============================================================================
+# Conectar Effi con la extensión (migración 070)
+#
+# El código de emparejamiento sale UNA vez, en la respuesta de crearlo. La
+# cookie entra por EffiPairingRedeemRequest y no hay modelo que la devuelva:
+# ni el canje, ni el estado, ni nada. `repr=False` en los dos valores secretos
+# para que un `logger.info("%r", payload)` descuidado tampoco los escriba.
+# =============================================================================
+
+
+class EffiPairingCreateRequest(BaseModel):
+    # Igual que al guardar una contraseña: la autorización se pide en el
+    # momento de conectar, no se hereda de cuando se creó la conexión.
+    consent_granted: bool = Field(
+        default=False,
+        description="Autorizas que Data Effi use tu sesión de Effi para descargar "
+                    "tus propios reportes. Sin esto no se genera el código.",
+    )
+
+
+class EffiPairingResponse(BaseModel):
+    """La única vez que el código se ve en claro."""
+
+    pairing_id: UUID
+    connection_id: UUID
+    code: str = Field(description="Pégalo en la extensión. Sirve una vez y caduca.")
+    expires_at: datetime
+    ttl_seconds: int
+    api_url: str = Field(
+        description="A dónde envía la extensión. Debe coincidir con la que trae instalada."
+    )
+    message: str
+
+
+PairingState = Literal[
+    "pending", "connected", "insufficient_permissions", "session_rejected",
+    "unverified", "expired", "revoked",
+]
+
+
+class EffiPairingStatusResponse(BaseModel):
+    """Lo que la pantalla consulta cada pocos segundos mientras espera."""
+
+    pairing_id: UUID
+    connection_id: UUID
+    state: PairingState
+    credential_status: str
+    summary: str | None = None
+    expires_at: datetime
+    redeemed_at: datetime | None = None
+
+
+# El nombre de una cookie: token de RFC 6265, sin espacios ni separadores.
+_COOKIE_NAME = r"^[A-Za-z0-9_.\-]{1,64}$"
+
+
+class EffiCookie(BaseModel):
+    model_config = {"extra": "ignore"}
+
+    name: Annotated[str, StringConstraints(pattern=_COOKIE_NAME)]
+    value: Annotated[str, StringConstraints(min_length=1, max_length=4096)] = Field(repr=False)
+    # Segundos Unix, como lo da chrome.cookies. Ausente = cookie de sesión.
+    expires_at: float | None = None
+
+    @field_validator("value")
+    @classmethod
+    def _no_header_injection(cls, value: str) -> str:
+        # Se reenvía dentro de un encabezado Cookie. Un `;` metería una cookie
+        # más; un salto de línea, un encabezado más. El mensaje NO repite el
+        # valor: los errores de validación viajan de vuelta al cliente.
+        if any(ch in value for ch in ";,\r\n\t ") or any(ord(ch) < 0x20 or ord(ch) == 0x7F for ch in value):
+            raise ValueError("La cookie trae caracteres que no puede llevar")
+        return value
+
+
+class EffiPairingRedeemRequest(BaseModel):
+    """Lo que manda la extensión. Sin JWT: el código es la credencial."""
+
+    model_config = {"extra": "ignore"}
+
+    code: Annotated[str, StringConstraints(min_length=8, max_length=40)] = Field(repr=False)
+    cookies: list[EffiCookie] = Field(min_length=1, max_length=10)
+    user_agent: Annotated[str, StringConstraints(max_length=512)] | None = None
+
+
+class EffiPairingRedeemResponse(BaseModel):
+    """Lo único que ve quien usa la extensión. Nunca la cookie de vuelta."""
+
+    connected: bool
+    credential_status: str
+    connection_name: str
+    summary: str
 
 
 # =============================================================================

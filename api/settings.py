@@ -90,6 +90,17 @@ class Settings(BaseSettings):
     ingest_max_concurrency: int = 4
     rate_limit_auth_per_minute: int = 10
     rate_limit_ingest_per_minute: int = 30
+    # `POST /config/effi/pairing/redeem` (migration 070) is public: the code in
+    # the body is the whole credential. Low on purpose - a person pastes a code
+    # a handful of times; a script guessing codes is the only thing that needs
+    # more than this.
+    rate_limit_effi_pairing_per_minute: int = 10
+    # Browser-extension origins allowed to call ONLY that redeem endpoint, as
+    # exact `chrome-extension://<id>` values, comma-separated. Empty accepts any
+    # `chrome-extension://` origin (Chrome and Opera both use that scheme, and
+    # an unpacked extension's id changes per install) - safe because the
+    # endpoint sends no cookies and the one-time code is what authorises it.
+    effi_extension_origins: str = ""
     upload_dir: str = "uploads"
     log_level: str = "INFO"
     environment: str = "development"
@@ -145,6 +156,14 @@ class Settings(BaseSettings):
     @property
     def cors_origin_list(self) -> list[str]:
         return [origin.strip() for origin in self.cors_origins.split(",") if origin.strip()]
+
+    @property
+    def effi_extension_origin_list(self) -> list[str]:
+        return [
+            origin.strip().rstrip("/")
+            for origin in self.effi_extension_origins.split(",")
+            if origin.strip()
+        ]
 
     def public_url_for(self, path: str, *, fallback_base: str) -> str:
         """Absolute URL an outside caller can actually reach.
