@@ -307,7 +307,9 @@ async def main_async(args) -> dict:
             for label, same_ip in (("login_misma_ip", True), ("login_ips_distintas", False)):
                 stats = Stats()
 
-                async def one(i: int, same_ip: bool = same_ip, stats: Stats = stats) -> None:
+                async def one(
+                    i: int, same_ip: bool = same_ip, stats: Stats = stats, label: str = label
+                ) -> None:
                     started = time.monotonic()
                     email = ACCOUNTS[i % len(ACCOUNTS)]
                     ip = "203.0.113.7" if same_ip else f"198.51.{i // 250}.{i % 250 + 1}"
