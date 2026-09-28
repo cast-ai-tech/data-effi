@@ -110,7 +110,11 @@ export default function DailyReportPage() {
   const countryCode = (params.country ?? "").toUpperCase();
   const { range, field, platform } = useDateRange();
 
-  const { data: countries } = useApi<Country[]>("/config/countries");
+  const {
+    data: countries,
+    error: countriesError,
+    reload: reloadCountries,
+  } = useApi<Country[]>("/config/countries");
   const country = useMemo(
     () => (countries ?? []).find((item) => item.code === countryCode) ?? null,
     [countries, countryCode],
@@ -137,8 +141,19 @@ export default function DailyReportPage() {
     [range.from, range.to],
   );
 
-  const loading = daily.loading || platforms.loading || !country;
-  const error = daily.error ?? platforms.error;
+  // The country row is needed to format anything. Waiting for it is loading;
+  // but once the list answered (or failed) without it, waiting forever was a
+  // skeleton that never ended.
+  const countryUnknown = countries !== null && country === null;
+  const loading =
+    daily.loading || platforms.loading || (!country && !countriesError && !countryUnknown);
+  const error =
+    countriesError ??
+    (countryUnknown
+      ? new Error(`${countryCode} no está activo en tu workspace.`)
+      : null) ??
+    daily.error ??
+    platforms.error;
 
   const printedOn = useMemo(() => new Date(), []);
   const periodLabel = formatRangeLabel(range, country ?? undefined);
@@ -189,6 +204,7 @@ export default function DailyReportPage() {
           <ErrorState
             message={error.message}
             onRetry={() => {
+              if (countriesError) reloadCountries();
               daily.reload();
               platforms.reload();
             }}

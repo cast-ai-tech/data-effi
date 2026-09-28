@@ -22,7 +22,7 @@ import { useRouter } from "next/navigation";
 import { useState } from "react";
 
 import { AppShell } from "@/components/AppShell";
-import { Button, Card, Chip, EmptyState, SkeletonRows, ThemeToggle } from "@/components/ui";
+import { Button, Card, Chip, EmptyState, ErrorState, SkeletonRows, ThemeToggle } from "@/components/ui";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { ApiError, api } from "@/lib/api";
 import { countryFlag, formatRelative } from "@/lib/format";
@@ -49,7 +49,7 @@ const ORG_ROLE_DETAIL: Record<string, string> = {
 };
 
 export default function CuentaPage() {
-  const { data: user, loading, reload } = useApi<User>("/auth/me");
+  const { data: user, loading, error, reload } = useApi<User>("/auth/me");
 
   return (
     <AppShell>
@@ -58,6 +58,13 @@ export default function CuentaPage() {
       {loading && (
         <Card>
           <SkeletonRows rows={4} />
+        </Card>
+      )}
+
+      {/* Without this a failed read left the page blank under its title. */}
+      {!loading && error && (
+        <Card>
+          <ErrorState message={error.message} onRetry={reload} />
         </Card>
       )}
 
@@ -246,10 +253,14 @@ function PasswordCard() {
     setSaving(true);
     setError(null);
     try {
-      await api.post("/auth/me/password", {
-        current_password: current,
-        new_password: next,
-      });
+      // `auth: false`: a wrong current password comes back as a 401, and that
+      // is an answer to show here, not an expired session to leave the page
+      // over. An expired access token is still renewed and replayed.
+      await api.post(
+        "/auth/me/password",
+        { current_password: current, new_password: next },
+        { auth: false },
+      );
       // Every session died with the change, this one included, and the proxy
       // already cleared the cookies. Going straight to the login screen is
       // honest; staying here would fail on the next request.
@@ -312,7 +323,12 @@ function PasswordCard() {
 // ---------------------------------------------------------------------------
 
 function SessionsCard() {
-  const { data: sessions, loading, reload } = useApi<Session[]>("/auth/me/sessions");
+  const {
+    data: sessions,
+    loading,
+    error: loadError,
+    reload,
+  } = useApi<Session[]>("/auth/me/sessions");
   const [error, setError] = useState<string | null>(null);
 
   async function close(id: string) {
@@ -332,7 +348,11 @@ function SessionsCard() {
     >
       {loading && <SkeletonRows rows={2} />}
 
-      {!loading && (sessions?.length ?? 0) === 0 && (
+      {!loading && loadError && (
+        <ErrorState message={loadError.message} onRetry={reload} />
+      )}
+
+      {!loading && !loadError && (sessions?.length ?? 0) === 0 && (
         <p className="text-sm text-ink-dim">No hay sesiones abiertas.</p>
       )}
 

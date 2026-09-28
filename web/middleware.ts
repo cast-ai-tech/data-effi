@@ -79,7 +79,11 @@ export function middleware(request: NextRequest) {
     request.cookies.has(REFRESH_COOKIE) ||
     request.cookies.has(LEGACY_ACCESS_COOKIE) ||
     request.cookies.has(LEGACY_REFRESH_COOKIE);
-  const isPublic = PUBLIC_PATHS.some((path) => pathname.startsWith(path));
+  // Exact segment match: a bare `startsWith("/login")` also let `/loginx`
+  // through without a session.
+  const isPublic = PUBLIC_PATHS.some(
+    (path) => pathname === path || pathname.startsWith(`${path}/`),
+  );
 
   if (!hasSession && !isPublic) {
     const url = request.nextUrl.clone();

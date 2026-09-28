@@ -21,7 +21,7 @@
  * cree que ya quedó.
  */
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 
 import { WidgetRenderer } from "@/components/WidgetRenderer";
 import { cx } from "@/components/ui";
@@ -47,7 +47,14 @@ export function DashboardGrid({
 }: Props) {
   // El orden que se está viendo. Arranca del servidor y se adelanta a él
   // mientras se arrastra.
-  const [order, setOrder] = useState<LayoutWidget[]>([...widgets]);
+  const [order, setOrderState] = useState<LayoutWidget[]>([...widgets]);
+  // Espejo síncrono del orden: dos cambios seguidos antes de que React vuelva
+  // a pintar deben encadenarse, no partir ambos del mismo orden viejo.
+  const orderRef = useRef(order);
+  const setOrder = useCallback((next: LayoutWidget[]) => {
+    orderRef.current = next;
+    setOrderState(next);
+  }, []);
   const [dragging, setDragging] = useState<string | null>(null);
   const [over, setOver] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -57,7 +64,7 @@ export function DashboardGrid({
   // descarta el local en vez de intentar conciliarlos.
   useEffect(() => {
     setOrder([...widgets]);
-  }, [widgets]);
+  }, [widgets, setOrder]);
 
   /** El ancho efectivo: lo que la persona guardó, o el de fábrica. */
   const widthOf = useCallback(
@@ -70,64 +77,76 @@ export function DashboardGrid({
     [defaultFullWidth],
   );
 
+  // Los guardados van EN FILA, uno detrás de otro. Dos arrastres rápidos
+  // lanzaban dos PUT en paralelo: podían llegar al servidor al revés (gana el
+  // viejo y se pierde el último acomodo sin aviso) y, si el primero fallaba,
+  // su reversión pisaba el segundo movimiento ya pintado.
+  const queue = useRef<Promise<void>>(Promise.resolve());
+  const latest = useRef(0);
+
   const persist = useCallback(
-    async (next: LayoutWidget[], previous: LayoutWidget[]) => {
+    (next: LayoutWidget[], previous: LayoutWidget[]) => {
+      const id = ++latest.current;
       setSaving(true);
       setError(null);
-      try {
-        await api.put(`/kpis/layout?country=${country.code}`, {
-          placements: next.map((widget, index) => ({
-            widget_code: widget.widget_code,
-            sort_order: index + 1,
-            width: widthOf(widget),
-            hidden: false,
-          })),
-        });
-        onSaved?.();
-      } catch {
-        // Revertir es lo honesto: dejar el orden nuevo en pantalla haría creer
-        // que quedó guardado.
-        setOrder(previous);
-        setError(
-          "No se pudo guardar cómo acomodaste el tablero. Intenta otra vez.",
-        );
-      } finally {
-        setSaving(false);
-      }
+      queue.current = queue.current.then(async () => {
+        try {
+          await api.put(`/kpis/layout?country=${country.code}`, {
+            placements: next.map((widget, index) => ({
+              widget_code: widget.widget_code,
+              sort_order: index + 1,
+              width: widthOf(widget),
+              hidden: false,
+            })),
+          });
+          // Solo el último: recargar a mitad de la fila pintaría un orden
+          // intermedio encima de lo que la persona ya movió.
+          if (id === latest.current) onSaved?.();
+        } catch {
+          // Revertir es lo honesto: dejar el orden nuevo en pantalla haría
+          // creer que quedó guardado. Si detrás viene otro guardado, ese manda.
+          if (id === latest.current) setOrder(previous);
+          setError(
+            "No se pudo guardar cómo acomodaste el tablero. Intenta otra vez.",
+          );
+        } finally {
+          if (id === latest.current) setSaving(false);
+        }
+      });
     },
-    [country.code, widthOf, onSaved],
+    [country.code, widthOf, onSaved, setOrder],
   );
 
+  // El PUT sale FUERA del actualizador de estado: React puede llamar un
+  // actualizador dos veces (StrictMode), y cada llamada era un PUT.
   const move = useCallback(
     (from: string, to: string) => {
       if (from === to) return;
-      setOrder((current) => {
-        const fromIndex = current.findIndex((w) => w.widget_code === from);
-        const toIndex = current.findIndex((w) => w.widget_code === to);
-        if (fromIndex < 0 || toIndex < 0) return current;
-        const next = [...current];
-        const [moved] = next.splice(fromIndex, 1);
-        next.splice(toIndex, 0, moved);
-        void persist(next, current);
-        return next;
-      });
+      const current = orderRef.current;
+      const fromIndex = current.findIndex((w) => w.widget_code === from);
+      const toIndex = current.findIndex((w) => w.widget_code === to);
+      if (fromIndex < 0 || toIndex < 0) return;
+      const next = [...current];
+      const [moved] = next.splice(fromIndex, 1);
+      next.splice(toIndex, 0, moved);
+      setOrder(next);
+      persist(next, current);
     },
-    [persist],
+    [persist, setOrder],
   );
 
   const toggleWidth = useCallback(
     (code: string) => {
-      setOrder((current) => {
-        const next = current.map((widget) =>
-          widget.widget_code === code
-            ? { ...widget, width: widthOf(widget) === 2 ? 1 : 2 }
-            : widget,
-        );
-        void persist(next, current);
-        return next;
-      });
+      const current = orderRef.current;
+      const next = current.map((widget) =>
+        widget.widget_code === code
+          ? { ...widget, width: widthOf(widget) === 2 ? 1 : 2 }
+          : widget,
+      );
+      setOrder(next);
+      persist(next, current);
     },
-    [persist, widthOf],
+    [persist, setOrder, widthOf],
   );
 
   const reset = useCallback(async () => {
@@ -152,7 +171,7 @@ export function DashboardGrid({
     } finally {
       setSaving(false);
     }
-  }, [country.code, widgets, defaultFullWidth, onSaved, order]);
+  }, [country.code, widgets, defaultFullWidth, onSaved, order, setOrder]);
 
   return (
     <>

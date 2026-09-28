@@ -495,6 +495,7 @@ function WorkspacePicker({
 }) {
   const [open, setOpen] = useState(false);
   const [switching, setSwitching] = useState<string | null>(null);
+  const [switchError, setSwitchError] = useState<string | null>(null);
 
   const current = user.workspaces.find((ws) => ws.tenant_id === user.tenant_id);
 
@@ -526,6 +527,7 @@ function WorkspacePicker({
       return;
     }
     setSwitching(tenantId);
+    setSwitchError(null);
     try {
       await api.post<Tokens>("/auth/switch", { tenant_id: tenantId });
       // Straight to that company's dashboard: a company lives in one country.
@@ -533,9 +535,11 @@ function WorkspacePicker({
         user.workspaces.find((ws) => ws.tenant_id === tenantId),
       );
       window.location.assign(country ? `/${country.toLowerCase()}` : "/global");
-    } catch {
+    } catch (err) {
+      // The menu used to close in silence, which read as "switched" while the
+      // screen still showed the old company. Keep it open and say why.
       setSwitching(null);
-      setOpen(false);
+      setSwitchError(err instanceof Error ? err.message : "No se pudo cambiar de empresa");
     }
   }
 
@@ -592,6 +596,11 @@ function WorkspacePicker({
 
       {open && (
         <div className="absolute left-2.5 right-2.5 z-50 mt-1 overflow-hidden rounded-control border border-line-strong bg-surface shadow-pop">
+          {switchError && (
+            <p role="alert" className="px-3 py-2 text-xs text-negative-ink">
+              {switchError}
+            </p>
+          )}
           {user.workspaces.map((ws) => {
             const flag = companyCountry(ws);
             return (

@@ -15,25 +15,45 @@ import {
 import GlobalSummary from "@/components/widgets/global_summary";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { StatTile } from "@/components/ui/StatTile";
-import { Card, Chip, EmptyState, SkeletonRows, StatusDot } from "@/components/ui";
+import { Card, Chip, EmptyState, ErrorState, SkeletonRows, StatusDot } from "@/components/ui";
 import { TIER_LABELS } from "@/lib/glossary";
 import { useRangedApi } from "@/lib/date-range";
 import { FALLBACK_COUNTRY, countryFlag, formatNumber, formatPercent, formatRelative } from "@/lib/format";
 import { useApi } from "@/lib/hooks";
-import type { Brief, Connection, Country, GlobalRow } from "@/lib/types";
+import type { Brief, Connection, Country, GlobalRow, User } from "@/lib/types";
 
 export default function GlobalPage() {
   // These four tiles are numbers on a filtered screen like any other, so they
   // go through the range too, and carry the same disclosure as a dashboard card.
-  const { data: rows, loading, dateBasis } = useRangedApi<GlobalRow[]>("/kpis/global");
+  const {
+    data: rows,
+    loading: loadingRows,
+    error: rowsError,
+    reload: reloadRows,
+    dateBasis,
+  } = useRangedApi<GlobalRow[]>("/kpis/global");
   const totalsNote = useDateBasisNote(dateBasis);
-  const { data: countries } = useApi<Country[]>("/config/countries");
-  const { data: connections } = useApi<Connection[]>("/config/connections");
+  const {
+    data: countries,
+    loading: loadingCountries,
+    error: countriesError,
+    reload: reloadCountries,
+  } = useApi<Country[]>("/config/countries");
+  const connections = useApi<Connection[]>("/config/connections");
+  const { data: user } = useApi<User>("/auth/me");
 
-  const active = useMemo(
-    () => (countries ?? []).filter((country) => country.is_active),
-    [countries],
-  );
+  // The countries this person may open, same rule as the sidebar (AppShell): a
+  // partner limited to Guatemala must not get Ecuador's brief, which the API
+  // refuses with a 403.
+  const active = useMemo(() => {
+    const list = (countries ?? []).filter((country) => country.is_active);
+    const scope = user?.countries;
+    return scope ? list.filter((country) => scope.includes(country.code)) : list;
+  }, [countries, user]);
+
+  // Until the countries answer, "crea tu primera empresa" would be a guess; if
+  // they fail, it would be a lie.
+  const loading = loadingRows || loadingCountries;
 
   const totals = useMemo(() => {
     const list = rows ?? [];
@@ -64,7 +84,13 @@ export default function GlobalPage() {
 
       {loading && <SkeletonRows rows={4} />}
 
-      {!loading && active.length === 0 && (
+      {!loading && countriesError && (
+        <Card>
+          <ErrorState message={countriesError.message} onRetry={reloadCountries} />
+        </Card>
+      )}
+
+      {!loading && !countriesError && countries && active.length === 0 && (
         <Card>
           <EmptyState
             title="Crea tu primera empresa"
@@ -83,12 +109,21 @@ export default function GlobalPage() {
 
       {!loading && active.length > 0 && (
         <>
-          {totalsNote?.kind === "band" && (
+          {/* A failed read is said out loud: summing nothing would print
+              "0 guías" as if it were a real count. */}
+          {rowsError && (
+            <Card className="mb-4">
+              <ErrorState message={rowsError.message} onRetry={reloadRows} />
+            </Card>
+          )}
+
+          {!rowsError && totalsNote?.kind === "band" && (
             <div className="mb-3">
               <BasisBand note={totalsNote} standalone />
             </div>
           )}
 
+          {!rowsError && (
           <div className="mb-4">
           <div className="grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-4">
             <StatTile
@@ -133,6 +168,7 @@ export default function GlobalPage() {
 
             {totalsNote?.kind === "caption" && <BasisCaption note={totalsNote} />}
           </div>
+          )}
 
           {country && (
             <div className="mb-4">
@@ -151,7 +187,11 @@ export default function GlobalPage() {
 
           <div className="grid gap-4 lg:grid-cols-2">
             <BriefCard countryCode={active[0]?.code ?? null} />
-            <ConnectionsCard connections={connections ?? []} />
+            <ConnectionsCard
+              connections={connections.data}
+              error={connections.error}
+              onRetry={connections.reload}
+            />
           </div>
         </>
       )}
@@ -160,7 +200,7 @@ export default function GlobalPage() {
 }
 
 function BriefCard({ countryCode }: { countryCode: string | null }) {
-  const { data, loading } = useApi<Brief>(
+  const { data, loading, error, reload } = useApi<Brief>(
     countryCode ? `/ai/brief?country=${countryCode}` : null,
   );
 
@@ -179,7 +219,8 @@ function BriefCard({ countryCode }: { countryCode: string | null }) {
           )}
         </>
       )}
-      {!loading && !data && (
+      {!loading && error && <ErrorState message={error.message} onRetry={reload} />}
+      {!loading && !error && !data && (
         <p className="text-sm text-ink-dim">
           El resumen aparece cuando hay guías cargadas.
         </p>
@@ -188,7 +229,15 @@ function BriefCard({ countryCode }: { countryCode: string | null }) {
   );
 }
 
-function ConnectionsCard({ connections }: { connections: Connection[] }) {
+function ConnectionsCard({
+  connections,
+  error,
+  onRetry,
+}: {
+  connections: Connection[] | null;
+  error: Error | null;
+  onRetry: () => void;
+}) {
   const tone = (health: Connection["health"]) =>
     health === "ok"
       ? "positive"
@@ -215,7 +264,11 @@ function ConnectionsCard({ connections }: { connections: Connection[] }) {
         </Link>
       }
     >
-      {connections.length === 0 ? (
+      {error ? (
+        <ErrorState message={error.message} onRetry={onRetry} />
+      ) : connections === null ? (
+        <SkeletonRows rows={3} />
+      ) : connections.length === 0 ? (
         <EmptyState
           title="Sin conexiones"
           instruction="Conecta al menos una fuente para que los tableros tengan de dónde leer."

@@ -35,7 +35,7 @@ import {
   CountryFlagPicker,
   type CountryOption,
 } from "@/components/MemberPickers";
-import { Card, Chip, EmptyState, SkeletonRows, cx } from "@/components/ui";
+import { Card, Chip, EmptyState, ErrorState, SkeletonRows, cx } from "@/components/ui";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { ApiError, api } from "@/lib/api";
 import { countryFlag, formatRelative } from "@/lib/format";
@@ -73,7 +73,12 @@ const ROLES: { value: Role; label: string; detail: string }[] = [
 
 export default function UsuariosPage() {
   const { data: user } = useApi<User>("/auth/me");
-  const { data: members, loading, reload } = useApi<Member[]>("/config/users");
+  const {
+    data: members,
+    loading,
+    error: membersError,
+    reload,
+  } = useApi<Member[]>("/config/users");
   const { data: countries } = useApi<Country[]>("/config/countries");
 
   const activeCountries = useMemo(
@@ -112,10 +117,14 @@ export default function UsuariosPage() {
         <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_360px]">
           <Card
             title="Personas con acceso"
-            subtitle={`${members?.length ?? 0} en total`}
+            subtitle={members ? `${members.length} en total` : undefined}
           >
             {loading && <SkeletonRows rows={3} />}
-            {!loading && (members?.length ?? 0) === 0 && (
+            {/* A failed read is not "nobody invited yet". */}
+            {!loading && membersError && (
+              <ErrorState message={membersError.message} onRetry={reload} />
+            )}
+            {!loading && !membersError && (members?.length ?? 0) === 0 && (
               <p className="text-sm text-ink-dim">
                 Todavía no has invitado a nadie.
               </p>
