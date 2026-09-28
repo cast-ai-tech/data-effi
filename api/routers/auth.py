@@ -16,7 +16,7 @@ from uuid import UUID
 from fastapi import APIRouter, Depends, Request, Response, status
 
 from api.billing import start_trial, subscription_state
-from api.db import execute, fetch_all, fetch_one, fetch_required
+from api.db import connection, execute, fetch_all, fetch_one, fetch_required
 from api.deps import (
     CAPABILITIES,
     CurrentUser,
@@ -147,6 +147,28 @@ def _record_auth_event(
             request.headers.get("user-agent", "")[:500],
         ),
     )
+
+
+def _record_failed_auth_event(
+    *, email: str | None, event: str, request: Request,
+    tenant_id: UUID | None = None, user_id: UUID | None = None,
+) -> None:
+    """Un intento FALLIDO, escrito en su propia transacción.
+
+    El endpoint que lo registra responde con un error justo después, y ese error
+    deshace la transacción de la petición. Escrito ahí, el evento desaparecía:
+    `raw.auth_event` nunca veía un `login_failed`, que es precisamente la fila
+    que dice que una cuenta está bajo ataque. Un fallo al auditar se anota en el
+    log y no cambia la respuesta: la persona tiene que recibir su 401 igual.
+    """
+    try:
+        with connection() as audit_conn:
+            _record_auth_event(
+                audit_conn, email=email, event=event, request=request,
+                tenant_id=tenant_id, user_id=user_id,
+            )
+    except Exception:
+        logger.warning("could not record auth event %s", event, exc_info=True)
 
 
 def _workspaces(conn, user_id: UUID) -> list[dict]:
@@ -367,7 +389,7 @@ def login(
     stored_hash = user["password_hash"] if user is not None else _DUMMY_HASH
     matched = verify_password(stored_hash, payload.password)
     if user is None or not matched:
-        _record_auth_event(conn, email=payload.email, event="login_failed", request=request)
+        _record_failed_auth_event(email=payload.email, event="login_failed", request=request)
         raise Unauthorized("Correo o contraseña incorrectos")
 
     if not user["is_active"]:
@@ -553,8 +575,8 @@ def change_password(
         raise NotFound("El usuario del token ya no existe")
 
     if not verify_password(row["password_hash"], payload.current_password):
-        _record_auth_event(
-            conn, email=user.email, event="password_change_refused",
+        _record_failed_auth_event(
+            email=user.email, event="password_change_refused",
             request=request, user_id=user.id, tenant_id=user.tenant_id,
         )
         raise Unauthorized("La contraseña actual no es correcta")
@@ -689,6 +711,22 @@ def invite(
     email = payload.email.lower()
     scope = list(payload.country_scope) if payload.country_scope else None
 
+    # Nadie reparte más alcance del que tiene. Un owner limitado a Guatemala que
+    # invitaba sin `country_scope` creaba una membresía sobre TODA la sociedad -
+    # bastaba invitarse a sí mismo con otro correo para saltarse su propio límite.
+    if user.countries is not None:
+        if scope is None:
+            raise Forbidden(
+                "Tu usuario está limitado a "
+                f"{', '.join(user.countries)}: elige a qué países tendrá acceso."
+            )
+        outside = [c.upper() for c in scope if not user.may_read_country(c)]
+        if outside:
+            raise Forbidden(
+                f"No puedes dar acceso a {', '.join(outside)}. Tu usuario tiene "
+                f"acceso a: {', '.join(user.countries)}."
+            )
+
     if scope:
         _assert_countries_active(conn, tenant_id, scope)
 
@@ -800,6 +838,21 @@ def accept_invite(
         raise Conflict("Esa invitación ya fue usada")
     if invitation["expires_at"] < datetime.now(UTC):
         raise ApiError("invitation_expired", "La invitación expiró. Pide una nueva.")
+
+    # El correo pudo registrarse por su cuenta después de ser invitado. Crear la
+    # cuenta otra vez chocaba con el índice único y respondía 500. Tampoco se
+    # le pega la invitación a esa cuenta: el token solo prueba que alguien lo
+    # recibió, no que sea el dueño de la cuenta que ya existe.
+    exists = fetch_one(
+        conn,
+        "SELECT 1 FROM core.app_user WHERE lower(email) = lower(%s)",
+        (invitation["email"],),
+    )
+    if exists:
+        raise Conflict(
+            "Ese correo ya tiene cuenta. Entra con tu contraseña y pide que te "
+            "den acceso a la empresa desde ahí."
+        )
 
     try:
         password_hash = hash_password(payload.password)

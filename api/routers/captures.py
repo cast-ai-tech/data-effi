@@ -245,6 +245,20 @@ def submit_capture(
     exportaciones = len(contrato.get("exportaciones") or [])
 
     with connection(service=True) as conn:
+        # Se gasta el uso ANTES de guardar, y de forma atómica. `_valid_token`
+        # mira `uses < max_uses` en otra transacción: dos envíos simultáneos con
+        # un código de un solo uso pasaban los dos y el contador quedaba por
+        # encima del máximo. El UPDATE condicionado solo lo gana uno.
+        gastado = fetch_one(
+            conn,
+            "UPDATE core.capture_token SET uses = uses + 1 "
+            "WHERE id = %s AND uses < max_uses AND revoked_at IS NULL "
+            "AND expires_at > now() RETURNING id",
+            (invitacion["id"],),
+        )
+        if gastado is None:
+            raise NotFound("Ese código no sirve. Pídele uno nuevo a quien te lo envió.")
+
         try:
             execute(
                 conn,
@@ -273,11 +287,6 @@ def submit_capture(
                 "llevar. Avísale a quien te envió el código.",
             ) from None
 
-        execute(
-            conn,
-            "UPDATE core.capture_token SET uses = uses + 1 WHERE id = %s",
-            (invitacion["id"],),
-        )
         conn.commit()
         _notify(conn, invitacion, encontro_login, exportaciones)
 

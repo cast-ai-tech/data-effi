@@ -24,7 +24,7 @@ from fastapi import APIRouter, Depends, Query, Response, status
 
 from api.db import fetch_all, fetch_one, fetch_required
 from api.deps import CurrentUser, CurrentUserDep, DbDep, require_role, tenant_of
-from api.errors import ApiError, Conflict, NotFound
+from api.errors import ApiError, Conflict, Forbidden, NotFound
 from api.schemas import (
     CatalogueStatus,
     ProductCatalogueRow,
@@ -225,6 +225,7 @@ def update_product(
     )
     if existing is None:
         raise NotFound("Ese producto no existe en tu workspace")
+    _assert_product_writable(conn, user, product_id)
 
     sent = payload.model_fields_set
 
@@ -308,6 +309,7 @@ def delete_product(product_id: UUID, conn: DbDep, user: AnalystDep) -> None:
     ever carried it without a name, so the product is deactivated instead: it
     disappears from the pickers and every historical number stays intact.
     """
+    _assert_product_writable(conn, user, product_id)
     row = fetch_one(
         conn,
         "UPDATE core.product SET is_active = false WHERE id = %s AND tenant_id = %s RETURNING id",
@@ -321,6 +323,44 @@ def delete_product(product_id: UUID, conn: DbDep, user: AnalystDep) -> None:
 # =============================================================================
 # Helpers
 # =============================================================================
+
+
+def _assert_product_writable(conn, user: CurrentUser, product_id: UUID) -> None:
+    """Una membresía limitada no edita productos que viajan a otros países.
+
+    El catálogo es de la sociedad, no de un país: el costo de un producto entra
+    en el margen de TODAS las guías que lo llevaron. Leerlo ya estaba recortado
+    (`get_product`), pero editar o desactivar no miraba el alcance, así que un
+    analista limitado a Guatemala podía cambiar el costo - y con él la
+    contribución - de un producto que solo se vende en Colombia.
+
+    Un producto sin ninguna guía (creado a mano, todavía sin ventas) no afecta a
+    nadie y se deja editar. Uno que solo viajó fuera del alcance es 404, igual
+    que al leerlo; uno compartido con otros países es 403, porque la persona sí
+    lo ve pero el cambio llegaría a países que no puede ver.
+    """
+    if user.countries is None:
+        return
+    row = fetch_one(
+        conn,
+        """
+        SELECT bool_or(upper(s.country_code) = ANY(%(scope)s))     AS inside,
+               bool_or(NOT upper(s.country_code) = ANY(%(scope)s)) AS outside
+        FROM core.shipment s
+        WHERE s.product_id = %(product_id)s
+        """,
+        {"scope": list(user.countries), "product_id": product_id},
+    )
+    inside = bool(row and row["inside"])
+    outside = bool(row and row["outside"])
+    if outside and not inside:
+        raise NotFound("Ese producto no existe en tu workspace")
+    if outside:
+        raise Forbidden(
+            "Este producto también se vende en países fuera de tu alcance "
+            f"({', '.join(user.countries)} es lo que puedes ver). Pídele el cambio "
+            "a alguien con acceso a toda la sociedad."
+        )
 
 
 def _resolve_supplier(conn, tenant_id: UUID, name: str | None) -> UUID | None:

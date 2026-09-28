@@ -19,6 +19,7 @@ from typing import Annotated, Any
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, File, Form, Query, Request, UploadFile, status
+from fastapi.concurrency import run_in_threadpool
 from psycopg.types.json import Json
 from starlette.datastructures import UploadFile as StarletteUploadFile
 
@@ -390,40 +391,57 @@ async def upload(
     upload_dir.mkdir(parents=True, exist_ok=True)
 
     jobs: list[UploadJobResponse] = []
-    for upload_file in files:
-        filename, payload = await _read_within_limits(upload_file, settings)
-        # Before anything is written: a recognised report going into the wrong
-        # platform is refused here, by name, not discovered on the dashboard.
-        _refuse_platform_mismatch(filename, payload, batch_kind, owner["platform_code"])
+    # Lo que ya quedó en disco, para borrarlo si un archivo posterior falla. El
+    # rechazo de, digamos, el tercer archivo deshace la transacción entera - los
+    # dos primeros jobs no existen - pero sus bytes se quedaban en el disco
+    # persistente para siempre, sin fila que los nombre ni cola que los borre.
+    written: list[Path] = []
+    try:
+        for upload_file in files:
+            filename, payload = await _read_within_limits(upload_file, settings)
+            # Before anything is written: a recognised report going into the wrong
+            # platform is refused here, by name, not discovered on the dashboard.
+            #
+            # En un hilo: leer un xlsx de 25 MB son segundos de CPU, y hecho en el
+            # bucle de eventos congela TODAS las peticiones del API mientras dura,
+            # /health incluido.
+            await run_in_threadpool(
+                _refuse_platform_mismatch, filename, payload, batch_kind, owner["platform_code"]
+            )
 
-        stored_path = upload_dir / f"{uuid.uuid4()}_{filename}"
-        stored_path.write_bytes(payload)
+            stored_path = upload_dir / f"{uuid.uuid4()}_{filename}"
+            written.append(stored_path)
+            await run_in_threadpool(stored_path.write_bytes, payload)
 
-        row = fetch_required(
-            conn,
-            """
-            INSERT INTO raw.upload_job
-                (tenant_id, connection_id, uploaded_by, filename, kind, size_bytes,
-                 storage_path, reprocess)
-            VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
-            RETURNING id, filename, kind, size_bytes, status, batch_id, error,
-                      queued_at, finished_at
-            """,
-            (
-                user.tenant_id, connection_id, user.id, filename,
-                batch_kind.value, len(payload), str(stored_path), reprocess,
-            ),
-        )
-        jobs.append(UploadJobResponse(**row))
-        # The screen hears "queued" in the same commit that makes the job real.
-        emit(
-            conn, tenant_of(user), "upload_job.updated",
-            country_code=owner["country_code"],
-            payload=_job_event(row, "queued"),
-        )
+            row = fetch_required(
+                conn,
+                """
+                INSERT INTO raw.upload_job
+                    (tenant_id, connection_id, uploaded_by, filename, kind, size_bytes,
+                     storage_path, reprocess)
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
+                RETURNING id, filename, kind, size_bytes, status, batch_id, error,
+                          queued_at, finished_at
+                """,
+                (
+                    user.tenant_id, connection_id, user.id, filename,
+                    batch_kind.value, len(payload), str(stored_path), reprocess,
+                ),
+            )
+            jobs.append(UploadJobResponse(**row))
+            # The screen hears "queued" in the same commit that makes the job real.
+            emit(
+                conn, tenant_of(user), "upload_job.updated",
+                country_code=owner["country_code"],
+                payload=_job_event(row, "queued"),
+            )
 
-    # Commit before queueing: the worker must be able to see the rows.
-    conn.commit()
+        # Commit before queueing: the worker must be able to see the rows.
+        conn.commit()
+    except BaseException:
+        for path in written:
+            path.unlink(missing_ok=True)
+        raise
     queue = get_queue()
     for job in jobs:
         queue.submit(job.id)
@@ -461,21 +479,29 @@ async def webhook_ingest(
     token: str, request: Request, settings: SettingsDep
 ) -> UploadAcceptedResponse:
     """Accept `{"kind": ..., "rows": [...]}` or a plain file, and queue it."""
-    target = _webhook_connection(token)
+    # Todo lo que toca la base o el disco va a un hilo: psycopg aquí es
+    # síncrono, y una consulta lenta hecha en el bucle de eventos detiene todas
+    # las peticiones del API a la vez, no solo esta.
+    target = await run_in_threadpool(_webhook_connection, token)
 
     if target is None:
         # Never say whether the token ever existed, expired or was revoked: that
         # difference is exactly what a token-guessing script measures. The
         # per-IP limit is here rather than at the top so that a scanner cannot
         # fill raw.job_run either.
-        if _allowed(request, "webhook_unknown", client_ip(request), settings):
-            _record_webhook_run(None, "failed", {"reason": "unknown_token"}, "Token no válido")
+        if await run_in_threadpool(
+            _allowed, request, "webhook_unknown", client_ip(request), settings
+        ):
+            await run_in_threadpool(
+                _record_webhook_run, None, "failed", {"reason": "unknown_token"},
+                "Token no válido",
+            )
         raise NotFound("Webhook no encontrado")
 
     tenant_id = target["tenant_id"]
-    if not _allowed(request, "webhook", str(target["id"]), settings):
-        _record_webhook_run(
-            tenant_id, "failed", {"connection_id": str(target["id"])},
+    if not await run_in_threadpool(_allowed, request, "webhook", str(target["id"]), settings):
+        await run_in_threadpool(
+            _record_webhook_run, tenant_id, "failed", {"connection_id": str(target["id"])},
             "Rate limit del webhook alcanzado",
         )
         raise ApiError(
@@ -487,15 +513,22 @@ async def webhook_ingest(
     try:
         filename, payload, declared_kind = await _webhook_payload(request, settings)
         batch_kind = _webhook_kind(declared_kind, target)
-        job = _queue_webhook_job(target, filename, payload, batch_kind, settings)
+        job = await run_in_threadpool(
+            _queue_webhook_job, target, filename, payload, batch_kind, settings
+        )
     except ApiError as exc:
-        _record_webhook_run(
+        await run_in_threadpool(
+            _record_webhook_run,
             tenant_id, "failed", {"connection_id": str(target["id"]), "code": exc.code},
             exc.message,
         )
         raise
+    # En el bucle, no en el hilo: `submit` crea una tarea de asyncio y fuera del
+    # bucle no hay ninguno donde crearla.
+    get_queue().submit(job.id)
 
-    _record_webhook_run(
+    await run_in_threadpool(
+        _record_webhook_run,
         tenant_id,
         "ok",
         {
@@ -572,8 +605,16 @@ async def _webhook_payload(
         declared_kind = form_kind if isinstance(form_kind, str) else None
         for value in form.values():
             if isinstance(value, StarletteUploadFile):
-                payload = await value.read()
-                _refuse_oversize(len(payload), settings)
+                # Por trozos y con tope, como /upload: una petición chunked no
+                # declara tamaño, y `read()` entero cargaba el archivo completo
+                # en memoria antes de mirar cuánto pesaba.
+                chunks: list[bytes] = []
+                total = 0
+                while chunk := await value.read(1024 * 1024):
+                    total += len(chunk)
+                    _refuse_oversize(total, settings)
+                    chunks.append(chunk)
+                payload = b"".join(chunks)
                 name = _safe_filename(value.filename or "webhook.csv")
                 if not name.lower().endswith(SUPPORTED_EXTENSIONS):
                     raise ApiError(
@@ -703,37 +744,45 @@ def _queue_webhook_job(
     kind: BatchKind,
     settings: Settings,
 ) -> UploadJobResponse:
-    """Write the payload down and queue it, exactly as /ingest/upload does."""
+    """Write the payload down and record the job, exactly as /ingest/upload does.
+
+    Runs in a worker thread, so it does NOT submit to the queue: the caller does,
+    back on the event loop.
+    """
     upload_dir = Path(settings.upload_dir) / str(target["tenant_id"])
     upload_dir.mkdir(parents=True, exist_ok=True)
     stored_path = upload_dir / f"{uuid.uuid4()}_{filename}"
     stored_path.write_bytes(payload)
 
-    with connection(service=True) as conn:
-        row = fetch_required(
-            conn,
-            """
-            INSERT INTO raw.upload_job
-                (tenant_id, connection_id, uploaded_by, filename, kind, size_bytes, storage_path)
-            VALUES (%s, %s, NULL, %s, %s, %s, %s)
-            RETURNING id, filename, kind, size_bytes, status, batch_id, error,
-                      queued_at, finished_at
-            """,
-            (
-                target["tenant_id"], target["id"], filename, kind.value,
-                len(payload), str(stored_path),
-            ),
-        )
+    try:
+        with connection(service=True) as conn:
+            row = fetch_required(
+                conn,
+                """
+                INSERT INTO raw.upload_job
+                    (tenant_id, connection_id, uploaded_by, filename, kind, size_bytes,
+                     storage_path)
+                VALUES (%s, %s, NULL, %s, %s, %s, %s)
+                RETURNING id, filename, kind, size_bytes, status, batch_id, error,
+                          queued_at, finished_at
+                """,
+                (
+                    target["tenant_id"], target["id"], filename, kind.value,
+                    len(payload), str(stored_path),
+                ),
+            )
 
-        emit(
-            conn, target["tenant_id"], "upload_job.updated",
-            country_code=target.get("country_code"),
-            payload=_job_event(row, "queued"),
-        )
+            emit(
+                conn, target["tenant_id"], "upload_job.updated",
+                country_code=target.get("country_code"),
+                payload=_job_event(row, "queued"),
+            )
+    except BaseException:
+        # Sin fila que lo nombre, nadie volvería a borrar este archivo.
+        stored_path.unlink(missing_ok=True)
+        raise
 
-    job = UploadJobResponse(**row)
-    get_queue().submit(job.id)
-    return job
+    return UploadJobResponse(**row)
 
 
 def _job_event(row: dict[str, Any], status_value: str) -> dict[str, Any]:
@@ -792,7 +841,8 @@ async def detect(
     file_format = sniff_format(payload, filename)
 
     try:
-        headers, rows = read_tabular(payload, filename)
+        # En un hilo por lo mismo que en /upload: parsear no puede frenar al API.
+        headers, rows = await run_in_threadpool(read_tabular, payload, filename)
     except (UnsupportedFileError, EmptyFileError) as exc:
         raise ApiError("unreadable_file", str(exc)) from exc
 

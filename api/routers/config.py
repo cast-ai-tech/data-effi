@@ -37,9 +37,10 @@ from api.deps import (
     UnscopedDbDep,
     country_scope_sql,
     require_cap,
+    require_platform_admin,
     require_role,
 )
-from api.errors import ApiError, Conflict, NotFound
+from api.errors import ApiError, Conflict, Forbidden, NotFound
 from api.preflight import run_preflight_for_connection
 from api.schemas import (
     ActivateCountryRequest,
@@ -96,6 +97,14 @@ def list_countries(conn: DbDep, user: CurrentUserDep) -> list[CountryResponse]:
 def activate_country(
     payload: ActivateCountryRequest, conn: DbDep, user: OwnerDep
 ) -> CountryResponse:
+    # El país viaja en el cuerpo, así que `_guard_country` (que solo mira la
+    # query) no lo ve. Sin esto, un owner limitado a Guatemala podía desactivar
+    # Colombia - o cambiarle la ventana de maduración - para toda la sociedad.
+    if user.countries is not None and not user.may_read_country(payload.country_code):
+        raise Forbidden(
+            f"No puedes cambiar {payload.country_code.upper()}. Tu usuario tiene "
+            f"acceso a: {', '.join(user.countries)}."
+        )
     country = fetch_one(
         conn, "SELECT code FROM core.country WHERE code = %s AND is_supported",
         (payload.country_code.upper(),),
@@ -695,14 +704,21 @@ def list_fx_rates(conn: DbDep, user: CurrentUserDep) -> list[FxRateRow]:
 @router.put(
     "/fx",
     response_model=FxRateRow,
-    dependencies=[Depends(require_cap("config"))],
-    summary="Fijar una tasa a mano",
+    dependencies=[Depends(require_platform_admin)],
+    summary="Fijar una tasa a mano (solo quien opera la plataforma)",
 )
 def upsert_fx_rate(
     payload: FxRateUpsertRequest, conn: DbDep, user: CurrentUserDep
 ) -> FxRateRow:
     """Writes the rate a person dictates, marked `manual` so it is never mistaken
     for the provider's.
+
+    SOLO QUIEN OPERA LA PLATAFORMA. `core.fx_rate` no tiene tenant_id (ver el
+    encabezado de esta sección): es UNA tabla que leen todas las empresas de
+    todas las organizaciones. Con el guardia anterior - capacidad `config`, que
+    tiene cualquier owner o analyst - cualquiera que se registrara (el registro
+    es abierto) podía reescribir la tasa del peso colombiano para todos los
+    demás clientes y mover sus consolidados en dólares.
 
     The request speaks in the direction people quote - how many bolívares to the
     dollar - and this converts to the direction the database stores, which is the
