@@ -122,6 +122,39 @@ export async function createMerchant(
 
 export { apiCall };
 
+/** Upload a fixture through the API and wait until its job is finished. */
+export async function uploadFixture(
+  merchant: Merchant,
+  filePath: string,
+  options: { country: string; platform: string; kind?: string },
+): Promise<void> {
+  const { readFile } = await import("node:fs/promises");
+  const { basename } = await import("node:path");
+  const form = new FormData();
+  form.append("platform_code", options.platform);
+  form.append("country_code", options.country);
+  form.append("kind", options.kind ?? "shipments");
+  form.append("files", new Blob([await readFile(filePath)]), basename(filePath));
+  const response = await fetch(`${API_URL}/ingest/upload`, {
+    method: "POST",
+    headers: { authorization: `Bearer ${merchant.token}` },
+    body: form,
+  });
+  if (!response.ok) throw new Error(`upload -> ${response.status}: ${await response.text()}`);
+  const { jobs } = (await response.json()) as { jobs: { id: string }[] };
+  for (const job of jobs) {
+    for (let attempt = 0; attempt < 90; attempt += 1) {
+      const state = await apiCall<{ status: string; error: string | null }>(
+        `/ingest/jobs/${job.id}`,
+        { token: merchant.token },
+      );
+      if (state.status === "done") break;
+      if (state.status === "failed") throw new Error(`job ${job.id} failed: ${state.error}`);
+      await new Promise((resolve) => setTimeout(resolve, 1000));
+    }
+  }
+}
+
 export type Problem ={ kind: "console" | "pageerror" | "request"; text: string };
 
 /**
