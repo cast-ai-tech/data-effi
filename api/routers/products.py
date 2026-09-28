@@ -25,6 +25,7 @@ from fastapi import APIRouter, Depends, Query, Response, status
 from api.db import fetch_all, fetch_one, fetch_required
 from api.deps import CurrentUser, CurrentUserDep, DbDep, require_role, tenant_of
 from api.errors import ApiError, Conflict, Forbidden, NotFound
+from api.routers.orders import _escape_like
 from api.schemas import (
     CatalogueStatus,
     ProductCatalogueRow,
@@ -87,8 +88,12 @@ def list_products(
         clauses.append("is_active = %(active)s")
         params["active"] = active
     if search:
-        clauses.append("(product_name ILIKE %(search)s OR sku ILIKE %(search)s)")
-        params["search"] = f"%{search}%"
+        clauses.append(
+            "(product_name ILIKE %(search)s ESCAPE '\\'"
+            " OR sku ILIKE %(search)s ESCAPE '\\')"
+        )
+        # `%` y `_` escritos por la persona se buscan como texto, igual que en /orders.
+        params["search"] = f"%{_escape_like(search)}%"
     # No `country` parameter, so the door guard never sees this endpoint. The
     # catalogue is per company, not per country, so the cut is by what the
     # scoped countries actually shipped: a product only ever sold in Costa
