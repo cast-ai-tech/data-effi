@@ -711,6 +711,22 @@ def invite(
     email = payload.email.lower()
     scope = list(payload.country_scope) if payload.country_scope else None
 
+    # Nadie reparte más alcance del que tiene. Un owner limitado a Guatemala que
+    # invitaba sin `country_scope` creaba una membresía sobre TODA la sociedad -
+    # bastaba invitarse a sí mismo con otro correo para saltarse su propio límite.
+    if user.countries is not None:
+        if scope is None:
+            raise Forbidden(
+                "Tu usuario está limitado a "
+                f"{', '.join(user.countries)}: elige a qué países tendrá acceso."
+            )
+        outside = [c.upper() for c in scope if not user.may_read_country(c)]
+        if outside:
+            raise Forbidden(
+                f"No puedes dar acceso a {', '.join(outside)}. Tu usuario tiene "
+                f"acceso a: {', '.join(user.countries)}."
+            )
+
     if scope:
         _assert_countries_active(conn, tenant_id, scope)
 

@@ -21,6 +21,7 @@ from uuid import UUID
 
 from fastapi import APIRouter, Query
 
+from api.db import fetch_one
 from api.deps import CurrentUserDep, DbDep, SettingsDep, tenant_of
 from api.errors import Forbidden, NotFound
 from api.schemas import (
@@ -145,6 +146,19 @@ async def ask(
                 f"Tu usuario solo tiene acceso a: {', '.join(user.countries)}."
             )
 
+    conversation_id = payload.conversation_id
+    if user.countries is not None and conversation_id is not None:
+        # Continuar un hilo mete sus mensajes anteriores en el contexto del
+        # modelo. Un hilo de otro país se trata como uno que no existe: se abre
+        # uno nuevo, igual que hace `ensure_conversation` con un id ajeno.
+        thread = fetch_one(
+            conn,
+            "SELECT country_code FROM raw.ai_conversation WHERE id = %s AND tenant_id = %s",
+            (conversation_id, tenant_of(user)),
+        )
+        if thread is None or not _only_scoped([thread], user):
+            conversation_id = None
+
     try:
         result = await asyncio.to_thread(
             ask_data,
@@ -153,7 +167,7 @@ async def ask(
             tenant_of(user),
             payload.question,
             payload.country_code.upper() if payload.country_code else None,
-            conversation_id=payload.conversation_id,
+            conversation_id=conversation_id,
             user_id=user.id,
             allowed_countries=user.countries,
         )
@@ -181,7 +195,11 @@ async def ask(
 def conversations(conn: DbDep, user: CurrentUserDep) -> ConversationsResponse:
     from ai.features import list_conversations
 
-    rows = list_conversations(conn, tenant_of(user))
+    # Los hilos son de la sociedad, no de la persona, y cada uno guarda las
+    # respuestas con sus cifras. Un socio limitado a Guatemala no puede leer los
+    # hilos que el dueño abrió sobre Colombia; uno sin país se descarta igual que
+    # una alerta sin país (`_only_scoped`).
+    rows = _only_scoped(list_conversations(conn, tenant_of(user)), user)
     return ConversationsResponse(
         conversations=[ConversationSummary(**row) for row in rows]
     )
@@ -198,7 +216,8 @@ def conversation_detail(
     from ai.features import get_conversation
 
     found = get_conversation(conn, tenant_of(user), conversation_id)
-    if found is None:
+    # Fuera del alcance, el mismo 404 que un id inexistente.
+    if found is None or not _only_scoped([found], user):
         raise NotFound("Esa conversación no existe en esta cuenta.")
     return ConversationDetail(**found)
 

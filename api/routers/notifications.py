@@ -17,10 +17,17 @@ import logging
 from datetime import datetime
 from typing import Annotated, Any
 
-from fastapi import APIRouter, Query, Response, status
+from fastapi import APIRouter, Depends, Query, Response, status
 
 from api.db import execute, fetch_all, fetch_one
-from api.deps import CurrentUser, CurrentUserDep, DbDep, country_scope_sql, tenant_of
+from api.deps import (
+    CurrentUser,
+    CurrentUserDep,
+    DbDep,
+    country_scope_sql,
+    require_cap,
+    tenant_of,
+)
 from api.errors import ApiError, NotFound
 from api.schemas import (
     THRESHOLD_KEYS,
@@ -113,8 +120,16 @@ def unread_count(
 # =============================================================================
 
 
+# El router entero se monta con `read` O `ingest` para que la campana funcione
+# con cualquier rol. Los umbrales no son la campana: son cifras del negocio (lo
+# "normal" de devoluciones, de CPA...) que un `uploader` no debe leer, y una
+# configuración que un `viewer` - solo lectura - no debe poder cambiar. Cada uno
+# lleva su propio guardia, igual que las escrituras de /config.
 @router.get(
-    "/thresholds", response_model=ThresholdsResponse, summary="Umbrales de este país"
+    "/thresholds",
+    response_model=ThresholdsResponse,
+    summary="Umbrales de este país",
+    dependencies=[Depends(require_cap("read"))],
 )
 def get_thresholds(conn: DbDep, user: CurrentUserDep, country: CountryQuery) -> ThresholdsResponse:
     """The four normals the detectors compare against: inferred, or set by hand."""
@@ -127,7 +142,10 @@ def get_thresholds(conn: DbDep, user: CurrentUserDep, country: CountryQuery) -> 
 
 
 @router.put(
-    "/thresholds", response_model=ThresholdsResponse, summary="Fijar umbrales a mano"
+    "/thresholds",
+    response_model=ThresholdsResponse,
+    summary="Fijar umbrales a mano",
+    dependencies=[Depends(require_cap("config"))],
 )
 def put_thresholds(
     payload: ThresholdsUpdateRequest,
