@@ -12,7 +12,8 @@ from datetime import UTC, date, datetime
 import psycopg
 import pytest
 
-from pipeline.ingest import _tally
+from pipeline.ingest import IngestEngine, MemoryStore, _tally
+from pipeline.mapping import resolve_status
 from pipeline.models import (
     BatchContext,
     BatchKind,
@@ -21,10 +22,40 @@ from pipeline.models import (
     ShipmentInput,
     UpsertResult,
 )
-from pipeline.mapping import resolve_status
 from pipeline.normalize import normalize_tracking
 from pipeline.store_pg import PostgresStore
-from tests.conftest import CONNECTION_ID, COUNTRY, PLATFORM, TENANT_ID
+from tests.conftest import CONNECTION_ID, COUNTRY, CURRENCY, PLATFORM, TENANT_ID
+
+
+def _ingest(store, payload: bytes, kind: BatchKind, *, today: date, name: str = "f.csv"):
+    engine = IngestEngine(store, pii_salt="test-salt", today=today)
+    return engine.ingest(
+        payload=payload, source_name=name, kind=kind, tenant_id=TENANT_ID,
+        connection_id=CONNECTION_ID, country_code=COUNTRY, platform_code=PLATFORM,
+        default_currency=CURRENCY,
+    )
+
+
+# =============================================================================
+# Movimientos sin fecha legible
+# =============================================================================
+
+
+def test_an_undated_movement_is_not_added_again_on_the_next_days_sync():
+    """Una hoja publicada se relee cada 30 minutos y cambia de bytes en cuanto
+    alguien la edita. La clave del movimiento sin id ni fecha usaba la fecha de
+    CARGA: al día siguiente era otra clave y el recaudo se sumaba dos veces."""
+    store = MemoryStore()
+    day_one = b"guia;tipo;fecha;valor\nG-1;recaudo;;50000\n"
+    day_two = b"guia;tipo;fecha;valor\nG-1;recaudo;;50000\nG-2;recaudo;02/07/2026;1000\n"
+
+    first = _ingest(store, day_one, BatchKind.MOVEMENTS, today=date(2026, 7, 10))
+    second = _ingest(store, day_two, BatchKind.MOVEMENTS, today=date(2026, 7, 11))
+
+    assert first.rows_inserted == 1
+    assert second.rows_inserted == 1          # solo G-2
+    assert len(store.movements) == 2
+    assert any(i.code == "movement_without_date" for i in first.sanity_issues)
 
 
 # =============================================================================
