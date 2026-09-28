@@ -461,6 +461,20 @@ def test_a_viewer_still_gets_the_stable_customer_label(client, viewer_token, see
     assert len(refs) == 2
 
 
+def test_search_treats_like_wildcards_as_literal_characters(client, owner_token, seeded):
+    """`_` and `%` are LIKE wildcards; a guide number never means them.
+
+    Unescaped, "EC_0001" matched "EC-0001" and a lone "%" returned every guide.
+    """
+    assert orders(client, owner_token, search="EC_0001")["total"] == 0
+    assert orders(client, owner_token, search="%")["total"] == 0
+    assert orders(client, owner_token, search="EC-00%1")["total"] == 0
+
+    # A plain substring still finds what it should.
+    found = orders(client, owner_token, search="C-0001")["rows"]
+    assert [row["tracking_number"] for row in found] == ["EC-0001"]
+
+
 def test_the_same_request_as_owner_does_return_the_contact_data(
     client, owner_token, seeded
 ):

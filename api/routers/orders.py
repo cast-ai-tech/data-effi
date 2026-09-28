@@ -225,6 +225,11 @@ def get_order(
 # =============================================================================
 
 
+def _escape_like(term: str) -> str:
+    """Make `term` match literally inside a LIKE pattern with `ESCAPE '\\'`."""
+    return term.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
+
+
 def _order_filters(
     *,
     country: str,
@@ -249,10 +254,13 @@ def _order_filters(
     if search:
         # Both numbers, because the operator is reading whichever one the
         # customer quoted at them - the platform's guide or the courier's.
+        # `%` and `_` are LIKE wildcards: unescaped, searching "EC_1" also
+        # matched "EC-1" and a lone "%" matched every guide. Matched literally.
         clauses.append(
-            "(o.tracking_number ILIKE %(search)s OR o.carrier_tracking_number ILIKE %(search)s)"
+            "(o.tracking_number ILIKE %(search)s ESCAPE '\\'"
+            " OR o.carrier_tracking_number ILIKE %(search)s ESCAPE '\\')"
         )
-        params["search"] = f"%{search}%"
+        params["search"] = f"%{_escape_like(search)}%"
     if status:
         clauses.append("o.status_code = %(status)s")
         params["status"] = status
