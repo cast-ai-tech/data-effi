@@ -123,6 +123,12 @@ STATUS_ALIASES: dict[str, str] = {
     "recolectado": "picked_up",
     "guia_generada": "created",
     "preparado para transportadora": "confirmed",
+    # --- What Dropi's API can answer that the export never showed (mirrors
+    # migration 061). CANDIDATES from the Dropi panel's status list; verify
+    # against a real account. RECHAZADO is deliberately absent: it is ambiguous.
+    "pendiente confirmacion": "created",
+    "en bodega transportadora": "picked_up",
+    "en proceso de devolucion": "returning",
     # --- Indemnización (mirrors migration 045). CANDIDATE spellings: no real
     # export with the word has been seen yet. `resolve_status` flags whatever
     # spelling the first real file carries, so it can be added here by name.
