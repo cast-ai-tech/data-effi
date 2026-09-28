@@ -22,8 +22,8 @@
  */
 
 import Link from "next/link";
-import { useParams } from "next/navigation";
-import { useCallback, useMemo, useRef, useState } from "react";
+import { useParams, useSearchParams } from "next/navigation";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { AppShell } from "@/components/AppShell";
 import { BatchHistory } from "@/components/ingest/BatchHistory";
@@ -32,6 +32,13 @@ import { Card, Chip, EmptyState, ErrorState, SkeletonRows, cx } from "@/componen
 import { ApiError, api } from "@/lib/api";
 import { countryFlag } from "@/lib/format";
 import { useApi } from "@/lib/hooks";
+import {
+  initialUploadChoice,
+  isUploadKind,
+  readUploadChoice,
+  resumableJobs,
+  writeUploadChoice,
+} from "@/lib/upload-memory";
 import { judgeFile, platformsForKind, shortPlatformName } from "@/lib/upload-platform";
 import type { Country, CountryPlatform, DetectResult, UploadJob } from "@/lib/types";
 
@@ -62,9 +69,69 @@ export default function CountryUploadPage() {
   const [lastFiles, setLastFiles] = useState<File[]>([]);
   const [dragging, setDragging] = useState(false);
   const [checking, setChecking] = useState(false);
+  const [uploading, setUploading] = useState(0);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
+  const busy = checking || uploading > 0;
+
+  // Start where the last upload of this country left off (or on the type a
+  // dashboard card asked for with ?tipo=). Once per country, after mount:
+  // localStorage does not exist on the server.
+  const search = useSearchParams();
+  const tipo = search.get("tipo");
+  useEffect(() => {
+    const start = initialUploadChoice(tipo, readUploadChoice(countryCode));
+    setKind(start.kind);
+    setPlatform(start.platform);
+  }, [countryCode, tipo]);
+
+  // A remembered platform this country no longer offers for this type is
+  // dropped rather than preselected.
+  useEffect(() => {
+    if (
+      platform &&
+      platformsState.data &&
+      !platforms.some((item) => item.platform_code === platform)
+    ) {
+      setPlatform(null);
+    }
+  }, [platform, platforms, platformsState.data]);
+
+  // Files still processing (or that just failed) come back on screen after
+  // looking at another page: the work is on the server, not in this tab.
+  useEffect(() => {
+    if (!countryCode) return;
+    let cancelled = false;
+    api
+      .get<UploadJob[]>(`/ingest/jobs?country=${countryCode}&limit=20`)
+      .then((recent) => {
+        if (cancelled) return;
+        const resumed = resumableJobs(recent, Date.now());
+        if (resumed.length === 0) return;
+        setJobs((current) => [
+          ...current,
+          ...resumed.filter((job) => !current.some((item) => item.id === job.id)),
+        ]);
+      })
+      .catch(() => {
+        // The history below still tells the story; nothing to add here.
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [countryCode]);
+
+  // Leaving while the file is still travelling to the server cancels it.
+  // Once the API has it (a job exists), leaving is safe.
+  useEffect(() => {
+    if (uploading === 0) return;
+    const warn = (event: BeforeUnloadEvent) => {
+      event.preventDefault();
+    };
+    window.addEventListener("beforeunload", warn);
+    return () => window.removeEventListener("beforeunload", warn);
+  }, [uploading]);
 
   /** Ask the API what the first file is, before deciding anything. */
   const detect = useCallback(async (file: File): Promise<DetectResult | null> => {
@@ -81,6 +148,7 @@ export default function CountryUploadPage() {
 
   const upload = useCallback(
     async (files: FileList | File[], reprocess = false) => {
+      if (busy) return;
       setError(null);
       setNotice(null);
       const picked = Array.from(files);
@@ -122,17 +190,22 @@ export default function CountryUploadPage() {
       if (reprocess) form.append("reprocess", "true");
       for (const file of picked) form.append("files", file);
 
+      setUploading(picked.length);
       try {
         const response = await api.upload<{ jobs: UploadJob[] }>("/ingest/upload", form);
         setJobs((previous) => [...response.jobs, ...previous]);
+        // Tomorrow's upload starts on the same type and platform.
+        if (isUploadKind(kind)) writeUploadChoice(countryCode, { kind, platform: chosen });
         platformsState.reload();
       } catch (err) {
         setError(
           err instanceof ApiError ? err.message : "No se pudo subir. Revisa tu conexión.",
         );
+      } finally {
+        setUploading(0);
       }
     },
-    [platform, kind, detect, platforms, countryCode, platformsState],
+    [busy, platform, kind, detect, platforms, countryCode, platformsState],
   );
 
   return (
@@ -251,18 +324,23 @@ export default function CountryUploadPage() {
                 setDragging(false);
                 void upload(event.dataTransfer.files);
               }}
-              onClick={() => inputRef.current?.click()}
+              onClick={() => {
+                if (!busy) inputRef.current?.click();
+              }}
               role="button"
               tabIndex={0}
               aria-label="Elegir archivos para cargar"
+              aria-disabled={busy}
+              aria-busy={busy}
               onKeyDown={(event) => {
                 if (event.key === "Enter" || event.key === " ") {
                   event.preventDefault();
-                  inputRef.current?.click();
+                  if (!busy) inputRef.current?.click();
                 }
               }}
               className={cx(
                 "flex cursor-pointer flex-col items-center justify-center gap-2 rounded-card border-2 border-dashed px-6 py-12 text-center transition-colors focus:outline-none focus-visible:border-accent focus-visible:ring-2 focus-visible:ring-accent/40",
+                busy && "cursor-progress opacity-70",
                 dragging
                   ? "border-accent bg-accent/[0.06]"
                   : "border-line-input bg-sunken hover:border-line-strong",
@@ -274,7 +352,13 @@ export default function CountryUploadPage() {
               <p className="text-sm text-ink-dim">
                 o haz clic para elegirlo · Excel (.xlsx, .xls), CSV o TXT · hasta 25 MB cada uno
               </p>
-              {checking && <p className="text-sm text-accent-ink">Revisando de qué plataforma es…</p>}
+              <p className="min-h-5 text-sm text-accent-ink" role="status" aria-live="polite">
+                {checking
+                  ? "Revisando de qué plataforma es…"
+                  : uploading > 0
+                    ? `Subiendo ${uploading === 1 ? "el archivo" : `${uploading} archivos`}… no cierres esta pestaña.`
+                    : ""}
+              </p>
               <input
                 ref={inputRef}
                 type="file"
