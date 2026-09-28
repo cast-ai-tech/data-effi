@@ -25,6 +25,7 @@ from api.routers import (
     captures,
     config,
     customers,
+    dropi,
     events,
     ingest,
     kpis,
@@ -134,6 +135,11 @@ def create_app() -> FastAPI:
     # file, so the one screen an `uploader` may use needs this router too.
     app.include_router(
         config.router, dependencies=[Depends(require_any_cap("read", "ingest"))]
+    )
+    # Dropi por API lives under /config/dropi with the same door as `config`;
+    # its writes carry their own owner guard.
+    app.include_router(
+        dropi.router, dependencies=[Depends(require_any_cap("read", "ingest"))]
     )
     # NOT mounted with a router-wide `ingest` guard, unlike the surfaces above.
     # `POST /ingest/webhook/{token}` lives in this router and authenticates with
