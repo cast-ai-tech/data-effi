@@ -9,7 +9,7 @@
 import { useEffect, useState } from "react";
 
 import { Chip } from "@/components/ui";
-import { api } from "@/lib/api";
+import { ApiError, api } from "@/lib/api";
 import { formatBytes } from "@/lib/format";
 import { useApi } from "@/lib/hooks";
 import { useNotifications } from "@/lib/notifications";
@@ -85,8 +85,13 @@ export function JobRow({
         if (cancelled) return;
         setJob(next);
         if (!TERMINAL_STATUSES.has(next.status)) setFallbackTick((n) => n + 1);
-      } catch {
-        // Give up quietly; the history table below is the durable record.
+      } catch (err) {
+        // Try again at the same pace. Giving up on one failed read (a network
+        // blip, the API waking up) left the row saying "Procesando…" forever
+        // for a file that had long finished. A job that no longer exists is
+        // the one thing not worth asking about again.
+        const gone = err instanceof ApiError && err.status === 404;
+        if (!cancelled && !gone) setFallbackTick((n) => n + 1);
       }
     }, JOB_FALLBACK_MS);
     return () => {
