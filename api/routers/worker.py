@@ -55,8 +55,13 @@ async def trigger(
         result = await asyncio.to_thread(run_named_job, job)
     except Exception as exc:
         logger.exception("triggered job %s failed", job)
+        # 500, no el 400 por defecto de ApiError: la petición era correcta y lo
+        # que falló fue el job. Un cron que reintenta solo ante 5xx dejaba de
+        # reintentar, y un 400 dice "tu petición está mal" a quien no hizo nada mal.
         raise ApiError(
-            "job_failed", f"El job '{job}' falló: {type(exc).__name__}"
+            "job_failed",
+            f"El job '{job}' falló: {type(exc).__name__}",
+            status_code=500,
         ) from exc
 
     return {"job": job, **result}

@@ -155,6 +155,23 @@ def register_error_handlers(app: FastAPI) -> None:
             content=_envelope(codes.get(exc.status_code, "http_error"), str(exc.detail)),
         )
 
+    import psycopg
+
+    @app.exception_handler(psycopg.errors.UniqueViolation)
+    async def handle_unique_violation(request: Request, exc: Exception) -> JSONResponse:
+        # Dos peticiones que crean lo mismo a la vez (dos registros con el mismo
+        # correo, dos clics en "aceptar invitación") pasan las dos el SELECT
+        # previo y la segunda choca con el índice único. Eso es un conflicto,
+        # no "algo falló de nuestro lado": 409, sin nombres de índice ni SQL.
+        logger.info("unique violation on %s %s", request.method, request.url.path)
+        return JSONResponse(
+            status_code=status.HTTP_409_CONFLICT,
+            content=_envelope(
+                "conflict",
+                "Eso ya existe (quizá lo acabas de crear en otra pestaña). Recarga la página.",
+            ),
+        )
+
     @app.exception_handler(Exception)
     async def handle_unexpected(request: Request, exc: Exception) -> JSONResponse:
         # Log the real cause; never leak internals (or a DSN) to the client.

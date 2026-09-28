@@ -839,6 +839,21 @@ def accept_invite(
     if invitation["expires_at"] < datetime.now(UTC):
         raise ApiError("invitation_expired", "La invitación expiró. Pide una nueva.")
 
+    # El correo pudo registrarse por su cuenta después de ser invitado. Crear la
+    # cuenta otra vez chocaba con el índice único y respondía 500. Tampoco se
+    # le pega la invitación a esa cuenta: el token solo prueba que alguien lo
+    # recibió, no que sea el dueño de la cuenta que ya existe.
+    exists = fetch_one(
+        conn,
+        "SELECT 1 FROM core.app_user WHERE lower(email) = lower(%s)",
+        (invitation["email"],),
+    )
+    if exists:
+        raise Conflict(
+            "Ese correo ya tiene cuenta. Entra con tu contraseña y pide que te "
+            "den acceso a la empresa desde ahí."
+        )
+
     try:
         password_hash = hash_password(payload.password)
     except ValueError as exc:

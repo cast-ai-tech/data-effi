@@ -146,5 +146,10 @@ def create_webhook_token() -> tuple[str, str]:
 
 
 def constant_time_equals(left: str, right: str) -> bool:
-    """For comparing shared secrets (worker trigger), never for passwords."""
-    return secrets.compare_digest(left, right)
+    """For comparing shared secrets (worker trigger), never for passwords.
+
+    Compared as bytes: `compare_digest` on two `str` raises TypeError as soon as
+    one carries a non-ASCII character, and these values come from request
+    headers. A header with an `é` in it turned a 401 into a 500.
+    """
+    return secrets.compare_digest(left.encode("utf-8"), right.encode("utf-8"))
