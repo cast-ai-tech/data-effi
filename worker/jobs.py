@@ -263,30 +263,32 @@ def job_refresh_fx(conn: psycopg.Connection, *, provider_url: str, api_key: str 
     official_sources: dict[str, str] = {}
     currencies = _fx_currencies(conn)
 
-    try:
-        url = _provider_endpoint(provider_url)
-        params = {"apikey": api_key} if api_key else None
-        with httpx.Client(timeout=20.0, follow_redirects=True) as client:
+    with httpx.Client(timeout=20.0, follow_redirects=True) as client:
+        try:
+            url = _provider_endpoint(provider_url)
+            params = {"apikey": api_key} if api_key else None
             response = client.get(url, params=params)
             response.raise_for_status()
             rates = _parse_rate_payload(response.json())
 
             for currency in currencies:
                 # The API gives USD -> X. We store X -> USD, which is what the
-                # global view multiplies by.
+                # global view multiplies by. A non-positive quote is garbage,
+                # not a rate: 1/0 raised and a negative one would flip signs.
                 usd_to_currency = rates.get(currency)
-                if usd_to_currency:
+                if usd_to_currency and float(usd_to_currency) > 0:
                     fetched[currency] = 1.0 / float(usd_to_currency)
+        except Exception as exc:
+            error = f"{type(exc).__name__}: {exc}"
+            logger.warning("FX provider unreachable (%s)", error)
 
-            # Las oficiales mandan sobre el proveedor general, moneda por
-            # moneda: un banco central publica la tasa contra la que se miden
-            # los libros de ese país, y el proveedor solo cotiza el mercado.
-            for currency, (per_usd, nombre) in fetch_official_rates(client, currencies).items():
-                fetched[currency] = 1.0 / per_usd
-                official_sources[currency] = nombre
-    except Exception as exc:
-        error = f"{type(exc).__name__}: {exc}"
-        logger.warning("FX provider unreachable (%s); falling back to last known rates", error)
+        # Las oficiales mandan sobre el proveedor general, moneda por moneda:
+        # un banco central publica la tasa contra la que se miden los libros
+        # de ese país. Van FUERA del try del proveedor: antes, una caída del
+        # proveedor general se llevaba también la TRM, que no depende de él.
+        for currency, (per_usd, nombre) in fetch_official_rates(client, currencies).items():
+            fetched[currency] = 1.0 / per_usd
+            official_sources[currency] = nombre
 
     written = 0
     with conn.cursor() as cur:
@@ -302,31 +304,24 @@ def job_refresh_fx(conn: psycopg.Connection, *, provider_url: str, api_key: str 
                 (today, currency, rate, source),
             )
             written += 1
-
-        if not fetched:
-            # Carry yesterday's rates forward so the dashboard keeps working.
-            cur.execute(
-                """
-                INSERT INTO core.fx_rate (rate_date, base_currency, quote_currency, rate, source)
-                SELECT %s, base_currency, quote_currency, rate, 'carried_forward'
-                FROM (
-                    SELECT DISTINCT ON (base_currency, quote_currency)
-                           base_currency, quote_currency, rate
-                    FROM core.fx_rate
-                    ORDER BY base_currency, quote_currency, rate_date DESC
-                ) latest
-                ON CONFLICT DO NOTHING
-                """,
-                (today,),
-            )
-            written = cur.rowcount
     conn.commit()
 
-    if written:
-        broadcast(conn, "fx.refreshed", {})
+    if not fetched:
+        # Nothing is copied forward under today's date any more. Every view
+        # already reads the LATEST rate, so the dashboard keeps converting;
+        # re-stamping an old rate as today's is what kept mart.v_fx_rates from
+        # ever flagging it `is_stale`. And the job says it failed, in
+        # raw.job_run, instead of reporting "ok" with no rate fetched.
+        raise RuntimeError(
+            f"Ninguna tasa de cambio disponible hoy ({error or 'sin respuesta'}); "
+            "el tablero sigue con la última tasa conocida."
+        )
 
-    return {"rates_written": written, "source": "api" if fetched else "carried_forward",
-            "error": error}
+    broadcast(conn, "fx.refreshed", {})
+
+    missing = sorted(set(currencies) - set(fetched) - {"USD"})
+    return {"rates_written": written, "source": "api", "error": error,
+            "official": sorted(official_sources), "missing": missing}
 
 
 # =============================================================================
