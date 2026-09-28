@@ -246,10 +246,14 @@ function PasswordCard() {
     setSaving(true);
     setError(null);
     try {
-      await api.post("/auth/me/password", {
-        current_password: current,
-        new_password: next,
-      });
+      // `auth: false`: a wrong current password comes back as a 401, and that
+      // is an answer to show here, not an expired session to leave the page
+      // over. An expired access token is still renewed and replayed.
+      await api.post(
+        "/auth/me/password",
+        { current_password: current, new_password: next },
+        { auth: false },
+      );
       // Every session died with the change, this one included, and the proxy
       // already cleared the cookies. Going straight to the login screen is
       // honest; staying here would fail on the next request.

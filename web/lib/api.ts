@@ -6,12 +6,14 @@
  * HttpOnly cookie and forwards it to the API. Nothing here ever holds a token:
  * a script running on this page cannot read one, which is the whole point.
  *
- * Refresh is the proxy's job too. A 401 that comes back here means the session
- * is really over, so the page goes to the login screen once, remembering where
- * it was.
+ * Refresh happens HERE, once per tab: a 401 the proxy marks as expired makes
+ * every caller wait on the same single refresh and then replay. Any other 401
+ * means the session is really over, so the page goes to the login screen once,
+ * remembering where it was.
  */
 
 import { PLANS_PATH, shouldRedirectToPlans } from "@/lib/billing";
+import { SESSION_EXPIRED_HEADER } from "@/lib/session";
 import type { ApiErrorBody } from "@/lib/types";
 
 /** Where the browser sends its calls: this origin, through the proxy. */
@@ -84,14 +86,47 @@ export async function request<T>(path: string, options: RequestOptions = {}): Pr
     finalHeaders["Content-Type"] = "application/json";
   }
 
-  const response = await fetch(`${PROXY_BASE}${path}`, {
-    ...rest,
-    headers: finalHeaders,
-    body: payload,
-    credentials: "same-origin",
-  });
+  const send = () =>
+    fetch(`${PROXY_BASE}${path}`, {
+      ...rest,
+      headers: finalHeaders,
+      body: payload,
+      credentials: "same-origin",
+    });
+
+  let response = await send();
+  if (response.status === 401 && response.headers.get(SESSION_EXPIRED_HEADER) === "1") {
+    if (await refreshSession()) response = await send();
+  }
 
   return settle<T>(response, auth);
+}
+
+let refreshing: Promise<boolean> | null = null;
+
+/**
+ * Rotate the session ONCE, however many requests are waiting on it.
+ *
+ * The API kills a refresh token the moment it is used. A dashboard opened
+ * after the access token expired fires ~18 requests together; if each one
+ * refreshed on its own, one would win and the other seventeen would present a
+ * dead token, be told "Sesión inválida" and log the reader out. Here they all
+ * share one promise. Resolves `false` when the session cannot be renewed (the
+ * proxy has already cleared the cookies by then).
+ */
+export function refreshSession(): Promise<boolean> {
+  if (!refreshing) {
+    refreshing = fetch(`${PROXY_BASE}/auth/refresh`, {
+      method: "POST",
+      credentials: "same-origin",
+    })
+      .then((response) => response.ok)
+      .catch(() => false)
+      .finally(() => {
+        refreshing = null;
+      });
+  }
+  return refreshing;
 }
 
 /** Turn the API's answer into a value or an ApiError, the same way everywhere. */
@@ -154,11 +189,11 @@ export async function upload<T>(path: string, form: FormData): Promise<T> {
 }
 
 async function uploadCredential(): Promise<string> {
-  const response = await fetch(`${PROXY_BASE}/auth/upload-credential`, {
+  // Through `request`, so an expiring token is renewed by the one shared
+  // refresh rather than by a second one racing it.
+  const body = await request<{ access_token: string }>("/auth/upload-credential", {
     method: "POST",
-    credentials: "same-origin",
   });
-  const body = await settle<{ access_token: string }>(response, true);
   return body.access_token;
 }
 

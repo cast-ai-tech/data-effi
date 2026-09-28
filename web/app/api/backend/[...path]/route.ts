@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
 
+import { SESSION_EXPIRED_HEADER, classifyUnauthorized } from "@/lib/session";
 import { expiresWithin } from "@/lib/upload-transport";
 
 /**
@@ -18,9 +19,22 @@ import { expiresWithin } from "@/lib/upload-transport";
  * invisible to scripts, and a cookie a script cannot read is a cookie it cannot
  * exfiltrate. The price is one hop through this function per request.
  *
- * Refresh happens HERE, once, when the API answers 401: the refresh token is
- * presented, both cookies are rotated, and the original request is replayed.
- * The page sees either the real answer or a 401 that means "log in again".
+ * REFRESH IS THE PAGE'S JOB, NOT THIS HANDLER'S. It used to happen here, on
+ * every 401. But the API rotates the refresh token on use (the presented one
+ * dies), and a dashboard opened after the access token expired fires ~18
+ * requests at once: every one of them tried the SAME refresh token in
+ * parallel, one won, the rest got "Sesión inválida", cleared the cookies the
+ * winner had just written and sent the reader to the login screen. Serverless
+ * invocations share nothing, so the only place that can refresh ONCE is the
+ * browser tab (lib/api.ts `refreshSession`).
+ *
+ * So a 401 leaves here in one of three shapes:
+ *  - `x-session-expired: 1`: the access token is missing or about to expire
+ *    and a refresh token exists. The page refreshes once and replays.
+ *  - an "answer" 401 (wrong current password): passed through untouched.
+ *  - anything else: the session is dead. The cookies are cleared HERE, because
+ *    a login screen reached with the cookies still set is bounced straight
+ *    back to the dashboard by middleware.ts - a redirect loop.
  */
 
 // Server-side only. In Docker this is the internal service name
@@ -53,6 +67,8 @@ const TOKEN_ENDPOINTS = new Set([
   "auth/switch",
   "auth/accept-invite",
 ]);
+// The ones that authenticate with credentials in the body, not with a session.
+const CREDENTIAL_ENDPOINTS = new Set(["auth/login", "auth/register"]);
 
 // Request headers worth forwarding. Never `cookie` (the API has no use for it
 // and it would leak our session cookies to a third host in a misconfiguration)
@@ -242,42 +258,39 @@ async function handle(request: NextRequest, context: { params: Promise<{ path: s
       return new NextResponse(null, { status: 405 });
     }
     // A token about to expire would only earn the upload a 401 halfway through
-    // sending 20 MB; rotate it first, once, and hand out the fresh one.
+    // sending 20 MB. The page rotates it (lib/api.ts `refreshSession`, the
+    // one refresh per tab - rotating here too would race it) and asks again.
     if (accessToken && !expiresWithin(accessToken, UPLOAD_CREDENTIAL_MIN_TTL_SECONDS)) {
       return NextResponse.json({ access_token: accessToken }, { headers: { "cache-control": "no-store" } });
     }
-    const tokens = refreshToken ? await refresh(request, refreshToken) : null;
-    if (!tokens?.access_token) {
-      const response = NextResponse.json(
-        { error: { code: "unauthorized", message: "Sesión expirada. Vuelve a iniciar sesión.", detail: {} } },
-        { status: 401 },
-      );
-      clearSessionCookies(response, request);
-      return response;
-    }
     const response = NextResponse.json(
-      { access_token: tokens.access_token },
-      { headers: { "cache-control": "no-store" } },
+      { error: { code: "unauthorized", message: "Sesión expirada. Vuelve a iniciar sesión.", detail: {} } },
+      { status: 401, headers: { "cache-control": "no-store" } },
     );
-    setSessionCookies(response, request, tokens);
+    if (refreshToken) response.headers.set(SESSION_EXPIRED_HEADER, "1");
+    else clearSessionCookies(response, request);
     return response;
   }
 
   const body = request.method === "GET" || request.method === "HEAD" ? null : await request.arrayBuffer();
 
-  let upstream = await forward(request, path, body, accessToken);
-  let rotated: TokenBody | null = null;
-
-  // Silent refresh, once, then replay.
-  if (upstream.status === 401 && refreshToken && !TOKEN_ENDPOINTS.has(path)) {
-    rotated = await refresh(request, refreshToken);
-    if (rotated?.access_token) {
-      upstream = await forward(request, path, body, rotated.access_token);
-    } else {
-      const response = await passThrough(upstream);
-      clearSessionCookies(response, request);
-      return response;
-    }
+  let upstream: Response;
+  try {
+    upstream = await forward(request, path, body, accessToken);
+  } catch {
+    // The API did not answer at all: asleep, redeploying, or API_URL points
+    // nowhere. Say so in the API's own error shape - a bare 500 page reaches
+    // the reader as "Error 500", which reads like a bug in the screen.
+    return NextResponse.json(
+      {
+        error: {
+          code: "upstream_unreachable",
+          message: "No se pudo conectar con el servidor de datos. Intenta de nuevo en un momento.",
+          detail: {},
+        },
+      },
+      { status: 502, headers: { "cache-control": "no-store" } },
+    );
   }
 
   if (TOKEN_ENDPOINTS.has(path) && upstream.ok) {
@@ -288,7 +301,14 @@ async function handle(request: NextRequest, context: { params: Promise<{ path: s
   }
 
   const response = await passThrough(upstream);
-  if (rotated) setSessionCookies(response, request, rotated);
+
+  // A 401 from login/register is "wrong password", not a session verdict.
+  if (upstream.status === 401 && !CREDENTIAL_ENDPOINTS.has(path)) {
+    const verdict = classifyUnauthorized(path, accessToken, refreshToken);
+    if (verdict === "expired") response.headers.set(SESSION_EXPIRED_HEADER, "1");
+    if (verdict === "dead") clearSessionCookies(response, request);
+    return response;
+  }
 
   // The API revokes every session on a password change, this one included.
   if (path === "auth/me/password" && upstream.ok) clearSessionCookies(response, request);
