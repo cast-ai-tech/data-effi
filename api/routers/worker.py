@@ -24,6 +24,7 @@ router = APIRouter(prefix="/worker", tags=["worker"])
 ALLOWED_JOBS = (
     "sync_tier3",
     "sync_sheets",
+    "sync_dropi",
     "relink_orphans",
     "refresh_fx",
     "calibrate_maturation",

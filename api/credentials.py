@@ -53,6 +53,7 @@ __all__ = [
     "load_session",
     "read_summary",
     "record_login_failure",
+    "record_login_ok",
     "save_session",
     "store_credential",
     "use_credential",
@@ -177,6 +178,29 @@ def save_session(
          WHERE connection_id = %s AND tenant_id = %s
         """,
         (encrypt_secret(token), expires_at, connection_id, tenant_id),
+    )
+    execute(
+        conn,
+        "UPDATE core.connection SET credential_status = 'ok' WHERE id = %s AND tenant_id = %s",
+        (connection_id, tenant_id),
+    )
+
+
+def record_login_ok(conn, *, connection_id: UUID, tenant_id: UUID) -> None:
+    """A credential that has no session to keep - an API token - just worked.
+
+    `save_session` is for platforms that trade a password for a session (Effi).
+    A Dropi integration token IS the credential on every request, so there is
+    nothing to store: only the fact that it was accepted, and when.
+    """
+    execute(
+        conn,
+        """
+        UPDATE core.connection_credential
+           SET last_login_at = now(), last_login_error = NULL, updated_at = now()
+         WHERE connection_id = %s AND tenant_id = %s
+        """,
+        (connection_id, tenant_id),
     )
     execute(
         conn,

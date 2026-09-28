@@ -823,6 +823,256 @@ def _country_for_connection(
 
 
 # =============================================================================
+# Job: Dropi API sync
+# =============================================================================
+
+DROPI_PLATFORM_CODE = "dropi"
+
+
+def job_sync_dropi(
+    conn: psycopg.Connection,
+    *,
+    pii_salt: str,
+    today: date | None = None,
+    client_factory: Callable[..., Any] | None = None,
+) -> dict[str, Any]:
+    """Read every Dropi account connected by token, and ingest it normally.
+
+    Same shape as the sheets and tier-3 syncs: fetch, render the bytes a human
+    would have uploaded (connectors/dropi/orders.py), hand them to the same
+    IngestEngine, mark the connection with a readable error when it stops
+    working. One connection failing never stops the others.
+
+    WHICH CONNECTIONS. Platform `dropi`, `source_mode = 'api'` (migration 042),
+    active, and NOT `credential_status = 'invalid'`: a token Dropi already
+    rejected stays rejected until a person pastes a new one, which sets the
+    status back to 'none'. Asking again every few hours would only fill Dropi's
+    logs with our failures.
+
+    `client_factory` exists for tests; production builds a DropiClient.
+    """
+    from connectors.dropi.client import DropiAuthError, DropiError
+
+    results: list[dict[str, Any]] = []
+    run_date = today or date.today()
+
+    with conn.cursor(row_factory=dict_row) as cur:
+        cur.execute(
+            """
+            SELECT c.id, c.tenant_id, c.country_code, c.platform_code, c.name,
+                   co.currency_code, s.synced_through
+            FROM core.connection c
+            JOIN core.country co ON co.code = c.country_code
+            LEFT JOIN core.connection_sync_state s ON s.connection_id = c.id
+            WHERE c.platform_code = %s
+              AND c.source_mode = 'api'
+              AND c.status = 'active'
+              AND c.credential_status <> 'invalid'
+            ORDER BY c.name
+            """,
+            (DROPI_PLATFORM_CODE,),
+        )
+        connections = cur.fetchall()
+
+    for row in connections:
+        entry: dict[str, Any] = {"connection_id": row["id"], "name": row["name"]}
+        try:
+            entry.update(
+                _sync_one_dropi(
+                    conn, row, pii_salt=pii_salt, today=run_date,
+                    client_factory=client_factory,
+                )
+            )
+            entry["status"] = "ok"
+        except DropiAuthError as exc:
+            conn.rollback()
+            _mark_dropi_token_rejected(conn, row, str(exc))
+            entry["status"] = "needs_reauthorization"
+            entry["error"] = str(exc)
+        except LookupError as exc:
+            # No token stored: the connection says api but nobody pasted one.
+            conn.rollback()
+            _mark_connection_error(conn, row["id"], str(exc))
+            entry["status"] = "error"
+            entry["error"] = str(exc)
+        except DropiError as exc:
+            conn.rollback()
+            _record_dropi_error(conn, row["id"], exc)
+            entry["status"] = "error"
+            entry["error"] = str(exc)
+
+        results.append(entry)
+
+    return {"connections": results, "count": len(results)}
+
+
+def _sync_one_dropi(
+    conn: psycopg.Connection,
+    row: dict[str, Any],
+    *,
+    pii_salt: str,
+    today: date,
+    client_factory: Callable[..., Any] | None,
+) -> dict[str, Any]:
+    from api import credentials
+    from connectors.dropi.client import DropiClient, DropiError
+    from connectors.dropi.orders import build_orders_csv, csv_filename
+    from connectors.dropi.sync import plan_window
+    from pipeline.vault import CredentialUnreadable, VaultKeyMissing
+
+    factory = client_factory or DropiClient
+    window = plan_window(today=today, synced_through=row["synced_through"])
+    engine = IngestEngine(PostgresStore(conn), pii_salt=pii_salt)
+
+    slices: list[dict[str, Any]] = []
+    orders_seen = 0
+    pages = 0
+    warnings: list[str] = []
+
+    try:
+        # The token exists in plaintext for exactly this block: the whole
+        # window is read inside it and the client is dropped at the end.
+        with credentials.use_credential(
+            conn, connection_id=row["id"], tenant_id=row["tenant_id"]
+        ) as credential:
+            client = factory(token=credential.password, country_code=row["country_code"])
+            for date_from, date_to in window.slices():
+                fetched = client.fetch_orders(date_from=date_from, date_to=date_to)
+                pages += fetched.pages
+                orders_seen += len(fetched.orders)
+                if fetched.warning:
+                    warnings.append(f"{date_from}..{date_to}: {fetched.warning}")
+                if not fetched.orders:
+                    slices.append({"from": date_from, "to": date_to, "orders": 0})
+                    continue
+
+                report = engine.ingest(
+                    payload=build_orders_csv(fetched.orders),
+                    source_name=csv_filename(row["country_code"], date_from, date_to),
+                    kind=BatchKind.SHIPMENTS,
+                    tenant_id=row["tenant_id"],
+                    connection_id=row["id"],
+                    country_code=row["country_code"],
+                    platform_code=row["platform_code"],
+                    default_currency=row["currency_code"],
+                )
+                conn.commit()
+                slices.append({
+                    "from": date_from,
+                    "to": date_to,
+                    "orders": len(fetched.orders),
+                    "already_loaded": report.already_loaded,
+                    "inserted": report.rows_inserted,
+                    "updated": report.rows_updated,
+                    "failed": report.rows_failed,
+                })
+            del client
+    except (CredentialUnreadable, VaultKeyMissing) as exc:
+        raise DropiError(str(exc)) from None
+
+    warning = " | ".join(warnings)[:1000] or None
+    with conn.cursor() as cur:
+        cur.execute(
+            """
+            INSERT INTO core.connection_sync_state
+                (connection_id, tenant_id, synced_through, last_window_from,
+                 last_window_to, last_orders_seen, last_pages, last_warning,
+                 last_success_at, updated_at)
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, now(), now())
+            ON CONFLICT (connection_id) DO UPDATE SET
+                synced_through   = EXCLUDED.synced_through,
+                last_window_from = EXCLUDED.last_window_from,
+                last_window_to   = EXCLUDED.last_window_to,
+                last_orders_seen = EXCLUDED.last_orders_seen,
+                last_pages       = EXCLUDED.last_pages,
+                last_warning     = EXCLUDED.last_warning,
+                last_success_at  = now(),
+                updated_at       = now()
+            """,
+            (
+                row["id"], row["tenant_id"], window.date_to, window.date_from,
+                window.date_to, orders_seen, pages, warning,
+            ),
+        )
+        cur.execute(
+            "UPDATE core.connection SET last_sync_at = now(), last_error = NULL WHERE id = %s",
+            (row["id"],),
+        )
+    credentials.record_login_ok(conn, connection_id=row["id"], tenant_id=row["tenant_id"])
+    conn.commit()
+
+    return {
+        "window": {"from": window.date_from, "to": window.date_to},
+        "orders": orders_seen,
+        "pages": pages,
+        "slices": slices,
+        "warning": warning,
+    }
+
+
+def _record_dropi_error(conn: psycopg.Connection, connection_id: UUID, exc: Exception) -> None:
+    """Transient failures are written down; only permanent ones stop the sync.
+
+    A rate limit or a Dropi outage says nothing about the connection - marking
+    it `error` would take it out of the next run, and the next run is exactly
+    what fixes it. Anything else (unknown country, changed API) needs a person.
+    """
+    from connectors.dropi.client import DropiTransientError
+
+    if isinstance(exc, DropiTransientError):
+        with conn.cursor() as cur:
+            cur.execute(
+                "UPDATE core.connection SET last_error = %s WHERE id = %s",
+                (str(exc)[:1000], connection_id),
+            )
+        conn.commit()
+        return
+    _mark_connection_error(conn, connection_id, str(exc))
+
+
+def _mark_dropi_token_rejected(
+    conn: psycopg.Connection, row: dict[str, Any], message: str
+) -> None:
+    """Dropi refused the token. Same reasoning as `_mark_credential_status`: a
+    dead credential must announce itself, or the dashboard just goes quiet."""
+    from ai.alerts import persist_findings
+    from api import credentials
+
+    credentials.record_login_failure(
+        conn,
+        connection_id=row["id"],
+        tenant_id=row["tenant_id"],
+        credential_status="invalid",
+        message=message,
+    )
+    label = row.get("name") or "Dropi"
+    try:
+        persist_findings(
+            conn,
+            row["tenant_id"],
+            row.get("country_code"),
+            [{
+                "code": "connection_credential_failed",
+                "severity": "critical",
+                "title": f"{label}: Dropi rechazó el token",
+                "finding": (
+                    "Dropi ya no acepta el token de integración que Master Data usa "
+                    "para leer tus órdenes. Desde este momento no entra ninguna orden "
+                    "nueva y el tablero puede verse normal y estar desactualizado."
+                ),
+                "action": (
+                    "Genera un token nuevo en Dropi → Integraciones y pégalo en "
+                    "Configuración → Conexiones → Gestionar. Nada más se reanuda solo."
+                ),
+                "deep_link": "/connections",
+            }],
+        )
+    except Exception:
+        logger.exception("no se pudo notificar el token de Dropi rechazado")
+    conn.commit()
+
+
+# =============================================================================
 # Job: daily digest
 # =============================================================================
 
@@ -986,6 +1236,7 @@ def _scope_session(conn: psycopg.Connection, tenant_id: UUID | None) -> None:
 JOB_NAMES = (
     "sync_tier3",
     "sync_sheets",
+    "sync_dropi",
     "relink_orphans",
     "refresh_fx",
     "calibrate_maturation",

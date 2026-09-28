@@ -27,6 +27,7 @@ from worker.jobs import (
     job_daily_digest,
     job_refresh_fx,
     job_relink_orphans,
+    job_sync_dropi,
     job_sync_sheets,
     job_sync_tier3,
     run_job,
@@ -66,6 +67,7 @@ def run_named_job(job_name: str) -> dict[str, Any]:
             enabled=settings.tier3_fetch_enabled,
         ),
         "sync_sheets": lambda conn: job_sync_sheets(conn, pii_salt=settings.pii_hash_salt),
+        "sync_dropi": lambda conn: job_sync_dropi(conn, pii_salt=settings.pii_hash_salt),
         "daily_digest": lambda conn: job_daily_digest(conn, settings=settings),
     }
 
@@ -94,6 +96,16 @@ def build_scheduler() -> BlockingScheduler:
         lambda: run_named_job("sync_sheets"),
         CronTrigger(minute="5,35"),
         id="sync_sheets",
+        max_instances=1,
+        coalesce=True,
+    )
+    # Dropi by API: every three hours at :20. A COD order moves several times a
+    # day, and each pass re-reads a rolling window, so a missed run costs
+    # nothing but freshness. Off the :05/:35 slots so it never overlaps sheets.
+    scheduler.add_job(
+        lambda: run_named_job("sync_dropi"),
+        CronTrigger(hour="*/3", minute=20),
+        id="sync_dropi",
         max_instances=1,
         coalesce=True,
     )
