@@ -192,7 +192,7 @@ _TERMINAL_CREDENTIAL_STATUSES = ("invalid", "locked")
 
 BROWSER_SESSION_MISSING = (
     "No hay una sesión de Effi guardada para esta conexión. Entra a Effi en tu "
-    "navegador y envíala desde la extensión «Conectar Effi con Data Effi»."
+    "navegador y envíala desde la extensión de Effi."
 )
 BROWSER_SESSION_REJECTED = (
     "Effi no aceptó la sesión enviada desde la extensión: venció o se cerró. "

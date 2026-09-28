@@ -82,7 +82,7 @@ MAX_SESSION_LIFETIME = timedelta(days=30)
 
 NOT_USABLE_CODE = (
     "Ese código no sirve: ya se usó, caducó o no existe. Genera uno nuevo en "
-    "Data Effi (Configuración → Conexiones → Effi → Conectar con la extensión)."
+    "Master Data (Configuración → Conexiones → Effi → Conectar con la extensión)."
 )
 
 
@@ -172,7 +172,7 @@ def create_pairing(
         ttl_seconds=int(PAIRING_TTL.total_seconds()),
         api_url=settings.public_api_url or str(request.base_url).rstrip("/"),
         message=(
-            "Pega este código en la extensión «Conectar Effi con Data Effi» con "
+            "Pega este código en la extensión de Effi con "
             "Effi abierto y la sesión iniciada. Sirve una sola vez y caduca en "
             f"{int(PAIRING_TTL.total_seconds() // 60)} minutos."
         ),
@@ -312,7 +312,7 @@ def redeem_pairing(
             conn.commit()
             raise ApiError(
                 "vault_unavailable",
-                "Data Effi no pudo guardar la sesión: el servidor no tiene bóveda "
+                "Master Data no pudo guardar la sesión: el servidor no tiene bóveda "
                 "configurada. Avísale a soporte.",
                 status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
             ) from None
@@ -489,7 +489,7 @@ def _probe(
         logger.warning("effi pairing probe failed: %s", type(exc).__name__)
         return "unverified", "none", (
             "La sesión quedó guardada, pero Effi no respondió a la comprobación. "
-            "Data Effi la usará en la próxima sincronización."
+            "Master Data la usará en la próxima sincronización."
         )
 
     outcome = _OUTCOME_BY_STATUS.get(result.credential_status, "unverified")

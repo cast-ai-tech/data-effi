@@ -841,9 +841,9 @@ def _mark_browser_session_expired(
                     "cargar."
                 ),
                 "action": (
-                    "Entra a Effi en tu navegador, abre la extensión «Conectar Effi "
-                    "con Data Effi» y envía la sesión con un código nuevo de "
-                    "Configuración → Conexiones. Data Effi no lo reintenta solo."
+                    "Entra a Effi en tu navegador, abre la extensión de Effi "
+                    "y envía la sesión con un código nuevo de "
+                    "Configuración → Conexiones. Master Data no lo reintenta solo."
                 ),
                 "deep_link": "/connections",
             }],
