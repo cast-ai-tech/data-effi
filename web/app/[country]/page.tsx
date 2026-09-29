@@ -81,7 +81,9 @@ export default function CountryDashboard() {
     "/config/countries",
   );
   const country = useMemo(
-    () => (countries ?? []).find((item) => item.code === countryCode) ?? null,
+    // /config/countries is the whole catalogue; only an ACTIVE one is this
+    // company's. /pe used to open an empty Peru board for a company in Ecuador.
+    () => (countries ?? []).find((item) => item.code === countryCode && item.is_active) ?? null,
     [countries, countryCode],
   );
 
@@ -133,8 +135,16 @@ export default function CountryDashboard() {
     return (
       <AppShell>
         <EmptyState
-          title={`${countryCode} no está activo en tu workspace`}
-          instruction="Actívalo en Configuración para ver su tablero."
+          title={`${countryCode} no es un país de esta empresa`}
+          instruction="Cada empresa opera en un país, el que eligió al crearla. Para ver otro, cambia de empresa o crea una para ese país."
+          action={
+            <Link
+              href="/empresas"
+              className="rounded-control bg-accent px-3.5 py-2 text-sm font-semibold text-on-accent no-underline"
+            >
+              Mis empresas
+            </Link>
+          }
         />
       </AppShell>
     );

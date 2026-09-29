@@ -121,3 +121,12 @@ test("arrastrar una tarjeta, recargar y restablecer el orden", async ({ page }) 
   await expect.poll(() => cardTitles(page).then((titles) => titles[0])).toBe(before[0]);
   expect(problems()).toEqual([]);
 });
+
+test("un país que la empresa no tiene explica qué hacer", async ({ page }) => {
+  await logIn(page);
+  await page.goto("/pe");
+  await expect(page.getByText("PE no es un país de esta empresa")).toBeVisible({ timeout: 20_000 });
+  // It used to send people to Configuración, where no country can be activated.
+  await expect(page.getByText(/Actívalo en Configuración/)).toHaveCount(0);
+  await expect(page.getByRole("main").getByRole("link", { name: "Mis empresas" })).toBeVisible();
+});
