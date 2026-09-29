@@ -138,6 +138,41 @@ describe("EffiExtensionPairingPanel", () => {
     );
     expect(screen.getByRole("button", { name: "Generar otro código" })).toBeInTheDocument();
   });
+
+  it("keeps waiting while the API checks the session, then shows Effi's answer", async () => {
+    render(<EffiExtensionPairingPanel connection={connection} pollMs={10} />);
+    fireEvent.click(screen.getByRole("checkbox"));
+    fireEvent.click(screen.getByRole("button", { name: "Generar código" }));
+    await screen.findByText("ABCD-EFGH-JKMN", {}, { timeout: 5000 });
+
+    const redeemed = {
+      pairing_id: "p-1",
+      connection_id: "c-1",
+      credential_status: "none",
+      summary: null,
+      expires_at: new Date(Date.now() + 500_000).toISOString(),
+      redeemed_at: new Date().toISOString(),
+    };
+    // QA 2026-09-28: "claimed, probe still running" used to read as
+    // "unverified" and the panel gave up a second before the real answer.
+    calls.statusQueue.push({ ...redeemed, state: "verifying" }, { ...redeemed, state: "verifying" });
+    expect(
+      await screen.findByText("Recibimos la sesión. Comprobándola con Effi…", {}, { timeout: 5000 }),
+    ).toBeInTheDocument();
+    expect(screen.queryByText(/no se pudo comprobar/)).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /Generar/ })).not.toBeInTheDocument();
+
+    calls.statusQueue.push({
+      ...redeemed,
+      state: "session_rejected",
+      credential_status: "session_expired",
+    });
+    await waitFor(
+      () => expect(screen.getByRole("status")).toHaveTextContent(/Effi no aceptó la sesión/),
+      { timeout: 5000 },
+    );
+    expect(screen.getByRole("button", { name: "Generar otro código" })).toBeInTheDocument();
+  });
 });
 
 describe("formatCountdown", () => {

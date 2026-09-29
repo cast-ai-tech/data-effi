@@ -745,7 +745,7 @@ class EffiPairingResponse(BaseModel):
 
 
 PairingState = Literal[
-    "pending", "connected", "insufficient_permissions", "session_rejected",
+    "pending", "verifying", "connected", "insufficient_permissions", "session_rejected",
     "unverified", "expired", "revoked",
 ]
 

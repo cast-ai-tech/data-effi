@@ -627,6 +627,8 @@ export interface EffiPairing {
 
 export type EffiPairingState =
   | "pending"
+  /** Redeemed; the API is still checking the session with Effi. */
+  | "verifying"
   | "connected"
   | "insufficient_permissions"
   | "session_rejected"
