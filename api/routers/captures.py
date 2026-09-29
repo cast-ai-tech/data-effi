@@ -42,7 +42,15 @@ from typing import Any
 
 from fastapi import APIRouter, Depends, Request, status
 
-from api.db import check_rate_limit, connection, execute, fetch_all, fetch_one, fetch_required
+from api.db import (
+    check_rate_limit,
+    connection,
+    execute,
+    fetch_all,
+    fetch_one,
+    fetch_required,
+    restore_service_scope,
+)
 from api.deps import (
     CurrentUserDep,
     DbDep,
@@ -288,6 +296,9 @@ def submit_capture(
             ) from None
 
         conn.commit()
+        # Same connection after the commit: the notification must still be
+        # written as the service, or row-level security drops it.
+        restore_service_scope(conn)
         _notify(conn, invitacion, encontro_login, exportaciones)
 
     logger.info(

@@ -47,7 +47,7 @@ from uuid import UUID
 from fastapi import APIRouter, Depends, Request, status
 
 from api import credentials
-from api.db import check_rate_limit, connection, execute, fetch_one
+from api.db import check_rate_limit, connection, execute, fetch_one, restore_service_scope
 from api.deps import CurrentUserDep, DbDep, SettingsDep, client_ip, client_ip_inet, require_role
 from api.errors import ApiError, NotFound
 from api.preflight import run_preflight_for_connection
@@ -335,6 +335,9 @@ def redeem_pairing(
             (claimed["created_at"], claimed["created_by"], connection_id, tenant_id),
         )
         conn.commit()
+        # The commit ended the SET LOCAL service context; without it the probe
+        # runs as nobody and cannot see the session stored a line above.
+        restore_service_scope(conn)
 
         outcome, credential_status, summary = _probe(
             conn, connection_id, tenant_id, target["platform_name"], claimed["created_at"]
@@ -439,9 +442,26 @@ def session_from_cookies(cookies: list[EffiCookie]) -> tuple[str, datetime | Non
     return token, expires_at
 
 
+# How long a redeemed code with no outcome yet is "being checked" rather than
+# "could not be checked". The probe talks to Effi and takes a few seconds; a
+# probe that died with the process leaves the row without an outcome for good.
+VERIFYING_WINDOW = timedelta(minutes=2)
+
+
 def pairing_state(row: dict[str, Any]) -> str:
     if row["redeemed_at"] is not None:
-        return row["outcome"] or "unverified"
+        if row["outcome"]:
+            return str(row["outcome"])
+        # Between the claim (committed first, so a code is never used twice)
+        # and the probe's answer. Reporting "unverified" here made the screen
+        # stop polling and say "no se pudo comprobar" a second before Effi's
+        # real answer arrived.
+        redeemed_at = row["redeemed_at"]
+        if redeemed_at.tzinfo is None:
+            redeemed_at = redeemed_at.replace(tzinfo=UTC)
+        if datetime.now(UTC) - redeemed_at < VERIFYING_WINDOW:
+            return "verifying"
+        return "unverified"
     if row["revoked_at"] is not None:
         return "revoked"
     expires_at = row["expires_at"]
@@ -479,12 +499,14 @@ def _probe(
         )
     except ApiError as exc:
         conn.rollback()
+        restore_service_scope(conn)
         return "unverified", "none", (
             "La sesión quedó guardada, pero no se pudo comprobar ahora: "
             f"{exc.message}"
         )
     except Exception as exc:
         conn.rollback()
+        restore_service_scope(conn)
         # Solo el tipo: el mensaje de una excepción de red puede arrastrar
         # encabezados, y ahí va la cookie.
         logger.warning("effi pairing probe failed: %s", type(exc).__name__)

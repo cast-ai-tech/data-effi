@@ -200,6 +200,20 @@ def connection(
             raise
 
 
+def restore_service_scope(conn: psycopg.Connection) -> None:
+    """Put the service context back after a commit or rollback INSIDE a block.
+
+    `connection(service=True)` sets `norte.service` with SET LOCAL, which dies
+    with the transaction. Code that commits half-way and keeps using the same
+    connection would otherwise run as nobody: row-level security hides every
+    tenant row and writes quietly touch zero rows (QA 2026-09-28: the Effi
+    extension's redeem stored the session, committed, and its probe could no
+    longer see what it had just written).
+    """
+    with conn.cursor() as cur:
+        cur.execute("SELECT set_config('norte.service', 'on', true)")
+
+
 def fetch_all(
     conn: psycopg.Connection, query: str, params: dict[str, Any] | tuple[Any, ...] | None = None
 ) -> list[dict[str, Any]]:

@@ -133,6 +133,9 @@ def world(monkeypatch):
     monkeypatch.setattr(ep, "connection", _connection)
     monkeypatch.setattr(ep, "fetch_one", w.fetch_one)
     monkeypatch.setattr(ep, "execute", w.execute)
+    # The fake connection has no cursor; the real scope is covered by
+    # test_effi_pairing_db.py against PostgreSQL.
+    monkeypatch.setattr(ep, "restore_service_scope", lambda conn: None)
     monkeypatch.setattr(ep, "check_rate_limit", _rate)
     monkeypatch.setattr(ep, "client_ip", lambda request: "203.0.113.9")
     monkeypatch.setattr(ep, "client_ip_inet", lambda request: "203.0.113.9")
@@ -462,6 +465,11 @@ def test_estado_del_codigo():
     assert ep.pairing_state({**base, "expires_at": now - timedelta(seconds=1)}) == "expired"
     assert ep.pairing_state({**base, "revoked_at": now}) == "revoked"
     assert ep.pairing_state({**base, "redeemed_at": now, "outcome": "connected"}) == "connected"
+    # Claimed, probe still talking to Effi: not a final answer yet (QA 2026-09-28).
+    assert ep.pairing_state({**base, "redeemed_at": now}) == "verifying"
+    # A probe that never came back is not "checking" forever.
+    stale = now - ep.VERIFYING_WINDOW - timedelta(seconds=1)
+    assert ep.pairing_state({**base, "redeemed_at": stale}) == "unverified"
 
 
 # -- CORS solo para la extensión, solo en el canje --------------------------------------
