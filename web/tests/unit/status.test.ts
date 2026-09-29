@@ -6,6 +6,7 @@ import {
   STATUS_GROUP_LABELS,
   STATUS_GROUP_TEXT,
   STATUS_GROUP_TONES,
+  excludedStatusesLabel,
   isStatusGroup,
   platformSwatch,
   statusGroupMeta,
@@ -100,5 +101,20 @@ describe("platformSwatch", () => {
   it("never paints an unknown platform with another platform's colour", () => {
     expect(platformSwatch("effi")).not.toBe(platformSwatch("dropi"));
     expect(platformSwatch("plataforma-nueva")).toBe("bg-track");
+  });
+});
+
+describe("excludedStatusesLabel", () => {
+  it("says nothing when every group counts", () => {
+    expect(excludedStatusesLabel(null)).toBeNull();
+    expect(excludedStatusesLabel([...STATUS_GROUPS])).toBeNull();
+  });
+
+  it("names what the filter left out, for the printed Informe", () => {
+    const withoutReturns = STATUS_GROUPS.filter((group) => group !== "devolucion");
+    expect(excludedStatusesLabel(withoutReturns)).toBe("sin Devolución");
+    expect(excludedStatusesLabel(["entregada"])).toBe(
+      "sin En tránsito, Novedad, Devolución, Indemnización",
+    );
   });
 });

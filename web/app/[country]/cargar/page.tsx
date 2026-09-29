@@ -161,8 +161,16 @@ export default function CountryUploadPage() {
         setChecking(true);
         const detected = await detect(picked[0]);
         setChecking(false);
-        const verdict = judgeFile(chosen, detected);
+        const verdict = judgeFile(chosen, detected, kind);
 
+        if (verdict?.kind === "wrong_kind") {
+          const wanted = KINDS.find((item) => item.value === verdict.detectedKind)?.label;
+          setError(
+            `"${picked[0].name}" es el «${verdict.label}». En «1. Tipo de reporte» elige ` +
+              `«${wanted ?? verdict.detectedKind}» y vuelve a subirlo.`,
+          );
+          return;
+        }
         if (verdict?.kind === "mismatch") {
           setError(
             `"${picked[0].name}" es un reporte de ${verdict.label}, y elegiste ` +

@@ -38,7 +38,7 @@ const FINAL_STATES: ReadonlySet<EffiPairingState> = new Set([
   "revoked",
 ]);
 
-const STATE_TEXT: Record<Exclude<EffiPairingState, "pending">, string> = {
+const STATE_TEXT: Record<Exclude<EffiPairingState, "pending" | "verifying">, string> = {
   connected: "Effi quedó conectado. Master Data ya puede descargar tus reportes.",
   insufficient_permissions:
     "La sesión llegó, pero al usuario de Effi le falta un permiso. Revisa la lista de permisos.",
@@ -145,6 +145,9 @@ export function EffiExtensionPairingPanel({
   const state: EffiPairingState | null = status?.state ?? (pairing ? "pending" : null);
   const remaining = deadline === null ? 0 : deadline - now;
   const waiting = state === "pending" && remaining > 0;
+  // The extension already sent the session and the API is asking Effi about
+  // it. Not an answer yet: keep polling, whatever the code's own clock says.
+  const verifying = state === "verifying";
 
   const generate = useCallback(async () => {
     setCreating(true);
@@ -183,7 +186,7 @@ export function EffiExtensionPairingPanel({
 
   // Poll until the extension redeems the code (or it dies).
   useEffect(() => {
-    if (!pairing || !waiting) return;
+    if (!pairing || !(waiting || verifying)) return;
     // One request at a time (a timeout chain, not an interval): with an
     // interval, a slow "pending" answer could land AFTER the "connected" one
     // and put the code back on screen.
@@ -195,7 +198,9 @@ export function EffiExtensionPairingPanel({
           `/config/effi/connections/${pairing.connection_id}/pairing/${pairing.pairing_id}`,
         );
         if (cancelled) return;
-        if (next.state !== "pending") {
+        if (next.state === "verifying") {
+          setStatus(next);
+        } else if (next.state !== "pending") {
           cancelled = true;
           storePairing(pairing.connection_id, null);
           setStatus(next);
@@ -212,7 +217,7 @@ export function EffiExtensionPairingPanel({
       cancelled = true;
       window.clearTimeout(timer);
     };
-  }, [pairing, waiting, pollMs]);
+  }, [pairing, waiting, verifying, pollMs]);
 
   const expiredLocally = state === "pending" && remaining <= 0;
   const finalState: EffiPairingState | null = expiredLocally
@@ -280,6 +285,12 @@ export function EffiExtensionPairingPanel({
         </div>
       )}
 
+      {verifying && (
+        <p role="status" className="text-sm leading-relaxed text-ink-2">
+          Recibimos la sesión. Comprobándola con Effi…
+        </p>
+      )}
+
       {finalState && (
         <p
           role="status"
@@ -292,11 +303,11 @@ export function EffiExtensionPairingPanel({
         >
           {status?.summary && finalState !== "expired" && finalState !== "revoked"
             ? status.summary
-            : STATE_TEXT[finalState as Exclude<EffiPairingState, "pending">]}
+            : STATE_TEXT[finalState as Exclude<EffiPairingState, "pending" | "verifying">]}
         </p>
       )}
 
-      {!waiting && (
+      {!waiting && !verifying && (
         <>
           <label className="flex items-start gap-2.5 text-sm leading-relaxed text-ink-2">
             <input

@@ -38,11 +38,17 @@ const LEGACY_REFRESH_COOKIE = "dataeffi_refresh";
 // origin or the browser refuses the request before it leaves.
 const API_ORIGIN = apiOrigin(process.env.NEXT_PUBLIC_API_URL);
 
+// `next dev` evaluates its hot-reload and React debugging code with eval().
+// Without 'unsafe-eval' the browser refuses it, React never hydrates and every
+// button on every page is dead. Production builds never eval, so they keep the
+// strict policy.
+const DEV_EVAL = process.env.NODE_ENV === "development" ? " 'unsafe-eval'" : "";
+
 function contentSecurityPolicy(nonce: string): string {
   return [
     "default-src 'self'",
     API_ORIGIN ? `connect-src 'self' ${API_ORIGIN}` : "connect-src 'self'",
-    `script-src 'self' 'nonce-${nonce}' 'strict-dynamic'`,
+    `script-src 'self' 'nonce-${nonce}' 'strict-dynamic'${DEV_EVAL}`,
     "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
     "font-src 'self' https://fonts.gstatic.com data:",
     "img-src 'self' data: blob:",

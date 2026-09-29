@@ -1,7 +1,7 @@
 "use client";
 
 import { useRouter, useSearchParams } from "next/navigation";
-import { Suspense, useState } from "react";
+import { Suspense, useState, useSyncExternalStore } from "react";
 
 import { BrandMark } from "@/components/BrandMark";
 import { Button, Field, Input } from "@/components/ui";
@@ -23,6 +23,14 @@ function LoginForm() {
   const [fullName, setFullName] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [pending, setPending] = useState(false);
+  // Until React takes over, a click on "Entrar" would fall through to the
+  // browser's own form submission: the page reloads to /login? and whatever
+  // the person typed is gone. The button waits for hydration instead.
+  const hydrated = useSyncExternalStore(
+    subscribeNothing,
+    () => true,
+    () => false,
+  );
 
   async function submit(event: React.FormEvent) {
     event.preventDefault();
@@ -123,7 +131,7 @@ function LoginForm() {
             </p>
           )}
 
-          <Button type="submit" size="lg" className="w-full" disabled={pending}>
+          <Button type="submit" size="lg" className="w-full" disabled={pending || !hydrated}>
             {pending ? "Un momento…" : submitLabel}
           </Button>
         </form>
@@ -159,6 +167,10 @@ function LoginForm() {
       </div>
     </main>
   );
+}
+
+function subscribeNothing(): () => void {
+  return () => {};
 }
 
 /** A labelled input, so `getByLabel("Correo")` and screen readers both work. */

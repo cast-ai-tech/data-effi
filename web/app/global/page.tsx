@@ -40,12 +40,15 @@ export default function GlobalPage() {
     reload: reloadCountries,
   } = useApi<Country[]>("/config/countries");
   const connections = useApi<Connection[]>("/config/connections");
-  const { data: user } = useApi<User>("/auth/me");
+  const { data: user, loading: loadingUser } = useApi<User>("/auth/me");
 
   // The countries this person may open, same rule as the sidebar (AppShell): a
   // partner limited to Guatemala must not get Ecuador's brief, which the API
   // refuses with a 403.
+  // Nothing until the person is known too: the countries often answer first,
+  // and for that instant a scoped partner "had" every country and got a 403.
   const active = useMemo(() => {
+    if (!user) return [];
     const list = (countries ?? []).filter((country) => country.is_active);
     const scope = user?.countries;
     return scope ? list.filter((country) => scope.includes(country.code)) : list;
@@ -53,7 +56,7 @@ export default function GlobalPage() {
 
   // Until the countries answer, "crea tu primera empresa" would be a guess; if
   // they fail, it would be a lie.
-  const loading = loadingRows || loadingCountries;
+  const loading = loadingRows || loadingCountries || loadingUser;
 
   const totals = useMemo(() => {
     const list = rows ?? [];

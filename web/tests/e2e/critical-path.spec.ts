@@ -1,4 +1,6 @@
-import { expect, test, type Page } from "@playwright/test";
+import { expect, test } from "@playwright/test";
+
+import { logIn, skipWithoutStack } from "./helpers";
 
 /**
  * The one path that must never break: land, log in, read a country dashboard,
@@ -9,47 +11,7 @@ import { expect, test, type Page } from "@playwright/test";
  * red that trains everyone to ignore it.
  */
 
-const API_HEALTH_URL = process.env.MASTERDATA_API_URL
-  ? `${process.env.MASTERDATA_API_URL}/health`
-  : "http://localhost:8000/health";
-
-const DEMO_EMAIL = process.env.MASTERDATA_DEMO_EMAIL ?? "demo@masterdata.app";
-const DEMO_PASSWORD = process.env.MASTERDATA_DEMO_PASSWORD ?? "demo-masterdata-2026";
-
-let stackIsUp = false;
-
-test.beforeAll(async () => {
-  try {
-    const controller = new AbortController();
-    const timer = setTimeout(() => controller.abort(), 3000);
-    const response = await fetch(API_HEALTH_URL, { signal: controller.signal });
-    clearTimeout(timer);
-    stackIsUp = response.ok;
-  } catch {
-    stackIsUp = false;
-  }
-});
-
-test.beforeEach(() => {
-  test.skip(
-    !stackIsUp,
-    `La API no responde en ${API_HEALTH_URL}. Levanta la API (uvicorn api.main:app --port 8000) para correr estas pruebas.`,
-  );
-});
-
-async function logIn(page: Page): Promise<void> {
-  await page.goto("/");
-
-  // Unauthenticated, the middleware sends everything to /login.
-  await expect(page).toHaveURL(/\/login/);
-
-  await page.getByLabel("Correo").fill(DEMO_EMAIL);
-  await page.getByLabel("Contraseña").fill(DEMO_PASSWORD);
-  await page.getByRole("button", { name: "Entrar" }).click();
-
-  // Landing anywhere that is not the login screen means the session took.
-  await expect(page).not.toHaveURL(/\/login/, { timeout: 15_000 });
-}
+skipWithoutStack();
 
 test.describe("critical path", () => {
   test("redirects an anonymous visitor to the login screen", async ({ page }) => {
@@ -116,8 +78,16 @@ test.describe("critical path", () => {
     await logIn(page);
 
     // No global upload any more (migration 042): every file belongs to a
-    // country and names its platform, so the old address forwards there.
+    // country and names its platform, so the old address forwards there. With
+    // one country it goes straight in; with several (the demo has three) it
+    // asks which one instead of guessing.
     await page.goto("/ingest");
+    const chooser = page.getByText("¿De qué país es el archivo?");
+    const direct = page.waitForURL(/\/[a-z]{2}\/cargar/, { timeout: 15_000 });
+    await Promise.race([chooser.waitFor({ timeout: 15_000 }), direct]);
+    if (await chooser.isVisible()) {
+      await page.getByRole("main").getByRole("link", { name: /Ecuador/ }).click();
+    }
     await expect(page).toHaveURL(/\/[a-z]{2}\/cargar/, { timeout: 15_000 });
     await expect(page.getByText("Arrastra el reporte aquí")).toBeVisible({
       timeout: 15_000,

@@ -122,6 +122,22 @@ describe("judgeFile", () => {
     expect(judgeFile("manual_xlsx", detected(null))).toEqual({ kind: "ok", platform: "manual_xlsx" });
     expect(judgeFile("dropi", null)).toEqual({ kind: "ok", platform: "dropi" });
   });
+
+  it("stops a money report chosen as guides, even on the right platform", () => {
+    const movements = {
+      ...detected("effi", "Effi (fulfillment COD)"),
+      profile_label: "Effi · Reporte de movimientos de dinero",
+      detected_kind: "movements",
+    };
+    expect(judgeFile("effi", movements, "shipments")).toEqual({
+      kind: "wrong_kind",
+      detectedKind: "movements",
+      label: "Effi · Reporte de movimientos de dinero",
+    });
+    expect(judgeFile("effi", movements, "movements")).toEqual({ kind: "ok", platform: "effi" });
+    // An API without detected_kind keeps the old behaviour.
+    expect(judgeFile("effi", detected("effi"), "shipments")).toEqual({ kind: "ok", platform: "effi" });
+  });
 });
 
 describe("shortPlatformName", () => {

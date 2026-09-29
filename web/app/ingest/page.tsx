@@ -52,13 +52,13 @@ export default function IngestForwardPage() {
         {!loading && allowed.length === 0 && (
           <EmptyState
             title="No tienes ningún país activo"
-            instruction="Activa tu país en Configuración y vuelve aquí."
+            instruction="El país se elige al crear la empresa. Crea una, o pide acceso a la de tu equipo."
             action={
               <Link
-                href="/settings"
+                href="/empresas/nueva"
                 className="rounded-control bg-accent px-3.5 py-2 text-sm font-semibold text-on-accent no-underline"
               >
-                Ir a Configuración
+                Crear empresa
               </Link>
             }
           />

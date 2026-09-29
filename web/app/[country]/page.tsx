@@ -23,7 +23,7 @@ import { PageHeader } from "@/components/ui/PageHeader";
 import { countryFlag } from "@/lib/format";
 import { TAB_HELP } from "@/lib/glossary";
 import { useApi } from "@/lib/hooks";
-import type { Country, DecisionScope, LayoutResponse } from "@/lib/types";
+import type { Country, DecisionScope, LayoutResponse, User } from "@/lib/types";
 
 /**
  * Which decisions sit above which tab. Each tab gets the verdicts about the
@@ -81,9 +81,17 @@ export default function CountryDashboard() {
     "/config/countries",
   );
   const country = useMemo(
-    () => (countries ?? []).find((item) => item.code === countryCode) ?? null,
+    // /config/countries is the whole catalogue; only an ACTIVE one is this
+    // company's. /pe used to open an empty Peru board for a company in Ecuador.
+    () => (countries ?? []).find((item) => item.code === countryCode && item.is_active) ?? null,
     [countries, countryCode],
   );
+
+  // A partner limited to other countries of this company: say so instead of
+  // asking the API for a board it will refuse (that used to read "Revisa que
+  // la API esté corriendo", which sent people chasing a server that was fine).
+  const { data: user } = useApi<User>("/auth/me");
+  const outOfScope = Boolean(user?.countries && !user.countries.includes(countryCode));
 
   const {
     data: layout,
@@ -91,7 +99,7 @@ export default function CountryDashboard() {
     error,
     reload: refreshLayout,
   } = useApi<LayoutResponse>(
-    countryCode ? `/kpis/layout?country=${countryCode}` : null,
+    countryCode && user && !outOfScope ? `/kpis/layout?country=${countryCode}` : null,
     [countryCode],
   );
 
@@ -112,18 +120,29 @@ export default function CountryDashboard() {
     );
   }
 
+  if (outOfScope) {
+    return (
+      <AppShell>
+        <EmptyState
+          title={`No tienes acceso a ${country?.name ?? countryCode}`}
+          instruction="Tu acceso en esta empresa no incluye este país. Si lo necesitas, pídeselo a quien administra la empresa."
+        />
+      </AppShell>
+    );
+  }
+
   if (!loadingCountries && countries && !country) {
     return (
       <AppShell>
         <EmptyState
-          title={`${countryCode} no está activo en tu workspace`}
-          instruction="Actívalo en Configuración para ver su tablero."
+          title={`${countryCode} no es un país de esta empresa`}
+          instruction="Cada empresa opera en un país, el que eligió al crearla. Para ver otro, cambia de empresa o crea una para ese país."
           action={
             <Link
-              href="/settings"
+              href="/empresas"
               className="rounded-control bg-accent px-3.5 py-2 text-sm font-semibold text-on-accent no-underline"
             >
-              Ir a Configuración
+              Mis empresas
             </Link>
           }
         />
@@ -190,7 +209,7 @@ export default function CountryDashboard() {
       {/* The verdicts for this tab, before the numbers that justify them. Only
           once the country is known: a strip for a country you may not open
           would be a 403 dressed as a recommendation. */}
-      {country && <DecisionStrip countryCode={countryCode} scope={DECISION_SCOPE[tab]} />}
+      {country && user && <DecisionStrip countryCode={countryCode} scope={DECISION_SCOPE[tab]} />}
 
       {loadingLayout && <SkeletonRows rows={4} />}
 
@@ -202,7 +221,7 @@ export default function CountryDashboard() {
 
       {/* Not after a failed read: "todavía no tiene datos" under "no se pudo
           cargar" contradicts it and suggests uploading data that is there. */}
-      {country && widgets.length === 0 && !loadingLayout && !error && (
+      {country && layout && widgets.length === 0 && !loadingLayout && !error && (
         <Card>
           <EmptyState
             title="Esta pestaña todavía no tiene datos"

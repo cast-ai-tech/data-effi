@@ -34,6 +34,7 @@ from pipeline.dbconn import connect as db_connect
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 DEMO_TENANT = UUID("d0000000-0000-4000-a000-000000000001")
+DEMO_ORG = UUID("d0000000-0000-4000-a000-0000000000a1")
 DEMO_EMAIL = "demo@masterdata.app"
 DEMO_PASSWORD = "demo-masterdata-2026"
 
@@ -187,18 +188,53 @@ def seed(conn: psycopg.Connection) -> None:
         raise SystemExit(1) from None
 
     with conn.cursor() as cur:
+        # Since migrations 032/036 a login reads the company from
+        # core.membership and the holding from core.org_membership. A user with
+        # only app_user.tenant_id lands on "Crea tu primera empresa" with the
+        # whole demo invisible, so the seed writes the same rows /auth/register
+        # does.
         cur.execute(
-            "INSERT INTO core.tenant (id, slug, name) VALUES (%s, 'demo', 'Operación Demo') "
+            "INSERT INTO core.org (id, slug, name) VALUES (%s, 'demo', 'Operación Demo') "
             "ON CONFLICT (id) DO NOTHING",
-            (DEMO_TENANT,),
+            (DEMO_ORG,),
         )
         cur.execute(
             """
-            INSERT INTO core.app_user (tenant_id, email, password_hash, full_name, role)
-            VALUES (%s, %s, %s, 'Cuenta de demostración', 'owner')
-            ON CONFLICT (tenant_id, email) DO UPDATE SET password_hash = EXCLUDED.password_hash
+            INSERT INTO core.org_subscription (org_id, status, trial_ends_at)
+            VALUES (%s, 'trial', now() + interval '365 days')
+            ON CONFLICT (org_id) DO UPDATE
+                SET status = 'trial', trial_ends_at = EXCLUDED.trial_ends_at
             """,
-            (DEMO_TENANT, DEMO_EMAIL, password_hash),
+            (DEMO_ORG,),
+        )
+        cur.execute(
+            "INSERT INTO core.tenant (id, slug, name, org_id) "
+            "VALUES (%s, 'demo', 'Operación Demo', %s) "
+            "ON CONFLICT (id) DO UPDATE SET org_id = EXCLUDED.org_id",
+            (DEMO_TENANT, DEMO_ORG),
+        )
+        cur.execute(
+            """
+            INSERT INTO core.app_user
+                (tenant_id, org_id, email, password_hash, full_name, role, is_org_admin)
+            VALUES (%s, %s, %s, %s, 'Cuenta de demostración', 'owner', true)
+            ON CONFLICT (tenant_id, email) DO UPDATE
+                SET password_hash = EXCLUDED.password_hash, org_id = EXCLUDED.org_id,
+                    is_org_admin = true
+            RETURNING id
+            """,
+            (DEMO_TENANT, DEMO_ORG, DEMO_EMAIL, password_hash),
+        )
+        user_id = cur.fetchone()["id"]
+        cur.execute(
+            "INSERT INTO core.membership (user_id, tenant_id, role) VALUES (%s, %s, 'owner') "
+            "ON CONFLICT (user_id, tenant_id) DO NOTHING",
+            (user_id, DEMO_TENANT),
+        )
+        cur.execute(
+            "INSERT INTO core.org_membership (user_id, org_id, role) VALUES (%s, %s, 'admin') "
+            "ON CONFLICT (user_id, org_id) DO NOTHING",
+            (user_id, DEMO_ORG),
         )
 
         for code, config in COUNTRIES.items():

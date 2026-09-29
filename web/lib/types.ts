@@ -32,6 +32,8 @@ export interface DetectResult {
   /** Migration 042: which platform the recognised report belongs to. */
   detected_platform_code: string | null;
   detected_platform_name: string | null;
+  /** shipments | movements for a recognised report; absent on older APIs. */
+  detected_kind?: string | null;
   detected_country_code: string | null;
   detected_country_raw: string | null;
   row_count: number;
@@ -625,6 +627,8 @@ export interface EffiPairing {
 
 export type EffiPairingState =
   | "pending"
+  /** Redeemed; the API is still checking the session with Effi. */
+  | "verifying"
   | "connected"
   | "insufficient_permissions"
   | "session_rejected"

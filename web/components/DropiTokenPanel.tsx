@@ -127,7 +127,12 @@ export function DropiTokenPanel({
           {error}
         </p>
       )}
-      {notice && <p className="text-sm leading-relaxed text-ink-2">{notice}</p>}
+      {/* "Probar conexión" answers with the same sentence it just stored as
+          last_login_error; saying it twice, once red and once grey, reads as
+          two different problems. */}
+      {notice && notice !== status?.last_login_error && (
+        <p className="text-sm leading-relaxed text-ink-2">{notice}</p>
+      )}
 
       <p className="text-sm leading-relaxed text-ink-muted">
         Con el token de integración, Master Data lee tus órdenes de Dropi varias veces al

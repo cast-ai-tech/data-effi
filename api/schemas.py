@@ -745,7 +745,7 @@ class EffiPairingResponse(BaseModel):
 
 
 PairingState = Literal[
-    "pending", "connected", "insufficient_permissions", "session_rejected",
+    "pending", "verifying", "connected", "insufficient_permissions", "session_rejected",
     "unverified", "expired", "revoked",
 ]
 
@@ -1037,6 +1037,9 @@ class DetectResponse(BaseModel):
     # is stored. Null when the shape is not recognised.
     detected_platform_code: str | None = None
     detected_platform_name: str | None = None
+    # shipments | movements: what the recognised report holds, so the screen
+    # can stop a money report chosen as "Guías" before it is sent.
+    detected_kind: str | None = None
     detected_country_code: str | None
     detected_country_raw: str | None
     row_count: int
